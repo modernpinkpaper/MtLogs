@@ -26,6 +26,50 @@ export interface WorkAssignment {
 }
 
 export type ProjectVisibility = 'OWNER_PRIVATE' | 'ASSIGNED_ONLY' | 'TEAM_SHARED';
+/** Plain-language project states shown in the UI. Mapped from richer step data without changing it. */
+export type ProjectWorkStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
+export type ResumeMode = 'MANUAL' | 'AUTOMATIC_ON_DATE' | 'REMIND_ON_DATE';
+
+export interface ProjectPauseState {
+  isPaused: boolean;
+  pausedAt?: string; // UTC ISO
+  pausedByUserId?: string;
+  reasonCode?: string;
+  reasonNote?: string;
+  messageToTeam?: string;
+  priorProjectStatus?: 'NOT_STARTED' | 'IN_PROGRESS';
+  resumeMode: ResumeMode;
+  resumeDateLocal?: string; // YYYY-MM-DD in America/Chicago
+  timeZone: 'America/Chicago';
+  scheduleVersion: number;
+  lastReminderAt?: string;
+  reminderSentForVersion?: number;
+  resumedAt?: string;
+  resumedByUserId?: string | null; // null = automatic
+  resumeNote?: string;
+  deadlineAtPause?: string | null;
+}
+
+export type PilotRowState = 'NOT_DONE' | 'TRIED' | 'CHECKED_OFF' | 'UPLOADED' | 'VERIFIED' | 'FAILED';
+export interface PilotRow { sku: string; state: PilotRowState; note: string | null; updatedAt: string | null; evidence: string | null; verifiedBy: string | null }
+export interface PilotCheckpoint {
+  enabled: boolean;
+  stepId: string | null;
+  metricType: 'VERIFIED_LISTINGS' | 'CONFIRMED_ROWS' | 'PRINT_JOBS' | 'CUSTOM';
+  metricLabel: string;
+  targetCount: number;
+  scopeLabel: string; // e.g. source sheet + filter + version
+  rows: PilotRow[];
+  enforcement: 'TECHNICAL_LIMIT' | 'TRACKING_ONLY';
+  continuationRequiresApproval: true;
+  whenReached: 'PROPOSE_PAUSE' | 'AUTO_PAUSE_APPROVED';
+  approvedBy: string;
+  approvedAt: string;
+  status: 'RUNNING' | 'TARGET_REACHED' | 'NEXT_BATCH_APPROVED';
+  reachedAt: string | null;
+  batchNumber: number;
+  history: { at: string; text: string }[];
+}
 
 export interface Project {
   id: string;
@@ -47,6 +91,15 @@ export interface Project {
   lastVerifiedAt: string | null;
   currentRisk: string | null;
   impactPlan: { target: string; observed: string | null } | null;
+  /** v1.1 additive fields (all optional-safe; old data defaults them). */
+  pause: ProjectPauseState | null;
+  pilot: PilotCheckpoint | null;
+  managerUids: string[]; // delegated people allowed to pause/resume
+  pinned: boolean;
+  canceledAt: string | null;
+  origin: 'MANUAL' | 'AI_RECOMMENDATION';
+  category: string | null;
+  employeeBrief: string | null; // sanitized worker brief (never contains owner finances)
 }
 
 export type StepStatus =
@@ -98,6 +151,10 @@ export interface Step {
   /** Latest Not-yet-handled "new activity" marker. */
   newActivityAt: string | null;
   linkedDocLabel?: string;
+  /** Step-level hold that does not pause the whole project. */
+  onHold: { at: string; byUid: string; reason: string | null } | null;
+  /** Employee-safe reason this step exists (never financial). */
+  whyForGoal?: string;
 }
 
 export interface Verification {
@@ -169,7 +226,8 @@ export interface ResourceLink {
 export type JournalType =
   | 'STATUS_CHANGE' | 'UPDATE_REQUESTED' | 'UPDATE_RESPONSE' | 'PROACTIVE_UPDATE' | 'AI_OBSERVATION'
   | 'EMPLOYEE_REVIEW' | 'RESOURCE' | 'VERIFICATION' | 'BLOCKER' | 'NOTE' | 'DECISION' | 'LATE_EVIDENCE'
-  | 'ACK' | 'PLAN_CHANGE' | 'ACCESS';
+  | 'ACK' | 'PLAN_CHANGE' | 'ACCESS'
+  | 'PAUSE_REQUESTED' | 'PROJECT_PAUSED' | 'PAUSE_SCHEDULE_CHANGED' | 'RESUME_REMINDER_SENT' | 'PROJECT_RESUMED' | 'PILOT';
 export type ConfidenceBand = 'LOW' | 'MEDIUM' | 'HIGH' | 'N_A';
 export type VerificationState = 'OFFICIAL' | 'AI_DETECTED' | 'EMPLOYEE_CONFIRMED' | 'INDEPENDENTLY_VERIFIED' | 'NEEDS_REVIEW' | 'UNKNOWN';
 
@@ -340,6 +398,8 @@ export interface Finding {
   reviewedAt: string | null;
   reviewDecisionId: string | null;
   groupKey: string;
+  /** Activity noticed on a project that is currently paused. Neutral wording; never resumes anything. */
+  whilePaused?: boolean;
 }
 
 export type CardType = 'AI_PROGRESS' | 'AI_COMPLETION_SUGGESTION' | 'AI_DISCREPANCY' | 'AI_UNMATCHED_WORK' | 'BLOCKER' | 'RESOURCE_SUGGESTION' | 'OWNER_REQUEST' | 'LATE_EVIDENCE';
@@ -424,7 +484,8 @@ export interface UpdateResponse {
 
 export type NotificationType =
   | 'OWNER_UPDATE_REQUEST' | 'EMPLOYEE_RESPONSE' | 'NEEDS_VERIFICATION' | 'BLOCKER' | 'MISSING_COVERAGE'
-  | 'DAILY_DIGEST' | 'WEEKLY_PRINT_INSIGHT' | 'DIRECT_MENTION' | 'FOLLOW_UP';
+  | 'DAILY_DIGEST' | 'WEEKLY_PRINT_INSIGHT' | 'DIRECT_MENTION' | 'FOLLOW_UP'
+  | 'PROJECT_PAUSED' | 'PROJECT_RESUMED' | 'RESUME_REMINDER' | 'PAUSE_SUGGESTION' | 'PILOT_REACHED' | 'AI_FINDING' | 'PROJECT_ASSIGNED';
 export type NotificationState = 'CREATED' | 'DELIVERED' | 'READ' | 'ACKNOWLEDGED' | 'DISMISSED';
 
 export interface Notification {
@@ -522,6 +583,7 @@ export interface Settings {
   reviewReadyTargetMinutes: number;
   backupReadyLocalTime: string;
   retentionDays: { raw: number; business: number };
+  statusRunLocalTime: string; // first scheduled status run of the day (America/Chicago)
 }
 
 export interface Verifier { id: string }

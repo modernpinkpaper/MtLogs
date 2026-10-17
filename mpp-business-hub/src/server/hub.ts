@@ -12,11 +12,14 @@ import type { AnalysisContext, FindingDraft, ModelAdapter } from '../ai/adapter'
 import { describeEvent, validateFindingDraft } from '../ai/adapter';
 import { ReplayAnalyzer } from '../ai/replay';
 import { cardTitle, cardTypeFor, Hub_rank } from './cards';
+import * as PS from './pause';
+import type { PauseInput } from './pause';
+import * as PL from './pilot';
 import { computeShiftStats, groupProblemEpisodes, fourStateMinutes, weeklyPrinterSummary } from './print';
 import * as FX from '../ai/fixtures';
 import type { AiRun, CardType, CoverageState, IntakeRun, IntakeStage, WorkLogEntry } from '../domain/types';
 
-export const STORAGE_KEY = 'mpp-hub-demo-state-v1';
+export const STORAGE_KEY = 'mpp-hub-demo-state-v2';
 /** Compile-time guard: demo-only operations exist only in this prototype build. */
 export const DEMO_MODE = true as const;
 
@@ -59,7 +62,7 @@ export class HubServer {
   };
   getVersion = () => this.version;
 
-  protected emit() {
+  emit() {
     this.version++;
     if (this.persist && typeof localStorage !== 'undefined') {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); } catch { /* storage full/blocked: demo continues in memory */ }
@@ -68,7 +71,7 @@ export class HubServer {
   }
 
   /** Run a mutation then notify subscribers. All writes go through here. */
-  protected commit<T>(fn: () => T): T {
+  commit<T>(fn: () => T): T {
     const out = fn();
     this.emit();
     return out;
@@ -76,14 +79,14 @@ export class HubServer {
 
   get now() { return this.state.now; }
 
-  protected nid(prefix: string): string {
+  nid(prefix: string): string {
     const n = (this.state.counters[prefix] ?? 0) + 1;
     this.state.counters[prefix] = n;
     return `${prefix}-${String(n).padStart(4, '0')}`;
   }
 
   /** Idempotency: the first result for a key is returned for every retry with no new side effects. */
-  protected idem<T>(key: string | undefined, fn: () => T): T {
+  idem<T>(key: string | undefined, fn: () => T): T {
     if (!key) return fn();
     if (key in this.state.idempotency) return this.state.idempotency[key] as T;
     const out = fn();
@@ -102,7 +105,7 @@ export class HubServer {
     return this.state.users.find((x) => x.id === uid)?.name ?? 'Unknown actor';
   }
   isOwner(uid: string) { return this.user(uid).role === 'OWNER'; }
-  protected requireOwner(uid: string): User {
+  requireOwner(uid: string): User {
     const u = this.user(uid);
     if (u.role !== 'OWNER') throw new PermissionDenied();
     return u;
@@ -120,18 +123,18 @@ export class HubServer {
     if (p.visibility === 'OWNER_PRIVATE') return false;
     return p.memberUids.includes(u.id);
   }
-  protected projectFor(uid: string, projectId: string): Project {
+  projectFor(uid: string, projectId: string): Project {
     const u = this.user(uid);
     const p = this.state.projects.find((x) => x.id === projectId);
     if (!p || !this.canReadProject(u, p)) throw new PermissionDenied();
     return p;
   }
-  protected stepFor(uid: string, stepId: string): { step: Step; project: Project } {
+  stepFor(uid: string, stepId: string): { step: Step; project: Project } {
     const step = this.state.steps.find((s) => s.id === stepId);
     if (!step) throw new PermissionDenied();
     return { step, project: this.projectFor(uid, step.projectId) };
   }
-  protected workStepFor(uid: string, stepId: string) {
+  workStepFor(uid: string, stepId: string) {
     const r = this.stepFor(uid, stepId);
     if (!this.canWorkOnProject(this.user(uid), r.project)) throw new PermissionDenied();
     return r;
@@ -144,11 +147,11 @@ export class HubServer {
   }
 
   // ------------------------------------------------------------------ audit / journal / notifications
-  protected audit(a: Omit<AuditEvent, 'id' | 'recordedAt'>) {
+  audit(a: Omit<AuditEvent, 'id' | 'recordedAt'>) {
     this.state.auditEvents.push({ ...a, id: this.nid('aud'), recordedAt: this.state.now });
   }
 
-  protected addJournal(e: {
+  addJournal(e: {
     projectId: string; stepIds?: string[]; type: JournalType; actorUid: string | null; actorLabel?: string; actorType?: ProjectEvent['actorType'];
     title: string; summary: string; verificationState: VerificationState; confidenceBand?: ProjectEvent['confidenceBand'];
     sourceRefs?: string[]; relatedResourceIds?: string[]; relatedRequestId?: string | null; relatedResponseId?: string | null; occurredAt?: string;
@@ -167,7 +170,7 @@ export class HubServer {
     return ev;
   }
 
-  protected notify(n: {
+  notify(n: {
     recipientUid: string; senderUid: string | null; type: NotificationType; title: string; preview: string; projectId: string | null;
     stepId?: string | null; sourceEntityId: string; deepLink: string; key: string;
   }): Notification {
@@ -241,6 +244,7 @@ export class HubServer {
         memberUids: input.visibility === 'OWNER_PRIVATE' ? [] : input.memberUids, sharedWithUids: [], visibility: input.visibility,
         priority: input.priority ?? 'NORMAL', deadlineAt: input.deadlineAt ?? null, businessGoal: '', closedAt: null, createdAt: this.state.now,
         updatedAt: this.state.now, lastVerifiedAt: null, currentRisk: null, impactPlan: null,
+        pause: null, pilot: null, managerUids: [], pinned: false, canceledAt: null, origin: 'MANUAL', category: null, employeeBrief: null,
       };
       this.state.projects.push(p);
       this.audit({ entityType: 'project', entityId: p.id, action: 'CREATE', before: null, after: { key: p.key, visibility: p.visibility }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner created project (demo data)', evidenceRefs: [], projectId: p.id });
@@ -265,7 +269,7 @@ export class HubServer {
         title: input.title.trim(), instructions: input.instructions ?? '', objective: '', acceptance: '', status: 'NOT_STARTED', blockerReason: null,
         assignedUids: input.assignedUids ?? project.memberUids.slice(0, 1), dueAt: null, impact: input.impact ?? 'ROUTINE', dependencyIds: [], evidenceHints: [],
         checklist: [], verificationSource: 'NONE', observedLevel: 'NO_EVIDENCE', observedReview: 'NONE', observedNote: null, lastActivityAt: null,
-        lastConfirmedAt: null, lastVerifiedAt: null, humanReported: null, verifications: [], newActivityAt: null,
+        lastConfirmedAt: null, lastVerifiedAt: null, humanReported: null, verifications: [], newActivityAt: null, onHold: null,
       };
       this.state.steps.push(step);
       this.audit({ entityType: 'step', entityId: step.id, action: 'CREATE', before: null, after: { title: step.title, parentStepId: step.parentStepId }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Plan change (demo data)', evidenceRefs: [], projectId });
@@ -326,6 +330,7 @@ export class HubServer {
   closeProject(uid: string, projectId: string) {
     this.requireOwner(uid);
     const p = this.projectFor(uid, projectId);
+    if (p.pause?.isPaused) throw new HubError('PAUSED', 'Resume this project before closing it.');
     const open = this.state.steps.filter((s) => s.projectId === projectId && !TERMINAL.includes(s.status));
     if (open.length) throw new HubError('STEPS_OPEN', `${open.length} step(s) are not finished. A project never closes by itself.`);
     return this.commit(() => {
@@ -361,7 +366,7 @@ export class HubServer {
     return this.commit(() => this.applyTransition(step, project, to, uid, opts.reason ?? '', verificationSource));
   }
 
-  protected applyTransition(step: Step, project: Project, to: StepStatus, actorUid: string | null, reason: string, verificationSource?: Step['verificationSource'], evidence: string[] = []): Step {
+  applyTransition(step: Step, project: Project, to: StepStatus, actorUid: string | null, reason: string, verificationSource?: Step['verificationSource'], evidence: string[] = []): Step {
     const before = { status: step.status, verificationSource: step.verificationSource, blockerReason: step.blockerReason };
     step.status = to;
     step.blockerReason = to === 'BLOCKED' || to === 'WAITING' ? reason || step.blockerReason : to === 'IN_PROGRESS' ? null : step.blockerReason;
@@ -380,7 +385,7 @@ export class HubServer {
   }
 
   /** Apply a human-reported choice as an official step change only when the transition is legal and not terminal. Never VERIFIED. */
-  protected applyHumanReport(step: Step, project: Project, choice: ResponseChoice, note: string | null, uid: string) {
+  applyHumanReport(step: Step, project: Project, choice: ResponseChoice, note: string | null, uid: string) {
     step.humanReported = { choice, note, at: this.state.now, byUid: uid };
     const target: StepStatus | null =
       choice === 'COMPLETED' ? 'REPORTED_COMPLETE' : choice === 'IN_PROGRESS' ? 'IN_PROGRESS' : choice === 'BLOCKED' ? 'BLOCKED' : choice === 'WAITING' ? 'WAITING' : null;
@@ -393,7 +398,7 @@ export class HubServer {
   openShift(uid: string): Shift | null {
     return this.state.shifts.find((s) => s.uid === uid && s.clockOutAt === null) ?? null;
   }
-  protected requirePaidShiftForEmployee(uid: string): Shift | null {
+  requirePaidShiftForEmployee(uid: string): Shift | null {
     const u = this.user(uid);
     const shift = this.openShift(uid);
     if (u.role !== 'OWNER' && !shift) {
@@ -618,7 +623,7 @@ export class HubServer {
     this.user(uid);
     return this.state.notifications.filter((n) => n.recipientUid === uid && n.state !== 'DISMISSED').sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
-  protected ownNote(uid: string, id: string): Notification {
+  ownNote(uid: string, id: string): Notification {
     const n = this.state.notifications.find((x) => x.id === id);
     if (!n || n.recipientUid !== uid) throw new PermissionDenied();
     return n;
@@ -687,7 +692,7 @@ export class HubServer {
     return this.commit(() => { c.reviewStartedAt = this.state.now; if (c.status === 'PENDING' || c.status === 'DEFERRED') c.status = 'IN_REVIEW'; return c; });
   }
 
-  protected recordDecision(uid: string, card: ReviewCard, action: CardAction, status: ResponseChoice | null, note: string | null, links: string[], correction: string | null, classification: string | null, key: string, shift: Shift | null): ReviewDecision {
+  recordDecision(uid: string, card: ReviewCard, action: CardAction, status: ResponseChoice | null, note: string | null, links: string[], correction: string | null, classification: string | null, key: string, shift: Shift | null): ReviewDecision {
     const d: ReviewDecision = {
       id: this.nid('dec'), cardId: card.id, actorUid: uid, selectedAction: action, statusAnswer: status, note, evidenceLinks: links, correctionText: correction,
       classificationChoice: classification, submittedAt: this.state.now, reviewStartedAt: card.reviewStartedAt, duringPaidShift: !!shift, shiftId: shift?.id ?? null, idempotencyKey: key,
@@ -754,7 +759,7 @@ export class HubServer {
     });
   }
 
-  protected applyClassification(uid: string, f: Finding, c: { kind: string; projectId?: string; stepId?: string; newStepTitle?: string } | null) {
+  applyClassification(uid: string, f: Finding, c: { kind: string; projectId?: string; stepId?: string; newStepTitle?: string } | null) {
     if (!c) return;
     if (c.kind === 'ROUTINE' || c.kind === 'POTENTIAL_PROJECT') {
       // Saved to the person's own "other work" list. It does NOT create a step or change any project.
@@ -839,7 +844,7 @@ export class HubServer {
   }
 
   // ------------------------------------------------------------------ resources
-  protected visibleResources(u: User): Resource[] {
+  visibleResources(u: User): Resource[] {
     if (u.role === 'OWNER') return this.state.resources;
     const readable = new Set(this.state.projects.filter((p) => this.canReadProject(u, p)).map((p) => p.id));
     return this.state.resources.filter((r) => r.visibility !== 'OWNER_PRIVATE' && (r.visibility === 'TEAM_SHARED' || this.state.resourceLinks.some((l) => l.resourceId === r.id && readable.has(l.projectId) && l.associationState !== 'REJECTED')));
@@ -943,7 +948,7 @@ export class HubServer {
   }
 
   // ------------------------------------------------------------------ MT Log intake (deterministic, no LLM)
-  protected adapter: ModelAdapter = new ReplayAnalyzer();
+  adapter: ModelAdapter = new ReplayAnalyzer();
   setAdapter(a: ModelAdapter) { this.adapter = a; }
   private analysisInFlight = false;
 
@@ -954,7 +959,7 @@ export class HubServer {
     if (arch.some((a) => a.coverageState === 'PROVISIONAL')) return 'PROVISIONAL';
     return 'FINAL';
   }
-  protected primaryUserFor(deviceId: string): User | null {
+  primaryUserFor(deviceId: string): User | null {
     // A routing hint for who reviews a device's activity — NOT attribution of who did the work.
     return this.state.users.find((u) => u.active && u.primaryDeviceId === deviceId) ?? null;
   }
@@ -1030,7 +1035,7 @@ export class HubServer {
   // ------------------------------------------------------------------ AI pipeline (typed JSON in, proposals out)
   monthSpendUsd() { return this.state.aiRuns.reduce((s, r) => s + r.costUsd, 0); }
 
-  protected buildContext(deviceId: string, recipient: User): AnalysisContext {
+  buildContext(deviceId: string, recipient: User): AnalysisContext {
     const projects = this.state.projects.filter((p) => this.canReadProject(recipient, p));
     const ids = new Set(projects.map((p) => p.id));
     return {
@@ -1087,7 +1092,7 @@ export class HubServer {
 
   private static LEVEL_RANK: Record<string, number> = { NO_EVIDENCE: 0, INCONCLUSIVE: 1, POSSIBLE_ACTIVITY: 2, STRONG_ACTIVITY: 3, DELIVERABLE_OBSERVED: 4, RESULT_OBSERVED: 5 };
 
-  protected ingestFindings(drafts: FindingDraft[], recipient: User): { created: number; updated: number; late: number } {
+  ingestFindings(drafts: FindingDraft[], recipient: User): { created: number; updated: number; late: number } {
     const st = this.state;
     const stats = { created: 0, updated: 0, late: 0 };
     for (const d of drafts) {
@@ -1127,6 +1132,15 @@ export class HubServer {
       }
 
       const f: Finding = { ...d, ...base, id: this.nid('fnd'), status: 'PROPOSED', supersedesFindingId: prev?.id ?? null };
+      const pj = f.projectId ? st.projects.find((p) => p.id === f.projectId) : null;
+      if (pj?.pause?.isPaused) {
+        // Neutral wording: a paused project can still have planned tests, blocker fixes or saved documents. Nothing resumes.
+        f.whilePaused = true;
+        f.headline = `We found activity that may belong to ${pj.key} while it is paused`;
+        f.inference = 'This may be a planned test, a fix for something in the way, or a document being saved. Nothing was resumed and nothing is wrong. Please tell us what it was.';
+        f.proposedUpdate = { kind: 'ASK_EMPLOYEE', detail: 'Ask what the activity was. The project stays paused.' };
+        f.uncertainties = f.uncertainties.filter((u) => !/tracker still says/i.test(u));
+      }
       st.findings.push(f);
       if (prev) { prev.status = 'SUPERSEDED'; stats.updated++; } else stats.created++;
       this.audit({ entityType: 'finding', entityId: f.id, action: prev ? 'UPDATED' : 'CREATED', before: prev ? { id: prev.id } : null, after: { type: f.findingType, claim: f.claimType, level: f.inferenceLevel }, actorUid: null, actorLabel: 'AI engine (replay adapter)', reason: 'Proposed from observed events; official state unchanged', evidenceRefs: f.sourceEventIds, projectId: f.projectId });
@@ -1141,7 +1155,7 @@ export class HubServer {
       if (f.projectId) {
         this.addJournal({
           projectId: f.projectId, stepIds: f.stepId ? [f.stepId] : [], type: 'AI_OBSERVATION', actorUid: null, actorType: 'AI', actorLabel: `${f.deviceId} device; actor unverified (automated AI suggestion)`,
-          title: 'AI saw some activity', summary: `${f.inference} The step status was not changed.`, verificationState: 'AI_DETECTED', confidenceBand: f.confidenceBand, sourceRefs: f.sourceEventIds, occurredAt: lastEv,
+          title: f.whilePaused ? 'Activity detected while the project was paused' : 'AI saw some activity', summary: `${f.inference} The step status was not changed.`, verificationState: 'AI_DETECTED', confidenceBand: f.confidenceBand, sourceRefs: f.sourceEventIds, occurredAt: lastEv,
         });
       }
       if (!wantsCard) continue; // print-only day: no mandatory daily review card
@@ -1157,12 +1171,12 @@ export class HubServer {
     return stats;
   }
 
-  protected newCard(type: CardType, recipientUid: string, f: Finding, title: string, text: string): ReviewCard {
+  newCard(type: CardType, recipientUid: string, f: Finding, title: string, text: string): ReviewCard {
     const step = f.stepId ? this.state.steps.find((s) => s.id === f.stepId) : null;
     return {
       id: this.nid('card'), cardType: type, recipientUid, projectId: f.projectId, stepId: f.stepId, findingIds: [f.id], updateRequestId: null, title, explanatoryText: text,
       status: 'PENDING', dueAt: null, provisional: f.coverageState !== 'FINAL', sourceCoverage: f.coverageState,
-      canBulkReview: type === 'AI_PROGRESS' && f.claimType === 'OBSERVED_ACTION' && step?.impact !== 'HIGH', reviewStartedAt: null,
+      canBulkReview: type === 'AI_PROGRESS' && f.claimType === 'OBSERVED_ACTION' && step?.impact !== 'HIGH' && !f.whilePaused, reviewStartedAt: null,
       createdAt: this.state.now, lastUpdatedAt: this.state.now, groupKey: f.groupKey,
     };
   }
@@ -1240,11 +1254,17 @@ export class HubServer {
     for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['EMPLOYEE_RESPONSE'].includes(n.type))) queue.push({ kind: 'They answered you', label: n.title, link: n.deepLink, weight: 100 });
     for (const s of st.steps) {
       const p = st.projects.find((p) => p.id === s.projectId)!;
+      const paused = !!p.pause?.isPaused;
       if (s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Needs a double-check', label: `${p.key} — ${s.title} (says it is done, but nobody double-checked)`, link: `/projects/${p.id}/steps/${s.id}`, weight: 80 });
-      if (s.status === 'BLOCKED') queue.push({ kind: 'Blocked', label: `${p.key} — ${s.title}: ${s.blockerReason ?? ''}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 90 });
-      if (s.dueAt && s.dueAt < st.now && !TERMINAL.includes(s.status)) queue.push({ kind: 'Late', label: `${p.key} — ${s.title}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 70 });
-      if (s.observedReview === 'PENDING_EMPLOYEE' && s.status === 'NOT_STARTED' && s.observedLevel !== 'NO_EVIDENCE') queue.push({ kind: 'Tracker and activity do not match', label: `${p.key} — ${s.title}: we saw activity, but the tracker still says “Not started”`, link: `/projects/${p.id}/steps/${s.id}`, weight: 60 });
+      if (s.status === 'BLOCKED' && !paused) queue.push({ kind: 'Blocked', label: `${p.key} — ${s.title}: ${s.blockerReason ?? ''}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 90 });
+      // Ordinary nags are quiet while a project is paused.
+      if (!paused && s.dueAt && s.dueAt < st.now && !TERMINAL.includes(s.status)) queue.push({ kind: 'Late', label: `${p.key} — ${s.title}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 70 });
+      if (!paused && s.observedReview === 'PENDING_EMPLOYEE' && s.status === 'NOT_STARTED' && s.observedLevel !== 'NO_EVIDENCE') queue.push({ kind: 'Tracker and activity do not match', label: `${p.key} — ${s.title}: we saw activity, but the tracker still says “Not started”`, link: `/projects/${p.id}/steps/${s.id}`, weight: 60 });
     }
+    for (const p of st.projects.filter((p) => p.pause?.isPaused && !p.closedAt)) {
+      if (p.deadlineAt && p.deadlineAt < st.now && (p.pause!.pausedAt ?? '') <= p.deadlineAt) queue.push({ kind: 'Pick a new deadline', label: `${p.key} was paused, and its original deadline has passed`, link: `/projects/${p.id}`, weight: 65 });
+    }
+    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && !n.readAt && ['RESUME_REMINDER', 'PAUSE_SUGGESTION', 'PILOT_REACHED', 'AI_FINDING'].includes(n.type))) queue.push({ kind: 'Needs your decision', label: n.title, link: n.deepLink, weight: 95 });
     for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['BLOCKER', 'NEEDS_VERIFICATION'].includes(n.type))) queue.push({ kind: n.type === 'BLOCKER' ? 'Blocked' : 'Needs a double-check', label: n.title, link: n.deepLink, weight: 85 });
     for (const a of st.archives.filter((a) => a.coverageState === 'INCOMPLETE')) queue.push({ kind: 'Data problem', label: `${a.deviceId} ${a.hourWindow}:00 file is missing some events (${a.sequenceGaps.join('; ')})`, link: '/owner/data-intake', weight: 50 });
     if (st.settings.aiOutage || st.settings.logSyncOutage) queue.push({ kind: 'Data problem', label: st.settings.aiOutage ? 'The AI helper is off (demo switch)' : 'Computer data is late (demo switch)', link: '/owner/data-intake', weight: 55 });
@@ -1263,6 +1283,7 @@ export class HubServer {
     return {
       today: st.now, lastSync: Object.values(st.deviceLastSeen).sort().pop() ?? null, dataThrough: latestRun?.dataThrough ?? null, lastOwnerLookAt: since,
       changeCount: ev.length, narrative, queue, workerCards,
+      counts: { active: st.projects.filter((p) => !p.closedAt && !p.canceledAt && !p.pause?.isPaused && p.visibility !== 'OWNER_PRIVATE').length, paused: st.projects.filter((p) => p.pause?.isPaused && !p.closedAt).length, waitingForYou: queue.length },
       print: this.weeklyPrintReport(uid).printers.map((p) => ({ printer: p.printer, completed: p.completed, failed: p.failed, incidents: p.incidents.length })),
       privateProjects: st.projects.filter((p) => p.visibility === 'OWNER_PRIVATE').length,
     };
@@ -1422,16 +1443,83 @@ export class HubServer {
     });
   }
 
+  setProjectManagers(uid: string, projectId: string, managerUids: string[]) {
+    this.requireOwner(uid);
+    const p = this.projectFor(uid, projectId);
+    if (p.visibility === 'OWNER_PRIVATE') throw new HubError('PRIVATE_PROJECT', 'A private project cannot have other managers.');
+    for (const m of managerUids) { if (!p.memberUids.includes(m)) throw new HubError('VALIDATION', 'A manager must work on the project.'); }
+    return this.commit(() => {
+      const before = [...p.managerUids]; p.managerUids = managerUids;
+      this.audit({ entityType: 'project', entityId: p.id, action: 'SET_MANAGERS', before, after: managerUids, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner chose who may pause and resume', evidenceRefs: [], projectId: p.id });
+      this.addJournal({ projectId: p.id, type: 'ACCESS', actorUid: uid, title: 'Who can pause this project changed', summary: `Allowed to pause or resume: ${managerUids.map((m) => this.userName(m)).join(', ') || 'only Dalia'}.`, verificationState: 'OFFICIAL' });
+      return p;
+    });
+  }
+  cancelProject(uid: string, projectId: string) {
+    this.requireOwner(uid);
+    const p = this.projectFor(uid, projectId);
+    if (p.canceledAt) throw new HubError('NOT_ACTIVE', 'This project is already canceled.');
+    return this.commit(() => {
+      p.canceledAt = this.state.now;
+      this.audit({ entityType: 'project', entityId: p.id, action: 'CANCEL', before: null, after: p.canceledAt, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner canceled the project', evidenceRefs: [], projectId: p.id });
+      this.addJournal({ projectId: p.id, type: 'DECISION', actorUid: uid, title: 'Project canceled by owner', summary: 'Everything is kept. A canceled project never restarts by itself.', verificationState: 'OFFICIAL' });
+      return p;
+    });
+  }
+  /** Finished projects only come back when the owner deliberately reopens them. */
+  reopenProject(uid: string, projectId: string) {
+    this.requireOwner(uid);
+    const p = this.projectFor(uid, projectId);
+    if (!p.closedAt && !p.canceledAt) throw new HubError('NOT_ACTIVE', 'This project is not finished.');
+    return this.commit(() => {
+      const before = { closedAt: p.closedAt, canceledAt: p.canceledAt };
+      p.closedAt = null; p.canceledAt = null;
+      this.audit({ entityType: 'project', entityId: p.id, action: 'REOPEN', before, after: { closedAt: null, canceledAt: null }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner reopened the project', evidenceRefs: [], projectId: p.id });
+      this.addJournal({ projectId: p.id, type: 'DECISION', actorUid: uid, title: 'Project reopened by owner', summary: 'It is active again.', verificationState: 'OFFICIAL' });
+      return p;
+    });
+  }
+
+  // ------------------------------------------------------------------ pause / resume (v1.1) — see pause.ts
+  canControlProject(uid: string, projectId: string): boolean { const p = this.projectFor(uid, projectId); return PS.canControlProject(this, this.user(uid), p); }
+  pauseProject(uid: string, projectId: string, input: PauseInput) { return PS.pauseProject(this, uid, projectId, input); }
+  resumeProject(uid: string, projectId: string, input: { note?: string; expectedScheduleVersion?: number; idempotencyKey: string }) { return PS.resumeProject(this, uid, projectId, input); }
+  changePauseSchedule(uid: string, projectId: string, input: Parameters<typeof PS.changePauseSchedule>[3]) { return PS.changePauseSchedule(this, uid, projectId, input); }
+  suggestPause(uid: string, projectId: string, note: string, key: string) { return PS.suggestPause(this, uid, projectId, note, key); }
+  suggestResume(uid: string, projectId: string, note: string, key: string) { return PS.suggestResume(this, uid, projectId, note, key); }
+  holdStep(uid: string, stepId: string, reason: string | null) { return PS.holdStep(this, uid, stepId, reason); }
+  releaseStep(uid: string, stepId: string) { return PS.releaseStep(this, uid, stepId); }
+  setProjectDeadline(uid: string, projectId: string, ymd: string | null) { return PS.setProjectDeadline(this, uid, projectId, ymd); }
+  /** The scheduled status run. Idempotent; changes planning state only, never runs scripts or external actions. */
+  processSchedules() { return PS.processSchedules(this); }
+  setPinned(uid: string, projectId: string, pinned: boolean) { this.requireOwner(uid); const p = this.projectFor(uid, projectId); return this.commit(() => { p.pinned = pinned; return p; }); }
+
+  // ------------------------------------------------------------------ limited tests (pilot checkpoints) — see pilot.ts
+  configurePilot(uid: string, projectId: string, input: PL.PilotInput) { return PL.configurePilot(this, uid, projectId, input); }
+  recordPilotRow(uid: string, projectId: string, sku: string, state: import('../domain/types').PilotRowState, note: string | null = null, evidence: string | null = null) { return PL.recordPilotRow(this, uid, projectId, sku, state, note, evidence); }
+  verifyPilotRows(uid: string, projectId: string, skus: string[], detail: string) { return PL.verifyPilotRows(this, uid, projectId, skus, detail); }
+  approveNextBatch(uid: string, projectId: string, input: Parameters<typeof PL.approveNextBatch>[3]) { return PL.approveNextBatch(this, uid, projectId, input); }
+  pilotHandoff(uid: string, projectId: string) { return PL.pilotHandoff(this, this.projectFor(uid, projectId)); }
+
   // ------------------------------------------------------------------ demo-only operations (never production)
   private assertDemo() { if (!DEMO_MODE) throw new HubError('DEMO_ONLY', 'Demo operation.'); }
 
   demoAdvance(minutes: number) {
     this.assertDemo();
-    return this.commit(() => { this.state.now = addMinutes(this.state.now, minutes); this.refreshCoverage(); });
+    this.commit(() => { this.state.now = addMinutes(this.state.now, minutes); this.refreshCoverage(); });
+    this.processSchedules();
   }
   demoAdvanceToNextMorning() {
     this.assertDemo();
-    return this.commit(() => { this.state.now = nextBusinessMorning(this.state.now, '07:30'); this.refreshCoverage(); });
+    this.commit(() => { this.state.now = nextBusinessMorning(this.state.now, '07:30'); this.refreshCoverage(); });
+    this.processSchedules();
+  }
+  /** Jump to a date (first status run of that Chicago day, 6:00 AM + 1 min). Only moves forward. */
+  demoAdvanceToDate(ymd: string) {
+    this.assertDemo();
+    const t = addMinutes(chicagoToUtc(ymd, this.state.settings.statusRunLocalTime || '06:00'), 1);
+    if (t > this.state.now) this.commit(() => { this.state.now = t; this.refreshCoverage(); });
+    this.processSchedules();
   }
   async demoReleaseFbaHour() {
     this.assertDemo();
@@ -1507,7 +1595,7 @@ export class HubServer {
     return hub;
   }
 
-  protected async bootstrap() {
+  async bootstrap() {
     this.ingestFile({ ...FX.FILE_ERIKA_14, text: FX.erika14Rev1() });
     this.ingestFile({ ...FX.FILE_PC04_13, text: FX.pc04_13() });
     await this.runAnalysis('seed: initial replay');

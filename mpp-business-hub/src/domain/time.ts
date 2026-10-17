@@ -103,3 +103,16 @@ export function nextBusinessMorning(iso: string, hhmm = '08:00'): string {
   }
   return iso;
 }
+
+/** "2026-10-30" → "Oct 30" (date-only values have no timezone shift). */
+export function formatLocalDate(ymd: string | null | undefined, withYear = false): string {
+  if (!ymd) return '—';
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) }).format(new Date(Date.UTC(y, m - 1, d, 12)));
+}
+export function isValidLocalDate(ymd: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 12));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}

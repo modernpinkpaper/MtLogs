@@ -39,10 +39,10 @@ function assignments(): WorkAssignment[] {
 
 export const settings = (): Settings => ({
   aiOutage: false, logSyncOutage: false, monthlyBudgetUsd: 100, budgetWarnPct: 80, budgetCircuitBreakerPct: 100,
-  emailUrgentOptIn: false, reviewReadyTargetMinutes: 20, backupReadyLocalTime: '07:30', retentionDays: { raw: 90, business: 1825 },
+  emailUrgentOptIn: false, reviewReadyTargetMinutes: 20, backupReadyLocalTime: '07:30', retentionDays: { raw: 90, business: 1825 }, statusRunLocalTime: '06:00',
 });
 
-const base = () => ({ ownerUid: USER_IDS.dalia, sharedWithUids: [] as string[], closedAt: null as string | null, createdAt: T('2026-09-28', '09:00'), lastVerifiedAt: null as string | null, currentRisk: null as string | null, impactPlan: null as Project['impactPlan'] });
+const base = () => ({ ownerUid: USER_IDS.dalia, sharedWithUids: [] as string[], closedAt: null as string | null, createdAt: T('2026-09-28', '09:00'), lastVerifiedAt: null as string | null, currentRisk: null as string | null, impactPlan: null as Project['impactPlan'], pause: null as Project['pause'], pilot: null as Project['pilot'], managerUids: [] as string[], pinned: false, canceledAt: null as string | null, origin: 'MANUAL' as const, category: null as string | null, employeeBrief: null as string | null });
 
 function projects(): Project[] {
   return [
@@ -57,7 +57,7 @@ function projects(): Project[] {
 const stepBase = (): Omit<Step, 'id' | 'projectId' | 'sortOrder' | 'title' | 'instructions' | 'status' | 'assignedUids' | 'impact'> => ({
   parentStepId: null as string | null, phase: null as string | null, blockerReason: null as string | null, dependencyIds: [] as string[], evidenceHints: [] as string[], checklist: [] as Step['checklist'],
   verificationSource: 'NONE' as Step['verificationSource'], observedLevel: 'NO_EVIDENCE' as Step['observedLevel'], observedReview: 'NONE' as Step['observedReview'], observedNote: null as string | null,
-  lastActivityAt: null as string | null, lastConfirmedAt: null as string | null, lastVerifiedAt: null as string | null, humanReported: null as Step['humanReported'], verifications: [] as Step['verifications'], newActivityAt: null as string | null,
+  lastActivityAt: null as string | null, lastConfirmedAt: null as string | null, lastVerifiedAt: null as string | null, humanReported: null as Step['humanReported'], verifications: [] as Step['verifications'], newActivityAt: null as string | null, onHold: null as Step['onHold'],
   dueAt: null as string | null, acceptance: '', objective: '',
 });
 

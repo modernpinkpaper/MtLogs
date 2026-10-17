@@ -6,6 +6,7 @@ export function cardTypeFor(f: Finding): CardType {
   return f.findingType === 'LATE_EVIDENCE' ? 'LATE_EVIDENCE' : f.findingType;
 }
 export function cardTitle(f: Finding): string {
+  if (f.whilePaused) return 'Activity while the project was paused';
   switch (f.findingType) {
     case 'AI_UNMATCHED_WORK': return 'Work we couldn’t match to a project';
     case 'AI_DISCREPANCY': return 'Activity seen — status differs';
