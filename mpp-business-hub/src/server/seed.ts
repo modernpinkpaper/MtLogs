@@ -4,6 +4,7 @@ import type {
 } from '../domain/types';
 import { addMinutes, chicagoToUtc } from '../domain/time';
 import type { HubState } from './state';
+import { ownerSeed } from './ownerSeed';
 
 // ALL DATA BELOW IS SYNTHETIC DEMO DATA. No real staff PII, customer data, or production records.
 
@@ -273,6 +274,7 @@ function opportunities(): Opportunity[] {
 export function buildSeedState(): HubState {
   const p = printData();
   const audit: AuditEvent[] = [];
+  const o = ownerSeed();
   return {
     now: NOW,
     lastOwnerLookAt: T('2026-10-15', '17:00'),
@@ -281,5 +283,7 @@ export function buildSeedState(): HubState {
     updateRequests: [], updateResponses: [], notifications: notifications(), shifts: shifts(), intakeRuns: [], aiRuns: [],
     printJobs: p.jobs, printerProblems: p.problems, activityBins: p.bins, stations: STATIONS, opportunities: opportunities(),
     settings: settings(), idempotency: {}, counters: {}, printPendingSync: {}, deviceLastSeen: {}, seenInjection: false, workLog: [],
+    ownerFindings: o.findings, ownerModels: o.models, outcomes: [], goals: o.goals, sources: o.sources, workspaces: {}, drive: { folders: [], shortcuts: [], failAfterOps: null, opCount: 0 },
+    lastFindingsLookAt: T('2026-10-15', '17:00'), lastScanAt: null, scanCount: 0,
   };
 }

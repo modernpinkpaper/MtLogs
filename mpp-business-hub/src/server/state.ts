@@ -1,7 +1,7 @@
 import type {
   ActivityBin, AiRun, AuditEvent, Finding, IntakeRun, MtLogEvent, NormalizedEvent, Notification, Opportunity, PrintJob,
   PrinterProblemEvent, PrintStation, Project, ProjectEvent, Resource, ResourceLink, ReviewCard, ReviewDecision, Settings,
-  Shift, SourceArchive, Step, UpdateRequest, UpdateResponse, User, WorkAssignment, WorkEpisode, WorkLogEntry,
+  Shift, SourceArchive, BusinessGoal, IntelligenceSource, OpportunityModel, OutcomeMeasurement, OwnerFinding, ProjectWorkspace, DriveSim, Step, UpdateRequest, UpdateResponse, User, WorkAssignment, WorkEpisode, WorkLogEntry,
 } from '../domain/types';
 
 export interface HubState {
@@ -42,6 +42,18 @@ export interface HubState {
   deviceLastSeen: Record<string, string>;
   seenInjection: boolean;
   workLog: WorkLogEntry[];
+  // ---- v1.1 ----
+  /** OWNER-ONLY collections. Only methods that call requireOwner may read them. */
+  ownerFindings: OwnerFinding[];
+  ownerModels: OpportunityModel[];
+  outcomes: OutcomeMeasurement[];
+  goals: BusinessGoal[];
+  sources: IntelligenceSource[];
+  workspaces: Record<string, ProjectWorkspace>;
+  drive: DriveSim;
+  lastFindingsLookAt: string;
+  lastScanAt: string | null;
+  scanCount: number;
 }
 
 export type { MtLogEvent };

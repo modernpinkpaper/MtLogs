@@ -15,6 +15,8 @@ import { cardTitle, cardTypeFor, Hub_rank } from './cards';
 import * as PS from './pause';
 import type { PauseInput } from './pause';
 import * as PL from './pilot';
+import * as MG from './manager';
+import * as DR from './drive';
 import { computeShiftStats, groupProblemEpisodes, fourStateMinutes, weeklyPrinterSummary } from './print';
 import * as FX from '../ai/fixtures';
 import type { AiRun, CardType, CoverageState, IntakeRun, IntakeStage, WorkLogEntry } from '../domain/types';
@@ -233,14 +235,14 @@ export class HubServer {
     };
   }
 
-  createProject(uid: string, input: { title: string; objective: string; memberUids: string[]; visibility: Project['visibility']; priority?: Project['priority']; deadlineAt?: string | null }): Project {
+  createProject(uid: string, input: { title: string; objective: string; memberUids: string[]; visibility: Project['visibility']; priority?: Project['priority']; deadlineAt?: string | null; key?: string }): Project {
     this.requireOwner(uid);
     if (!input.title.trim()) throw new HubError('VALIDATION', 'Please type a title.');
     return this.commit(() => {
       const nums = this.state.projects.map((p) => Number(p.key.replace(/\D/g, ''))).filter((n) => n < 900 && !Number.isNaN(n));
       const key = input.visibility === 'OWNER_PRIVATE' ? `P-D${String(this.state.projects.filter((p) => p.visibility === 'OWNER_PRIVATE').length + 1).padStart(2, '0')}` : `P-${String(Math.max(0, ...nums) + 1).padStart(3, '0')}`;
       const p: Project = {
-        id: this.nid('prj'), key, title: input.title.trim(), objective: input.objective.trim(), ownerUid: uid,
+        id: this.nid('prj'), key: input.key ?? key, title: input.title.trim(), objective: input.objective.trim(), ownerUid: uid,
         memberUids: input.visibility === 'OWNER_PRIVATE' ? [] : input.memberUids, sharedWithUids: [], visibility: input.visibility,
         priority: input.priority ?? 'NORMAL', deadlineAt: input.deadlineAt ?? null, businessGoal: '', closedAt: null, createdAt: this.state.now,
         updatedAt: this.state.now, lastVerifiedAt: null, currentRisk: null, impactPlan: null,
@@ -1491,7 +1493,7 @@ export class HubServer {
   releaseStep(uid: string, stepId: string) { return PS.releaseStep(this, uid, stepId); }
   setProjectDeadline(uid: string, projectId: string, ymd: string | null) { return PS.setProjectDeadline(this, uid, projectId, ymd); }
   /** The scheduled status run. Idempotent; changes planning state only, never runs scripts or external actions. */
-  processSchedules() { return PS.processSchedules(this); }
+  processSchedules() { const r = PS.processSchedules(this); MG.processFindingSchedules(this); return r; }
   setPinned(uid: string, projectId: string, pinned: boolean) { this.requireOwner(uid); const p = this.projectFor(uid, projectId); return this.commit(() => { p.pinned = pinned; return p; }); }
 
   // ------------------------------------------------------------------ limited tests (pilot checkpoints) — see pilot.ts
@@ -1500,6 +1502,38 @@ export class HubServer {
   verifyPilotRows(uid: string, projectId: string, skus: string[], detail: string) { return PL.verifyPilotRows(this, uid, projectId, skus, detail); }
   approveNextBatch(uid: string, projectId: string, input: Parameters<typeof PL.approveNextBatch>[3]) { return PL.approveNextBatch(this, uid, projectId, input); }
   pilotHandoff(uid: string, projectId: string) { return PL.pilotHandoff(this, this.projectFor(uid, projectId)); }
+
+  // ------------------------------------------------------------------ AI Recommendations (OWNER-ONLY) — see manager.ts / finance.ts / drive.ts
+  listFindings(uid: string, f?: Parameters<typeof MG.listFindings>[2]) { return MG.listFindings(this, uid, f); }
+  inboxSummary(uid: string) { return MG.inboxSummary(this, uid); }
+  markFindingsSeen(uid: string) { return MG.markFindingsSeen(this, uid); }
+  getFinding(uid: string, id: string) { return MG.getFinding(this, uid, id); }
+  findingModel(uid: string, id: string) { return MG.findingModel(this, uid, id); }
+  updateModelVar(uid: string, modelId: string, key: string, patch: Parameters<typeof MG.updateModelVar>[4]) { return MG.updateModelVar(this, uid, modelId, key, patch); }
+  snoozeFinding(uid: string, id: string, ymd: string) { return MG.snoozeFinding(this, uid, id, ymd); }
+  dismissFinding(uid: string, id: string, reason?: string) { return MG.dismissFinding(this, uid, id, reason); }
+  archiveFinding(uid: string, id: string) { return MG.archiveFinding(this, uid, id); }
+  markInformational(uid: string, id: string) { return MG.markInformational(this, uid, id); }
+  reopenFinding(uid: string, id: string) { return MG.reopenFinding(this, uid, id); }
+  setFindingFollowUp(uid: string, id: string, ymd: string | null) { return MG.setFollowUp(this, uid, id, ymd); }
+  linkFinding(uid: string, id: string, projectId: string) { return MG.linkFinding(this, uid, id, projectId); }
+  investigateMore(uid: string, id: string) { return MG.investigateMore(this, uid, id); }
+  runAiScan(uid: string) { return MG.runAiScan(this, uid); }
+  approveFindingAsProject(uid: string, id: string, input: MG.ApproveInput) { return MG.approveFindingAsProject(this, uid, id, input); }
+  employeeBriefPreview(uid: string, input: Parameters<typeof MG.employeeBriefPreview>[0]) { this.requireOwner(uid); return MG.employeeBriefPreview(input); }
+  assignProject(uid: string, projectId: string, assignUids: string[], key: string) { return MG.assignProject(this, uid, projectId, assignUids, key); }
+  addGoal(uid: string, title: string, description: string, priority: 'HIGH' | 'NORMAL' | 'LOW') { return MG.addGoal(this, uid, title, description, priority); }
+  updateGoal(uid: string, id: string, patch: Parameters<typeof MG.updateGoal>[3]) { return MG.updateGoal(this, uid, id, patch); }
+  toggleSource(uid: string, id: string, on: boolean) { return MG.toggleSource(this, uid, id, on); }
+  recordOutcome(uid: string, findingId: string, input: Parameters<typeof MG.recordOutcome>[3]) { return MG.recordOutcome(this, uid, findingId, input); }
+  outcomeTracker(uid: string) { return MG.outcomeTracker(this, uid); }
+  listGoals(uid: string) { this.requireOwner(uid); return this.state.goals; }
+  listSources(uid: string) { this.requireOwner(uid); return this.state.sources; }
+  // workspace (safe view for people on the project; owner extras only for the owner)
+  provisionWorkspace(uid: string, projectId: string, key: string) { return DR.provisionWorkspace(this, uid, projectId, key); }
+  projectWorkspace(uid: string, projectId: string) { return DR.projectWorkspaceView(this, uid, projectId); }
+  createChecklistSheet(uid: string, projectId: string, stepId: string | null, title: string, rows: number) { return DR.createChecklistSheet(this, uid, projectId, stepId, title, rows); }
+  demoDriveFailAfter(n: number | null) { this.assertDemo(); return this.commit(() => { this.state.drive.failAfterOps = n; }); }
 
   // ------------------------------------------------------------------ demo-only operations (never production)
   private assertDemo() { if (!DEMO_MODE) throw new HubError('DEMO_ONLY', 'Demo operation.'); }

@@ -599,3 +599,129 @@ export interface WorkLogEntry {
   deviceId: string;
   evidenceSummaries: string[];
 }
+
+// ======================= v1.1: AI Recommendations (OWNER-ONLY unless noted) =======================
+export type FindingKind =
+  | 'Incident' | 'Blocker' | 'Open follow-up' | 'Workflow improvement' | 'Automation idea' | 'Revenue opportunity' | 'Expense reduction'
+  | 'Quality risk' | 'Compliance/policy change' | 'Documentation gap' | 'Employee learning/support' | 'Data quality gap' | 'Other';
+export type FactLabel = 'CONFIRMED_SOURCE_FACT' | 'LIKELY_INFERENCE' | 'HYPOTHESIS' | 'UNKNOWN';
+export type EvidenceQuality = 'MEASURED' | 'SOURCED' | 'ASSUMPTION' | 'HYPOTHESIS';
+
+export interface FindingEvidence {
+  id: string;
+  label: string;
+  sourceType: 'MT_LOG' | 'SHEET' | 'PRINT_LOG' | 'WEB' | 'OWNER_INPUT' | 'PROJECT_RECORD';
+  sourceName: string;
+  url: string | null; // web sources only; demo URLs are labeled simulated
+  observedAt: string;
+  retrievedAt?: string;
+  publishedAt?: string;
+  effectiveDate?: string;
+  excerpt?: string;
+  quality: EvidenceQuality;
+}
+
+export interface PlanStepDraft {
+  title: string;
+  instructions: string;
+  /** Employee-safe reason. Never contains money, margin, ROI or strategy. */
+  whyForGoal: string;
+  deliverable: string;
+  tools: string[];
+  estimateHours?: number;
+  evidenceDescription: string;
+}
+export interface ProposedPlan {
+  title: string;
+  /** Employee-safe objective (what to do and why in operational terms). */
+  employeeObjective: string;
+  deliverables: string[];
+  steps: PlanStepDraft[];
+  suggestedAssignees: { uid: string; caveat: string }[];
+  risks: string[];
+}
+
+export interface OwnerDecision { id: string; at: string; decision: string; actorUid: string; rationale?: string; changedFields?: string[] }
+
+export interface OwnerFinding {
+  id: string;
+  code: string; // AF-001
+  kind: FindingKind;
+  area: string;
+  title: string;
+  summary: string; // what was found, why it matters, how urgent, recommended action
+  urgency: 'URGENT' | 'NORMAL' | 'STRATEGIC';
+  factLabel: FactLabel;
+  discoveredAt: string;
+  lastEvidenceAt: string;
+  analyzedAt: string;
+  evidence: FindingEvidence[];
+  occurrences: { at: string; note: string }[];
+  status: 'NEW' | 'INVESTIGATING' | 'APPROVED' | 'LINKED' | 'SNOOZED' | 'DISMISSED' | 'ARCHIVED' | 'INFORMATIONAL';
+  snoozedUntil?: string;
+  followUpAt?: string;
+  projectMatch: { type: 'NONE' | 'ALREADY_COVERED' | 'POSSIBLE_DUPLICATE' | 'CANDIDATE_NEW' | 'UNASSIGNED_INSIGHT'; projectKey?: string };
+  linkedProjectId: string | null;
+  approvedProjectId: string | null;
+  modelId: string | null;
+  plan: ProposedPlan | null;
+  dedupeKey: string;
+  decisions: OwnerDecision[];
+  recommendedAction: string;
+  uncertainties: string[];
+  ownerNotes: string; // owner investigation notes: never shared
+  seenByOwner: boolean;
+  goalIds: string[];
+}
+
+export interface ModelVar {
+  key: string;
+  label: string;
+  unit: string;
+  low: number | null;
+  base: number | null;
+  high: number | null;
+  quality: EvidenceQuality;
+  source: string;
+  retrievedAt?: string;
+}
+export interface OpportunityModel {
+  id: string;
+  findingId: string;
+  version: number;
+  type: 'CAPACITY' | 'REVENUE';
+  impactCategory: string;
+  baselinePeriod: string;
+  variables: ModelVar[];
+  overlapKey: string | null; // opportunities sharing an output cannot be added together
+  measurementPlan: string;
+  history: { version: number; at: string; changed: string }[];
+}
+
+export interface BusinessGoal { id: string; title: string; description: string; priority: 'HIGH' | 'NORMAL' | 'LOW'; enabled: boolean; area: string; createdAt: string }
+export interface IntelligenceSource {
+  id: string; name: string; type: string; allowed: string; sensitivity: 'OWNER_ONLY' | 'TEAM' | 'PUBLIC';
+  demoEnabled: boolean; health: 'OK' | 'LATE' | 'GAP' | 'NOT_CONNECTED'; lastCheckedAt: string | null; note: string; cadence: string;
+}
+export interface OutcomeMeasurement {
+  id: string; findingId: string; projectId: string; period: string; actualHours: number | null; actualOrders: number | null; limitations: string; recordedAt: string;
+}
+
+export interface WorkspaceFolder { id: string; name: string; parentId: string | null; webViewLink: string }
+export interface WorkspaceShortcut { id: string; name: string; parentId: string; targetId: string; targetResourceId: string }
+export interface ProjectWorkspace {
+  projectId: string;
+  state: 'PLANNED' | 'CREATING' | 'PARTIALLY_CREATED' | 'READY' | 'ERROR' | 'REPAIR_REQUIRED';
+  rootId: string;
+  folderId: string | null;
+  subfolderIds: Record<string, string>;
+  shortcuts: WorkspaceShortcut[];
+  pointers: { id: string; label: string; path: string; purpose: string; version: string | null; resourceId: string }[];
+  sheetResourceIds: string[];
+  attempts: number;
+  lastError: string | null;
+  idempotencyKey: string;
+  completedAt: string | null;
+  log: { at: string; op: string; detail: string }[]; // always labeled simulated in the UI
+}
+export interface DriveSim { folders: WorkspaceFolder[]; shortcuts: WorkspaceShortcut[]; failAfterOps: number | null; opCount: number }
