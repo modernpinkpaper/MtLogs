@@ -133,7 +133,7 @@ export function findSequenceGaps(events: MtLogEvent[]): string[] {
   for (const [run, seqs] of byRun) {
     const sorted = [...new Set(seqs)].sort((a, b) => a - b);
     for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i] - sorted[i - 1] > 1) gaps.push(`${run}: missing sequence ${sorted[i - 1] + 1}–${sorted[i] - 1}`);
+      if (sorted[i] - sorted[i - 1] > 1) gaps.push(`${run}: missing sequence ${sorted[i] - sorted[i - 1] === 2 ? sorted[i] - 1 : `${sorted[i - 1] + 1}–${sorted[i] - 1}`}`);
     }
   }
   return gaps;

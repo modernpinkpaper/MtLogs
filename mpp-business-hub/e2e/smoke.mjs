@@ -1,0 +1,43 @@
+import { chromium } from 'playwright'; // optional: npm i -D playwright (not installed by default)
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1300, height: 900 } });
+const errors = [];
+p.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
+p.on('console', (m) => { if (m.type() === 'error') errors.push('CONSOLE ' + m.text()); });
+const shot = (n) => p.screenshot({ path: `./e2e/out/${n}.png` });
+await p.goto('http://localhost:4173/#/login');
+await p.getByRole('button', { name: /Dalia/ }).first().click();
+await p.waitForSelector('text=What changed since I last looked');
+await shot('1-owner');
+await p.goto('http://localhost:4173/#/projects/prj-012/steps/s-012-3');
+await p.getByRole('button', { name: 'Request Update' }).last().click();
+await p.getByLabel('Question (optional)').fill('Did the test product get created?');
+await p.getByRole('button', { name: 'Send Request' }).click();
+await p.waitForSelector('text=They now have an in-app notification');
+await shot('2-sent');
+await p.keyboard.press('Escape');
+await p.selectOption('select[aria-label="Switch demo user"]', { label: 'Erika' });
+await p.goto('http://localhost:4173/#/review');
+await p.waitForSelector('text=Update requested by Dalia');
+await p.getByLabel('Still working on it').check();
+await p.getByLabel('Notes (optional)').first().fill('Test attempted; investigating permissions');
+await shot('3-erika-card');
+await p.getByRole('button', { name: 'Send Requested Update' }).click();
+await p.waitForSelector('text=Update sent to Dalia');
+await p.selectOption('select[aria-label="Switch demo user"]', { label: 'Dalia (owner)' });
+await p.goto('http://localhost:4173/#/notifications');
+await p.waitForSelector('text=responded to your update request');
+await shot('4-dalia-notif');
+await p.getByRole('button', { name: 'Open' }).first().click();
+await p.waitForSelector('text=Response to your update request');
+await shot('5-response');
+await p.getByRole('button', { name: 'Acknowledge' }).click();
+for (const r of ['/owner/print-weekly','/owner/data-intake','/owner/insights','/owner/team','/resources','/journal','/settings','/status','/demo/operations','/projects/prj-priv']) { await p.goto('http://localhost:4173/#'+r); await p.waitForTimeout(150); }
+await shot('6-last');
+// Erika must not see private
+await p.selectOption('select[aria-label="Switch demo user"]', { label: 'Erika' });
+await p.goto('http://localhost:4173/#/projects/prj-priv'); await p.waitForSelector('text=Permission denied');
+await shot('7-denied');
+await p.setViewportSize({ width: 390, height: 800 }); await p.goto('http://localhost:4173/#/clock'); await p.waitForTimeout(200); await shot('8-mobile');
+console.log(errors.length ? errors.join('\n') : 'NO BROWSER ERRORS');
+await b.close();
