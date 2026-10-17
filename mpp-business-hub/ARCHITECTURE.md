@@ -37,3 +37,7 @@ React UI (src/ui)  ──calls──▶  HubServer (src/server/hub.ts)  ──�
 - AI outage / log outage are first-class demo toggles; clock, requests and notifications are unaffected.
 - `runAnalysis` has an overlap guard, bounded behavior on invalid output (rejected and logged), and an optional-work budget circuit-breaker. Replay adapter cost is $0.
 - Real deployment would add scheduled functions with locks, `changes.list` cursors, and cheaper-model-first routing (see `INTEGRATION_PLAN.md`).
+
+
+## v1.1 modules
+`pause.ts` (modes, scheduler, resume reminders), `pilot.ts` (limited tests), `manager.ts` (findings, plans, approve, assign, goals, sources, outcomes), `finance.ts` (deterministic numbers), `drive.ts` (pretend folders), `search.ts` (explained search), `ownerSeed.ts` (pretend data). `HubServer` stays the only authorization boundary and delegates to these. UI adds `lang.ts`, `pauseUi.tsx`, `Layout.tsx` (5-item nav, mobile bottom bar), `TeamPrint.tsx`, `OwnerAI.tsx`.

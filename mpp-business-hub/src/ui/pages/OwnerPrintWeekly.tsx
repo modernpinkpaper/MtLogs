@@ -2,12 +2,12 @@ import { useMe } from '../hubContext';
 import { Chip } from '../common';
 import { formatDateTime, formatDuration, formatTime } from '../../domain/time';
 
-export function OwnerPrintWeekly() {
+export function OwnerPrintWeekly({ embedded }: { embedded?: boolean } = {}) {
   const { hub, uid } = useMe();
   const w = hub.weeklyPrintReport(uid);
   return (
     <div className="stack">
-      <div><h1>Weekly printing <Chip tone="violet" glyph="◆">Practice data</Chip></h1><p className="muted">{w.weekStart} to {w.weekEnd} · data up to {formatDateTime(w.dataThrough)} · only you can see this</p></div>
+      {!embedded && (<div><h1>Weekly printing <Chip tone="violet" glyph="◆">Practice data</Chip></h1><p className="muted">{w.weekStart} to {w.weekEnd} · data up to {formatDateTime(w.dataThrough)} · only you can see this</p></div>)}
       <div className="card info"><strong>Please read first</strong><ul style={{ margin: '.3rem 0 0 1.1rem' }}>{w.caveats.map((c) => <li key={c}>{c}</li>)}</ul></div>
 
       <section className="card"><h2>Printers</h2>

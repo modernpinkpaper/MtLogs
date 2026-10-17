@@ -73,8 +73,8 @@ export function RequestUpdateDialog({ projectId, stepId, onClose }: { projectId?
             <div><label htmlFor="rq-p">Reason</label><select id="rq-p" value={purpose} onChange={(e) => setPurpose(e.target.value)}>{['Check progress', 'Asked to notify me when completed', 'Need help', 'Specific due date'].map((x) => <option key={x}>{x}</option>)}</select></div>
             <div><label htmlFor="rq-i">Importance</label><select id="rq-i" value={importance} onChange={(e) => setImportance(e.target.value as 'NORMAL' | 'IMPORTANT')}><option value="NORMAL">Normal</option><option value="IMPORTANT">Important</option></select></div>
           </div>
-          <p className="small muted">Answer by the end of their next shift. There is no strict deadline. Answers are “told to us by a person” until a system double-checks.</p>
-          <label style={{ fontWeight: 500 }}><input type="checkbox" checked={notifyVerified} onChange={(e) => setNotifyVerified(e.target.checked)} /> Tell me when it is double-checked and done</label>
+          <p className="small muted">Answers are due by the end of their next shift. There is no strict deadline. An answer is “employee confirmed” until it is checked in the source system.</p>
+          <label style={{ fontWeight: 500 }}><input type="checkbox" checked={notifyVerified} onChange={(e) => setNotifyVerified(e.target.checked)} /> Tell me when it is checked in the source system</label>
           <label style={{ fontWeight: 500 }}><input type="checkbox" checked={reminder} onChange={(e) => setReminder(e.target.checked)} /> Remind them nicely if there is no answer</label>
           <div className="row"><button className="primary" type="submit" disabled={!recipients.length || !pid}>Send request</button><button type="button" onClick={onClose}>Cancel</button></div>
         </form>
@@ -99,9 +99,9 @@ export function SendUpdateDialog({ projectId, stepId, onClose }: { projectId: st
     if (r) setDone(true);
   };
   return (
-    <Modal title={`Send Dalia an update${step ? ` — Step ${step.sortOrder}` : ''}`} onClose={onClose}>
+    <Modal title={`Send Dalia an update${step ? ` on Step ${step.sortOrder}` : ''}`} onClose={onClose}>
       {done ? (
-        <div className="stack"><div className="card ok" role="status">Sent! Dalia has a new notification. Your update is saved in the history as “told to us by a person.”</div><button className="primary" onClick={onClose}>Done</button></div>
+        <div className="stack"><div className="card ok" role="status">Sent. Dalia has a new notification. Your update is saved in the history as “employee confirmed.”</div><button className="primary" onClick={onClose}>Done</button></div>
       ) : (
         <form className="stack" onSubmit={(e) => { e.preventDefault(); void send(); }}>
           <ChoiceGroup value={choice} onChange={setChoice} name="proactive" />

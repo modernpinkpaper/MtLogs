@@ -52,3 +52,10 @@ See `DEMO_SCENARIOS.md` for click-by-click steps. The headline flow:
 - AI findings come from a labeled **replay adapter** (deterministic rules), not an LLM. No API calls, $0.
 - Firebase Emulator/Firestore rules/Cloud Functions are **not** used. The authorization boundary is an in-browser server-style module (`src/server/hub.ts`) with the same shape, so it can move behind real functions later.
 - No real roster, trackers, logs or print data. Unnamed staff are generic placeholders.
+
+
+## v1.1 additions
+Pause/resume and limited tests, simpler screens, plain wording, step-centered project page, owner-only AI Recommendations, explained search.
+See `docs/changes-made.md`, `docs/ux-audit.md`, `docs/interface-language.md`, `PROACTIVE_AI_MANAGER_IMPLEMENTATION.md`.
+Tests: `npm test` (121 tests). Browser check: `node e2e/v11.mjs` (needs `npm run build && npx vite preview --port 4173`).
+Single-file build for sharing: `npm run build:single`.

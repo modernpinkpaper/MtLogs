@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAct, useMe } from '../hubContext';
 import { Chip } from '../common';
+import { GLOSSARY } from '../lang';
 
 const INTEGRATIONS = [
   ['Your real clock-in app', 'Not connected. We need your OK first.'],
@@ -49,6 +50,9 @@ export function Settings() {
             <div className="row"><button onClick={audit}>Copy the change log</button><span className="small muted">Only you can do this. It has no typing or screenshots. We never save those.</span></div></section>
         </>
       ) : <section className="card flat muted">Money, saving and download settings are only for the owner. They are blocked for everyone else, not just hidden.</section>}
+      <section className="card"><details><summary style={{ cursor: 'pointer', fontWeight: 650, fontSize: '1.15rem' }}>The words we use</summary>
+        <p className="small muted">One set of words is used on every screen. This list shows what we say now instead of the old technical term.</p>
+        <div className="tablewrap"><table><thead><tr><th>Old technical term</th><th>What we say</th><th>Note</th></tr></thead><tbody>{GLOSSARY.map((g) => <tr key={g.old}><td>{g.old}</td><td>{g.now}</td><td className="small muted">{g.note}</td></tr>)}</tbody></table></div></details></section>
       <section className="card"><h2>What we do and do not collect</h2>
         <ul className="small" style={{ margin: '0 0 0 1.1rem' }}><li>We save work events like app names, file names and print jobs. We do not save typing, passwords or private messages.</li><li>We do not take screenshots. A future recording mode would only run if you choose it, and you would see it.</li><li>You can fix or reject any AI guess (“That was not me”). We keep your fix next to the guess.</li><li>No activity never means someone was not working.</li></ul></section>
     </div>

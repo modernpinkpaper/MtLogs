@@ -31,3 +31,7 @@ MT Log v1 fields are preserved (`event_id`, `timestamp_utc`, `computer_id`, `emp
 
 ## Indexes (for a Firestore move)
 `(recipientUid,status,dueAt)`, `(projectId,occurredAt)`, `(projectId,stepId,occurredAt)` via the step junction, `(sourceArchiveId,sourceEventId)`, `(sourceProvider,sourceId)`, `(updateRequestId,submittedAt)`. No broad indexes over raw events.
+
+
+## v1.1 additions (additive only)
+`Project.pause` (`ProjectPauseState`: mode, resumeDateLocal, reason, scheduleVersion), `Project.pilot` (checkpoints and rows; only rows checked in the source system count), `Project.employeeBrief`, `Project.origin/category/pinned/managerUids/canceledAt`, `Step.onHold/whyForGoal`. Owner-only collections: findings, opportunity models, goals, intelligence sources, outcome measurements, project workspaces (pretend Drive). New journal types: PAUSE_REQUESTED, PROJECT_PAUSED, PAUSE_SCHEDULE_CHANGED, RESUME_REMINDER_SENT, PROJECT_RESUMED, PILOT. New notification types: PROJECT_PAUSED, PROJECT_RESUMED, RESUME_REMINDER, PAUSE_SUGGESTION, PILOT_REACHED, AI_FINDING, PROJECT_ASSIGNED. Status is derived (`projectWorkStatus`), not stored.

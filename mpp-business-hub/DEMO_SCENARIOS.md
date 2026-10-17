@@ -37,3 +37,18 @@ Erika confirms the Step 3 card. Demo operations → **Simulate late event** → 
 
 ## J. Work that is not part of a project
 As Erika, open Review and find “Work that is not in the tracker: MS066”. Choose one: save it as everyday work (goes in her “Other work you saved” list on My Work, Dalia can see it), add it to a project step, make a new step, or flag it as maybe a new project (Dalia gets a notification). Or skip it and do not log it, with an optional reason. As Dalia, open “Other work” in the menu: tabs show waiting, everyday, maybe a new project, added to a project, skipped, and not them. Skipped items stay visible with who skipped them and why, and “Send back for another look” puts the card back in front of the employee. The first decision stays in the history.
+
+
+## v1.1 scenarios (sign in as Dalia unless noted)
+K. **Pause with no end date.** Projects → P-070 → More actions → Pause project → "Until I resume it". Banner shows "Paused". Erika no longer sees it as late work. Resume project: next step comes back.
+L. **Auto-resume on a date.** Pause → "Resume on a date" → pick a date. Demo operations → advance to that date. Project resumes at 06:00 Chicago, one notification.
+M. **Remind me to decide.** Pause → "Remind me to decide on a date". On that date a reminder appears once; the project stays paused until you choose.
+N. **Limited test.** Open the project with a 20-listing test. At 19 of 20 it is quiet; at 20 of 20 Dalia gets one notice and the test pauses. Only rows "Checked in the source system" count. Approve the next batch.
+O. **Next step.** Open any project: the "Next step" card is first; open a step to see instructions, substeps, files and recent history.
+P. **Select multiple items (Erika → Review).** Select this item on easy cards, then Confirm selected items are accurate. Cards needing a note stay out of the group.
+Q. **Request Update (Dalia → Erika).** Step panel → Request Update. Erika gets a card and a notification; her answer notifies Dalia.
+R. **AI Recommendations.** More → AI Recommendations → open AF-001 → read "Why we think so" and "The numbers" → Approve. Check the employee brief has no money. Project is unassigned and invisible to Erika.
+S. **Assign.** Assign to Erika. She gets a notification and sees the brief only.
+T. **Pretend Drive folders.** Project → Files → set up folders. Run again: nothing duplicates.
+U. **Privacy.** Switch to Erika: no AI Recommendations, no private projects, no money in search.
+V. **Search.** Press the search box, type "FBA": each result says why it matched.

@@ -1,23 +1,27 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { JournalType, ProjectEvent, Resource, ResourceLink } from '../domain/types';
-import { formatDateTime } from '../domain/time';
+import { chicagoDate, formatDate, formatDateTime } from '../domain/time';
 import { Chip, Copy, LinkChip, Modal, VerifyBadge } from './common';
 import { useAct, useMe } from './hubContext';
 
 const JT_ICON: Partial<Record<JournalType, string>> = { STATUS_CHANGE: '⇄', UPDATE_REQUESTED: '❓', UPDATE_RESPONSE: '💬', PROACTIVE_UPDATE: '📣', AI_OBSERVATION: '✦', EMPLOYEE_REVIEW: '☑', RESOURCE: '⧉', VERIFICATION: '✔', BLOCKER: '⛔', LATE_EVIDENCE: '⏱', ACK: '👁', PLAN_CHANGE: '✎', ACCESS: '🔑', DECISION: '⚖', NOTE: '•' };
 
-export function JournalList({ events, showProject }: { events: (ProjectEvent & { projectKey: string })[]; showProject?: boolean }) {
+export function JournalList({ events, showProject, grouped }: { events: (ProjectEvent & { projectKey: string })[]; showProject?: boolean; grouped?: boolean }) {
   const { hub, uid } = useMe();
   const [raw, setRaw] = useState<string | null>(null);
   if (!events.length) return <div className="muted">No journal entries match.</div>;
+  let lastDay = '';
   return (
     <div>
       {events.map((e) => {
+        const day = chicagoDate(e.occurredAt);
+        const head = grouped && day !== lastDay ? <div className="dayhead">{formatDate(e.occurredAt)}</div> : null;
+        lastDay = day;
         const kind = e.actorType === 'AI' ? 'ai' : e.verificationState === 'INDEPENDENTLY_VERIFIED' ? 'verified' : 'human';
         const step = e.stepIds[0] ? hub.state.steps.find((s) => s.id === e.stepIds[0]) : null;
         return (
-          <div key={e.id} className={`journal-item ${kind}`}>
+          <div key={e.id}>{head}<div className={`journal-item ${kind}`}>
             <div className="row small muted"><span aria-hidden="true">{JT_ICON[e.type] ?? '•'}</span><span>{formatDateTime(e.occurredAt)}</span>
               {showProject && <Link to={`/projects/${e.projectId}`}>{e.projectKey}</Link>}
               {step && <Link to={`/projects/${e.projectId}/steps/${step.id}`}>Step {step.sortOrder}</Link>}
@@ -32,7 +36,7 @@ export function JournalList({ events, showProject }: { events: (ProjectEvent & {
                 {!hub.state.events.some((x) => e.sourceRefs.includes(x.id)) && <li>{e.sourceRefs.join(', ')}</li>}
               </ul>
             )}
-          </div>
+          </div></div>
         );
       })}
       <span hidden>{uid}</span>

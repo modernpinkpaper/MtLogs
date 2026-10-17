@@ -13,10 +13,8 @@ import { Journal } from './pages/Journal';
 import { Resources } from './pages/Resources';
 import { PrintMyStats } from './pages/PrintMyStats';
 import { OwnerOverview } from './pages/OwnerOverview';
-import { OwnerPrintWeekly } from './pages/OwnerPrintWeekly';
-import { OwnerTeam } from './pages/OwnerTeam';
-import { OwnerOtherWork } from './pages/OwnerOtherWork';
-import { OwnerInsights } from './pages/OwnerInsights';
+import { TeamPrint } from './pages/TeamPrint';
+import { OwnerAI, FindingDetail } from './pages/OwnerAI';
 import { OwnerDataIntake } from './pages/OwnerDataIntake';
 import { Settings } from './pages/Settings';
 import { DemoOperations } from './pages/DemoOperations';
@@ -42,11 +40,14 @@ export function App() {
             <Route path="/journal" element={<Journal />} />
             <Route path="/resources" element={<Resources />} />
             <Route path="/print/my-stats" element={<PrintMyStats />} />
-            <Route path="/owner/overview" element={<OwnerOverview />} />
-            <Route path="/owner/print-weekly" element={<OwnerPrintWeekly />} />
-            <Route path="/owner/team" element={<OwnerTeam />} />
-            <Route path="/owner/other-work" element={<OwnerOtherWork />} />
-            <Route path="/owner/insights" element={<OwnerInsights />} />
+            {/* Owner screens. Old addresses still work and send you to the new place. */}
+            <Route path="/owner/overview" element={<Navigate to="/home" replace />} />
+            <Route path="/owner/ai" element={<OwnerAI />} />
+            <Route path="/owner/ai/:id" element={<FindingDetail />} />
+            <Route path="/owner/team" element={<TeamPrint />} />
+            <Route path="/owner/print-weekly" element={<Navigate to="/owner/team?tab=print" replace />} />
+            <Route path="/owner/other-work" element={<Navigate to="/owner/team?tab=other" replace />} />
+            <Route path="/owner/insights" element={<Navigate to="/owner/team?tab=ideas" replace />} />
             <Route path="/owner/data-intake" element={<OwnerDataIntake />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/status" element={<StatusPage />} />

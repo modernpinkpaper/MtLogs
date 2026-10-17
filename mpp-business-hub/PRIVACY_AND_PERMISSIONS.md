@@ -33,3 +33,10 @@ Log text and file names are untrusted data. Instruction-like text is neutralized
 
 ## Production notes (not built)
 Firestore rules default-deny with membership checks; Admin SDK functions must re-check role and membership; Drive sharing is independent of internal links; time-clock PIN alone must not unlock business data; audit access and role changes; retention to be set with legal advice.
+
+
+## v1.1 additions
+- Only the owner can: pause or resume, approve a limited-test batch, read/approve/dismiss AI findings, assign an AI-proposed project, see numbers, goals, sources, outcomes, and Drive private root.
+- Employees see only the sanitized brief and their own assigned steps. A forbidden project returns the same "permission denied" as a missing one.
+- Leak tests check lists, search, journal, notifications, AI context and exports for owner-only words and values.
+- Clock in/out is never blocked by reviews, AI, logs, or pause state.

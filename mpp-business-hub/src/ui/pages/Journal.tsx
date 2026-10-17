@@ -8,7 +8,7 @@ const TYPES: { id: JournalType; label: string }[] = [
   { id: 'AI_OBSERVATION', label: 'AI guesses' }, { id: 'EMPLOYEE_REVIEW', label: 'People checked' }, { id: 'VERIFICATION', label: 'System checks' }, { id: 'RESOURCE', label: 'Files' }, { id: 'LATE_EVIDENCE', label: 'Late facts' }, { id: 'PLAN_CHANGE', label: 'Plan changes' },
 ];
 
-export function JournalFilters({ projectId, stepId }: { projectId?: string; stepId?: string }) {
+export function JournalFilters({ projectId, stepId, grouped }: { projectId?: string; stepId?: string; grouped?: boolean }) {
   const { hub, uid } = useMe();
   const [q, setQ] = useState('');
   const [types, setTypes] = useState<JournalType[]>([]);
@@ -26,7 +26,7 @@ export function JournalFilters({ projectId, stepId }: { projectId?: string; step
       </div>
       <div className="row">{TYPES.map((t) => (
         <button key={t.id} aria-pressed={types.includes(t.id)} className={types.includes(t.id) ? 'primary' : ''} style={{ minHeight: 32, padding: '.2rem .6rem' }} onClick={() => setTypes(types.includes(t.id) ? types.filter((x) => x !== t.id) : [...types, t.id])}>{t.label}</button>))}</div>
-      <JournalList events={events} showProject={!projectId} />
+      <JournalList events={events} showProject={!projectId} grouped={grouped ?? true} />
     </div>
   );
 }

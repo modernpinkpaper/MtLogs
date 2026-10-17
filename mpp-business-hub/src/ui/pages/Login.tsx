@@ -17,11 +17,11 @@ export function Login() {
       <div className="card pink stack" style={{ marginTop: '1rem' }}>
         <strong>Not sure where to start? Try this:</strong>
         <ol className="small" style={{ margin: '0 0 0 1.1rem' }}>
-          <li>Pick <strong>Dalia</strong>. Open “Projects”, then “P-012”, then click Step 3. Press “Ask for an update”.</li>
-          <li>Use the “Demo user” menu at the top to switch to <strong>Erika</strong>. Open “Review” and answer the card.</li>
-          <li>Switch back to <strong>Dalia</strong>. Click the bell to see Erika’s answer.</li>
-          <li>As Erika, open “Clock in / out” to see that clocking out never waits for reviews.</li>
-          <li>Open “Demo controls” to play out more of the day.</li>
+          <li>Pick <strong>Dalia</strong>. Open “Projects”, then “P-070”. Press “Pause project” and choose a way to resume.</li>
+          <li>Open “AI Recommendations”. Open the first one, look at “The numbers”, then press “Approve as project”.</li>
+          <li>Use the “Demo user” menu to switch to <strong>Erika</strong>. Open “My Work”, then “Review my work”.</li>
+          <li>As Dalia, open a project step and press “Ask for an update”. Switch to Erika to answer it. Switch back to see the notification.</li>
+          <li>Open “More”, then “Demo controls”, to play out a 20-listing test and scheduled resumes.</li>
         </ol>
       </div>
       <h2 style={{ marginTop: '1.2rem' }}>Pick who you want to be</h2>

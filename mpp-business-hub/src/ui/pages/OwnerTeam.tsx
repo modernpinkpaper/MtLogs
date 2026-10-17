@@ -4,14 +4,14 @@ import { useAct, useMe } from '../hubContext';
 import { Chip } from '../common';
 import type { Area } from '../../domain/types';
 
-export function OwnerTeam() {
+export function OwnerTeam({ embedded }: { embedded?: boolean } = {}) {
   const { hub, uid } = useMe();
   const act = useAct();
   const rows = hub.teamOverview(uid);
   const [name, setName] = useState('');
   return (
     <div className="stack">
-      <div><h1>Team</h1><p className="muted">What a person does today decides what they see. Job titles do not. Made-up names are marked.</p></div>
+      {!embedded && (<div><h1>Team</h1><p className="muted">What a person does today decides what they see. Job titles do not. Made-up names are marked.</p></div>)}
       <div className="tablewrap card"><table><thead><tr><th>Person</th><th>Job today</th><th>Clock</th><th>Projects</th><th>Reviews waiting</th><th>Notes</th><th></th></tr></thead><tbody>
         {rows.filter((r) => r.user.role === 'EMPLOYEE').map((r) => (
           <tr key={r.user.id}>

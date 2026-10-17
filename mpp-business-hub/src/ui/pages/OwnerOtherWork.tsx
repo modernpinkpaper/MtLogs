@@ -6,7 +6,7 @@ import { formatDateTime } from '../../domain/time';
 type Tab = 'waiting' | 'everyday' | 'maybeProject' | 'attached' | 'skipped' | 'notMine';
 const LABELS: Record<Tab, string> = { waiting: 'Waiting for a person', everyday: 'Everyday work', maybeProject: 'Maybe a new project', attached: 'Added to a project', skipped: 'Skipped', notMine: 'Not them' };
 
-export function OwnerOtherWork() {
+export function OwnerOtherWork({ embedded }: { embedded?: boolean } = {}) {
   const { hub, uid } = useMe();
   const act = useAct();
   const data = hub.otherWork(uid);
@@ -14,8 +14,8 @@ export function OwnerOtherWork() {
   const rows = data[tab];
   return (
     <div className="stack">
-      <div><h1>Other work</h1>
-        <p className="muted">Work the system saw that is not part of a tracked step. Nothing disappears when someone skips it. You can always see it here and send it back.</p></div>
+      {!embedded && (<div><h1>Other work</h1>
+        <p className="muted">Work the system saw that is not part of a tracked step. Nothing disappears when someone skips it. You can always see it here and send it back.</p></div>)}
       <Tabs tabs={(Object.keys(LABELS) as Tab[]).map((t) => ({ id: t, label: `${LABELS[t]} (${data[t].length})` }))} value={tab} onChange={setTab} />
       {rows.length === 0 && <Empty>Nothing here.</Empty>}
       {rows.map((r) => (

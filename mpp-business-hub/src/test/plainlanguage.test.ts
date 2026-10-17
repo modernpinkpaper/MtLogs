@@ -34,7 +34,8 @@ describe('plain language (about a 5th–6th grade reading level)', () => {
     const grades = joined.map((t) => ({ t, g: grade(t) }));
     const avg = grades.reduce((s, x) => s + x.g, 0) / grades.length;
     expect(avg).toBeLessThanOrEqual(7);
-    const hard = grades.filter((x) => x.g > 10);
+    // Very short labels (under 5 words) give meaningless scores, so only real sentences are checked.
+    const hard = grades.filter((x) => x.g > 10 && x.t.split(/\s+/).length >= 5);
     expect(hard.map((x) => `${x.g.toFixed(1)}: ${x.t}`)).toEqual([]);
   });
 

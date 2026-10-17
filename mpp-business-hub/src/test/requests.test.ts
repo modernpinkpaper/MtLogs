@@ -63,7 +63,7 @@ describe('B. owner update request round trip', () => {
     expect(step.verificationSource).toBe('NONE');
     expect(step.humanReported?.choice).toBe('COMPLETED');
     const n = hub.listNotifications(U.dalia).find((x) => x.type === 'EMPLOYEE_RESPONSE')!;
-    expect(n.preview).toMatch(/told to us by a person, not double-checked/);
+    expect(n.preview).toMatch(/Employee confirmed\. Not checked in the source system/);
     expect(hub.getProject(U.dalia, 'prj-081').closedAt).toBeNull();
   });
 

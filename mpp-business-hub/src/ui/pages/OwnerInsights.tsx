@@ -3,14 +3,14 @@ import { Link } from 'react-router-dom';
 import { useAct, useMe } from '../hubContext';
 import { Chip } from '../common';
 
-export function OwnerInsights() {
+export function OwnerInsights({ embedded }: { embedded?: boolean } = {}) {
   const { hub, uid } = useMe();
   const act = useAct();
   const [notes, setNotes] = useState<Record<string, string>>({});
   return (
     <div className="stack">
-      <div><h1>Ideas <Chip tone="violet" glyph="◆">Made-up examples</Chip></h1>
-        <p className="muted">Ideas from the AI. Nothing is made or changed until you say yes. What we expect is shown apart from what really happened.</p></div>
+      {!embedded && (<div><h1>Ideas <Chip tone="violet" glyph="◆">Made-up examples</Chip></h1>
+        <p className="muted">Ideas from the AI. Nothing is made or changed until you say yes. What we expect is shown apart from what really happened.</p></div>)}
       {hub.state.opportunities.map((o) => {
         const hours = (o.estMinutesSavedPerUnit * o.unitsPerMonth) / 60;
         return (

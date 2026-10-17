@@ -27,3 +27,7 @@ Revert routing and source-of-truth flags; original Sheets and audit copies remai
 
 ## Owner decisions needed later
 Real roster and print employees, Auth identities, payroll source of truth, Teams approvals, Drive folder allowlist, SOP screenshot consent, script repository scope, email opt-in, retention, hard spending cap.
+
+
+## v1.1 integration notes
+Sources for AI Recommendations (sales, ads, listings, Sheets, Drive) are pretend connectors with an off switch. A real move needs: read-only scopes first, a scheduled function for `processSchedules` at 06:00 Chicago, owner approval per source, and a separate private Drive root. Drive folder creation must stay idempotent and never move or copy scripts.

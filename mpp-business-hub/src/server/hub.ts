@@ -17,6 +17,7 @@ import type { PauseInput } from './pause';
 import * as PL from './pilot';
 import * as MG from './manager';
 import * as DR from './drive';
+import { searchAll } from './search';
 import { computeShiftStats, groupProblemEpisodes, fourStateMinutes, weeklyPrinterSummary } from './print';
 import * as FX from '../ai/fixtures';
 import type { AiRun, CardType, CoverageState, IntakeRun, IntakeStage, WorkLogEntry } from '../domain/types';
@@ -26,8 +27,8 @@ export const STORAGE_KEY = 'mpp-hub-demo-state-v2';
 export const DEMO_MODE = true as const;
 
 export const CHOICE_LABEL: Record<ResponseChoice, string> = {
-  COMPLETED: 'I finished it', IN_PROGRESS: 'Still working on it', NOT_STARTED: 'Not started',
-  BLOCKED: 'Stuck, I need help', WAITING: 'Waiting for someone or something', NOT_APPLICABLE: 'Not my job',
+  COMPLETED: 'Completed', IN_PROGRESS: 'Still working on it', NOT_STARTED: 'Not started',
+  BLOCKED: 'Blocked — I need help', WAITING: 'Waiting for someone or something', NOT_APPLICABLE: 'No longer needed',
 };
 
 const TRANSITIONS: Record<StepStatus, StepStatus[]> = {
@@ -235,6 +236,9 @@ export class HubServer {
     };
   }
 
+  /** Search with reasons (v1.1). Only items this person may see are ever matched. */
+  searchAll(uid: string, q: string, limit = 12) { return searchAll(this, uid, q, limit); }
+
   createProject(uid: string, input: { title: string; objective: string; memberUids: string[]; visibility: Project['visibility']; priority?: Project['priority']; deadlineAt?: string | null; key?: string }): Project {
     this.requireOwner(uid);
     if (!input.title.trim()) throw new HubError('VALIDATION', 'Please type a title.');
@@ -269,7 +273,7 @@ export class HubServer {
       const step: Step = {
         id: this.nid('s'), projectId, parentStepId: input.parentStepId ?? null, phase: null, sortOrder: Math.max(0, ...siblings.map((s) => s.sortOrder)) + 1,
         title: input.title.trim(), instructions: input.instructions ?? '', objective: '', acceptance: '', status: 'NOT_STARTED', blockerReason: null,
-        assignedUids: input.assignedUids ?? project.memberUids.slice(0, 1), dueAt: null, impact: input.impact ?? 'ROUTINE', dependencyIds: [], evidenceHints: [],
+        assignedUids: input.assignedUids ?? (u.role === 'OWNER' ? project.memberUids.slice(0, 1) : [uid]), dueAt: null, impact: input.impact ?? 'ROUTINE', dependencyIds: [], evidenceHints: [],
         checklist: [], verificationSource: 'NONE', observedLevel: 'NO_EVIDENCE', observedReview: 'NONE', observedNote: null, lastActivityAt: null,
         lastConfirmedAt: null, lastVerifiedAt: null, humanReported: null, verifications: [], newActivityAt: null, onHold: null,
       };
@@ -358,8 +362,8 @@ export class HubServer {
     if (to === 'VERIFIED_COMPLETE') {
       const hasIndependent = step.verifications.some((v) => v.result === 'CONFIRMED');
       if (step.impact === 'HIGH') {
-        if (u.role !== 'OWNER') throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'This is a big step. A system must double-check it, or the owner must approve it.');
-        if (!hasIndependent && !opts.ownerApproval) throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'No system has double-checked this yet. You must choose to approve it yourself.');
+        if (u.role !== 'OWNER') throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'This is a big step. It needs a check in the source system, or Dalia’s approval.');
+        if (!hasIndependent && !opts.ownerApproval) throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'Nothing has been checked in the source system yet. You must choose to approve it yourself.');
         verificationSource = hasIndependent ? 'INDEPENDENT' : 'OWNER_APPROVED';
       } else {
         verificationSource = u.role === 'OWNER' ? 'OWNER_APPROVED' : 'EMPLOYEE_CONFIRMED';
@@ -579,7 +583,7 @@ export class HubServer {
         if (step) this.applyHumanReport(step, project, input.choice, resp.note, uid);
         const where = step ? `${project.key}, Step ${step.sortOrder} “${step.title}”` : project.key;
         const label = CHOICE_LABEL[input.choice];
-        const unverifiedNote = input.choice === 'COMPLETED' ? ' (told to us by a person, not double-checked yet)' : '';
+        const unverifiedNote = input.choice === 'COMPLETED' ? '. Employee confirmed. Not checked in the source system yet.' : '';
         this.audit({ entityType: 'updateResponse', entityId: resp.id, action: 'SUBMIT', before: req ? { requestState: 'OPEN' } : null, after: { choice: resp.choice, requestId: req?.id ?? null }, actorUid: uid, actorLabel: this.userName(uid), reason: req ? 'Answered owner request' : 'Proactive update', evidenceRefs: resp.evidenceLinks, projectId: project.id });
         const ev = this.addJournal({
           projectId: project.id, stepIds: step ? [step.id] : [], type: req ? 'UPDATE_RESPONSE' : 'PROACTIVE_UPDATE', actorUid: uid,
@@ -1257,7 +1261,7 @@ export class HubServer {
     for (const s of st.steps) {
       const p = st.projects.find((p) => p.id === s.projectId)!;
       const paused = !!p.pause?.isPaused;
-      if (s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Needs a double-check', label: `${p.key} — ${s.title} (says it is done, but nobody double-checked)`, link: `/projects/${p.id}/steps/${s.id}`, weight: 80 });
+      if (s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Needs a check in the source system', label: `${p.key} — ${s.title} (says it is done, but it has not been checked in the source system)`, link: `/projects/${p.id}/steps/${s.id}`, weight: 80 });
       if (s.status === 'BLOCKED' && !paused) queue.push({ kind: 'Blocked', label: `${p.key} — ${s.title}: ${s.blockerReason ?? ''}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 90 });
       // Ordinary nags are quiet while a project is paused.
       if (!paused && s.dueAt && s.dueAt < st.now && !TERMINAL.includes(s.status)) queue.push({ kind: 'Late', label: `${p.key} — ${s.title}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 70 });
@@ -1267,7 +1271,7 @@ export class HubServer {
       if (p.deadlineAt && p.deadlineAt < st.now && (p.pause!.pausedAt ?? '') <= p.deadlineAt) queue.push({ kind: 'Pick a new deadline', label: `${p.key} was paused, and its original deadline has passed`, link: `/projects/${p.id}`, weight: 65 });
     }
     for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && !n.readAt && ['RESUME_REMINDER', 'PAUSE_SUGGESTION', 'PILOT_REACHED', 'AI_FINDING'].includes(n.type))) queue.push({ kind: 'Needs your decision', label: n.title, link: n.deepLink, weight: 95 });
-    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['BLOCKER', 'NEEDS_VERIFICATION'].includes(n.type))) queue.push({ kind: n.type === 'BLOCKER' ? 'Blocked' : 'Needs a double-check', label: n.title, link: n.deepLink, weight: 85 });
+    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['BLOCKER', 'NEEDS_VERIFICATION'].includes(n.type))) queue.push({ kind: n.type === 'BLOCKER' ? 'Blocked' : 'Needs a check in the source system', label: n.title, link: n.deepLink, weight: 85 });
     for (const a of st.archives.filter((a) => a.coverageState === 'INCOMPLETE')) queue.push({ kind: 'Data problem', label: `${a.deviceId} ${a.hourWindow}:00 file is missing some events (${a.sequenceGaps.join('; ')})`, link: '/owner/data-intake', weight: 50 });
     if (st.settings.aiOutage || st.settings.logSyncOutage) queue.push({ kind: 'Data problem', label: st.settings.aiOutage ? 'The AI helper is off (demo switch)' : 'Computer data is late (demo switch)', link: '/owner/data-intake', weight: 55 });
     queue.sort((a, b) => b.weight - a.weight);

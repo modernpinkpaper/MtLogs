@@ -39,7 +39,7 @@ describe('C. evidence vs official status', () => {
   it('high-impact completion needs independent verification or explicit owner approval; employees can never mark it verified', async () => {
     const hub = await newHub();
     hub.transitionStep(U.erika, 's-081-2', 'REPORTED_COMPLETE', {});
-    expect(() => hub.transitionStep(U.erika, 's-081-2', 'VERIFIED_COMPLETE')).toThrowError(/double-check/i);
+    expect(() => hub.transitionStep(U.erika, 's-081-2', 'VERIFIED_COMPLETE')).toThrowError(/source system/i);
     expect(() => hub.transitionStep(U.dalia, 's-081-2', 'VERIFIED_COMPLETE')).toThrowError(/choose to approve it yourself/i);
     hub.recordVerification(U.dalia, 's-081-2', { verifier: 'Amazon processing report', entity: 'ref 99105020742', result: 'CONFIRMED', detail: 'Processed without errors' });
     const s = hub.transitionStep(U.dalia, 's-081-2', 'VERIFIED_COMPLETE');
@@ -154,10 +154,10 @@ describe('FBA_TY001 regression (primary failure scenario)', () => {
     const card = hub.listReviewCards(U.erika).find((c) => c.updateRequestId === req.id)!;
     hub.submitDecision(U.erika, card.id, { action: 'SEND_STATUS', statusAnswer: 'COMPLETED', note: 'Completed upload', idempotencyKey: key() });
     const n = hub.listNotifications(U.dalia).find((x) => x.type === 'EMPLOYEE_RESPONSE')!;
-    expect(n.preview).toMatch(/told to us by a person/);
+    expect(n.preview).toMatch(/Employee confirmed/);
     expect(hub.getStep(U.dalia, 's-081-3').verifications).toHaveLength(0);
     expect(hub.getStep(U.dalia, 's-081-3').status).toBe('NOT_STARTED');
-    expect(hub.ownerOverview(U.dalia).queue.some((q) => q.kind === 'Needs a double-check')).toBe(true);
+    expect(hub.ownerOverview(U.dalia).queue.some((q) => q.kind === 'Needs a check in the source system')).toBe(true);
     hub.recordVerification(U.dalia, 's-081-3', { verifier: 'Amazon family lookup', entity: 'FBA_TY001 → PC107', result: 'CONFIRMED', detail: 'Child of PC107; not under PC078' });
     expect(hub.getStep(U.dalia, 's-081-3').verifications[0].result).toBe('CONFIRMED');
   });
