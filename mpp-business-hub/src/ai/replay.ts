@@ -44,16 +44,16 @@ export class ReplayAnalyzer implements ModelAdapter {
       const injected = evs.some((e) => e.keys.fileNames.some((f) => f.includes('instruction-like')));
       out.push({
         findingType: 'AI_UNMATCHED_WORK', claimType: 'OBSERVED_ACTION', projectId: null, stepId: null, deviceId: dev,
-        headline: `Work not in the tracker: ${key}`,
+        headline: `Work that is not in the tracker: ${key}`,
         observedFacts: evs.map(describeEvent),
-        inference: `A file was saved/edited that does not match any tracked step. It may be routine production, part of an existing project, a new project, or an ad hoc request.`,
+        inference: `Someone saved a file that does not match any step. It could be everyday work, part of a project, a new project, or a one-time ask.`,
         uncertainties: [
-          'Actor is unverified: this is activity on the device, not a confirmed person.',
-          'Purpose of the work cannot be determined from the log alone.',
-          ...(injected ? ['Source text contained instruction-like content; it was treated as data and ignored.'] : []),
+          'We can only see the computer, not the person. We cannot tell who was working.',
+          'The log alone cannot tell us what the work was for.',
+          ...(injected ? ['A file name looked like it was giving orders. We treated it as plain text and ignored it.'] : []),
         ],
-        verificationNeeded: ['Employee classification: link to a project, create a step, mark routine, or dismiss.'],
-        proposedUpdate: { kind: 'CLASSIFY_WORK', detail: 'Ask the employee to classify this work.' },
+        verificationNeeded: ['Please say what this work was: add it to a project, make a new step, call it everyday work, or skip it.'],
+        proposedUpdate: { kind: 'CLASSIFY_WORK', detail: 'Ask the person what this work was.' },
         confidenceBand: 'LOW', inferenceLevel: 'POSSIBLE_ACTIVITY', sourceEventIds: evs.map((e) => e.id),
         coverageState: ctx.coverageByDevice[dev] ?? 'PROVISIONAL', classification: 'UNCLEAR',
         refs: { skus: [...new Set(evs.flatMap((e) => e.keys.skus))], submissionRefs: [], fileNames: [...new Set(evs.flatMap((e) => e.keys.fileNames))] },
@@ -64,7 +64,7 @@ export class ReplayAnalyzer implements ModelAdapter {
     for (const d of out) {
       const cited = ctx.events.filter((e) => d.sourceEventIds.includes(e.id));
       if (cited.some((e) => e.keys.fileNames.some((f) => f.includes('instruction-like')) || looksLikeInjection(e.allowedSummary)) && !d.uncertainties.some((u) => /instruction-like/.test(u))) {
-        d.uncertainties.push('Source text contained instruction-like content; it was treated as data and ignored.');
+        d.uncertainties.push('A file name looked like it was giving orders. We treated it as plain text and ignored it.');
       }
     }
     return out;
@@ -88,7 +88,7 @@ function matchEvents(events: NormalizedEvent[], hints: string[]): NormalizedEven
 
 function coverageNote(ctx: AnalysisContext, dev: string): string[] {
   const c = ctx.coverageByDevice[dev];
-  return c && c !== 'FINAL' ? [`Log coverage for ${dev} is ${c}; later or missing events may change this picture.`] : [];
+  return c && c !== 'FINAL' ? [`Data from ${dev} is ${c === 'PROVISIONAL' ? 'not final yet' : c === 'INCOMPLETE' ? 'missing some pieces' : 'missing'}. More facts may change this.`] : [];
 }
 
 function actionFinding(step: Pick<Step, 'id' | 'projectId' | 'title' | 'status'>, key: string, evs: NormalizedEvent[], ctx: AnalysisContext): FindingDraft {
@@ -98,17 +98,17 @@ function actionFinding(step: Pick<Step, 'id' | 'projectId' | 'title' | 'status'>
   const official = step.status === 'NOT_STARTED';
   return {
     findingType: official ? 'AI_DISCREPANCY' : 'AI_PROGRESS', claimType: 'OBSERVED_ACTION', projectId: step.projectId, stepId: step.id, deviceId: dev,
-    headline: `${key}: activity observed on “${step.title}”` + (official ? ' (official status: Not Started)' : ''),
+    headline: `${key}: we saw activity on “${step.title}”` + (official ? ' (the tracker still says “Not started”)' : ''),
     observedFacts: evs.map(describeEvent),
-    inference: `${clicks.length} test action(s) were observed on this step${errors.length ? `, and ${errors.length} error indication(s)` : ''}. This shows an attempt, not that the product/draft exists or that the step is finished.`,
+    inference: `We saw ${clicks.length} test click(s) on this step${errors.length ? ` and ${errors.length} error sign(s)` : ''}. That shows someone tried. It does not show the draft exists or that the step is done.`,
     uncertainties: [
-      'Actor is unverified: the log shows the device, not which person was signed in.',
-      'The result of the attempt is unknown from clicks alone.',
-      ...(errors.length ? ['An error indication was seen; the final state still needs checking.'] : []),
+      'We can only see the computer, not the person. We cannot tell who was working.',
+      'We cannot tell from clicks if it worked.',
+      ...(errors.length ? ['We saw an error sign. Someone needs to check what happened.'] : []),
       ...coverageNote(ctx, dev),
     ],
-    verificationNeeded: ['Check the destination (e.g. does the test draft actually exist in Shopify?).'],
-    proposedUpdate: { kind: 'ADD_JOURNAL_NOTE', detail: 'Add a journal note “test attempted — result unknown” and ask the employee. Official status is NOT changed.' },
+    verificationNeeded: ['Look in Shopify. Is the test draft really there?'],
+    proposedUpdate: { kind: 'ADD_JOURNAL_NOTE', detail: 'Add a note: “test tried, result not known.” Ask the person. The step status will NOT change.' },
     confidenceBand: clicks.length > 1 ? 'MEDIUM' : 'LOW', inferenceLevel: clicks.length > 1 ? 'STRONG_ACTIVITY' : 'POSSIBLE_ACTIVITY',
     sourceEventIds: evs.map((e) => e.id), coverageState: ctx.coverageByDevice[dev] ?? 'PROVISIONAL',
     refs: { skus: [...new Set(evs.flatMap((e) => e.keys.skus))], submissionRefs: [], fileNames: [...new Set(evs.flatMap((e) => e.keys.fileNames))] },
@@ -130,26 +130,26 @@ function amazonUploadFinding(step: Pick<Step, 'id' | 'projectId' | 'title' | 'st
   const later = withRefs.slice(1).filter((e) => e.keys.submissionRefs.some((r) => !first?.keys.submissionRefs.includes(r)));
   const correctedSelected = sorted.some((e) => /corrected/i.test(e.keys.fileNames.join(' ')) && ['file_selected', 'file_downloaded'].includes(e.eventType));
   const bits: string[] = [];
-  if (first) bits.push(`The first upload (ref ${first.keys.submissionRefs[0]}) ${firstFailed ? 'ended with “Action required” (needs attention)' : 'was seen'}.`);
-  if (correctedSelected) bits.push('A corrected file was later downloaded/selected.');
-  if (later.length) bits.push(`A later upload-status page shows a DIFFERENT reference (${later.flatMap((e) => e.keys.submissionRefs).filter((r) => r !== first?.keys.submissionRefs[0])[0]}), so another submission is likely.`);
+  if (first) bits.push(`The first upload (number ${first.keys.submissionRefs[0]}) ${firstFailed ? 'ended with “Action required”, which means it needs fixing' : 'was seen'}.`);
+  if (correctedSelected) bits.push('A fixed file was picked later.');
+  if (later.length) bits.push(`A later page shows a DIFFERENT number (${later.flatMap((e) => e.keys.submissionRefs).filter((r) => r !== first?.keys.submissionRefs[0])[0]}), so a second upload was likely sent.`);
   const uncertainties = [
-    'Which file produced the later reference is not verified.',
-    ...(later.length ? ['The outcome of the later submission was not captured in the log.'] : ['No later submission reference has been seen yet in the available logs.']),
-    'Actor is unverified: the log shows the device, not which person was signed in.',
+    'We do not know which file made the later number.',
+    ...(later.length ? ['We did not see how the later upload ended.'] : ['We have not seen a later upload number yet.']),
+    'We can only see the computer, not the person. We cannot tell who was working.',
     ...coverageNote(ctx, dev),
   ];
   return {
     findingType: 'AI_DISCREPANCY', claimType: later.length ? 'LIKELY_ACTION' : 'OBSERVED_ACTION', projectId: step.projectId, stepId: step.id, deviceId: dev,
-    headline: `${key}: ${step.title} — upload attempts observed, final outcome NOT verified`,
+    headline: `${key}: “${step.title}” — we saw upload tries, but we do not know the final result`,
     observedFacts: sorted.map(describeEvent),
-    inference: `${bits.join(' ')} A resubmission is plausible but unconfirmed; the final family relationship (FBA_TY001 under the new parent) has not been verified. This step must not be closed from log evidence alone.`,
+    inference: `${bits.join(' ')} A second try looks likely, but we are not sure. We have not checked that “FBA_TY001” now sits under the new parent. Do not close this step from the log alone.`,
     uncertainties,
     verificationNeeded: [
-      `Amazon processing report for ${refs.length ? 'reference ' + refs.join(' and ') : 'the submission'}`,
-      'Confirm FBA_TY001 is a child of the NEW parent (family membership) and no longer under the old parent',
+      `The Amazon report for ${refs.length ? 'number ' + refs.join(' and ') : 'the upload'}`,
+      'Check that “FBA_TY001” is now under the NEW parent and not the old one',
     ],
-    proposedUpdate: { kind: 'ASK_EMPLOYEE', detail: 'Ask the employee what happened and request the processing report. Official status is NOT changed.' },
+    proposedUpdate: { kind: 'ASK_EMPLOYEE', detail: 'Ask the person what happened and ask for the Amazon report. The step status will NOT change.' },
     confidenceBand: 'MEDIUM', inferenceLevel: 'STRONG_ACTIVITY', sourceEventIds: sorted.map((e) => e.id),
     coverageState: ctx.coverageByDevice[dev] ?? 'PROVISIONAL',
     refs: { skus: [...new Set(sorted.flatMap((e) => e.keys.skus))], submissionRefs: refs, fileNames: [...new Set(sorted.flatMap((e) => e.keys.fileNames))] },
@@ -164,10 +164,10 @@ function genericFinding(step: Pick<Step, 'id' | 'projectId' | 'title'>, key: str
     findingType: 'AI_PROGRESS', claimType: 'OBSERVED_ACTION', projectId: step.projectId, stepId: step.id, deviceId: dev,
     headline: `${key}: related file activity on “${step.title}”`,
     observedFacts: evs.map(describeEvent),
-    inference: 'Related files were opened or saved. This is possible activity, not proof the step progressed or is finished.',
-    uncertainties: ['Actor is unverified.', ...(injected ? ['Source text contained instruction-like content; treated as data.'] : []), ...coverageNote(ctx, dev)],
-    verificationNeeded: ['Employee confirmation of what was done.'],
-    proposedUpdate: { kind: 'ADD_JOURNAL_NOTE', detail: `Add a journal note (last related activity ${formatTime(evs[evs.length - 1].occurredAt)}).` },
+    inference: 'Related files were opened or saved. That may mean work happened, but it does not prove the step moved or is done.',
+    uncertainties: ['We cannot tell who was at the computer.', ...(injected ? ['A file name looked like it was giving orders. We treated it as plain text.'] : []), ...coverageNote(ctx, dev)],
+    verificationNeeded: ['Ask the person what they did.'],
+    proposedUpdate: { kind: 'ADD_JOURNAL_NOTE', detail: `Add a note. Last related activity was at ${formatTime(evs[evs.length - 1].occurredAt)}.` },
     confidenceBand: 'LOW', inferenceLevel: 'POSSIBLE_ACTIVITY', sourceEventIds: evs.map((e) => e.id),
     coverageState: ctx.coverageByDevice[dev] ?? 'PROVISIONAL',
     refs: { skus: [...new Set(evs.flatMap((e) => e.keys.skus))], submissionRefs: [], fileNames: [...new Set(evs.flatMap((e) => e.keys.fileNames))] },

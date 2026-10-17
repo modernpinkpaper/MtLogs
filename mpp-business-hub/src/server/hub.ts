@@ -21,8 +21,8 @@ export const STORAGE_KEY = 'mpp-hub-demo-state-v1';
 export const DEMO_MODE = true as const;
 
 export const CHOICE_LABEL: Record<ResponseChoice, string> = {
-  COMPLETED: 'Completed (reported)', IN_PROGRESS: 'Still working on it', NOT_STARTED: 'Not started',
-  BLOCKED: 'Blocked — need help', WAITING: 'Waiting on someone/something', NOT_APPLICABLE: 'Not my assignment / Not applicable',
+  COMPLETED: 'I finished it', IN_PROGRESS: 'Still working on it', NOT_STARTED: 'Not started',
+  BLOCKED: 'Stuck, I need help', WAITING: 'Waiting for someone or something', NOT_APPLICABLE: 'Not my job',
 };
 
 const TRANSITIONS: Record<StepStatus, StepStatus[]> = {
@@ -232,7 +232,7 @@ export class HubServer {
 
   createProject(uid: string, input: { title: string; objective: string; memberUids: string[]; visibility: Project['visibility']; priority?: Project['priority']; deadlineAt?: string | null }): Project {
     this.requireOwner(uid);
-    if (!input.title.trim()) throw new HubError('VALIDATION', 'Title is required.');
+    if (!input.title.trim()) throw new HubError('VALIDATION', 'Please type a title.');
     return this.commit(() => {
       const nums = this.state.projects.map((p) => Number(p.key.replace(/\D/g, ''))).filter((n) => n < 900 && !Number.isNaN(n));
       const key = input.visibility === 'OWNER_PRIVATE' ? `P-D${String(this.state.projects.filter((p) => p.visibility === 'OWNER_PRIVATE').length + 1).padStart(2, '0')}` : `P-${String(Math.max(0, ...nums) + 1).padStart(3, '0')}`;
@@ -257,7 +257,7 @@ export class HubServer {
       const parent = input.parentStepId ? this.state.steps.find((s) => s.id === input.parentStepId) : null;
       if (!parent || !parent.assignedUids.includes(uid) || parent.projectId !== projectId) throw new PermissionDenied();
     }
-    if (!input.title.trim()) throw new HubError('VALIDATION', 'Step title is required.');
+    if (!input.title.trim()) throw new HubError('VALIDATION', 'Please type a title for the step.');
     return this.commit(() => {
       const siblings = this.state.steps.filter((s) => s.projectId === projectId);
       const step: Step = {
@@ -280,7 +280,7 @@ export class HubServer {
       const before = step.instructions;
       step.instructions = text;
       this.audit({ entityType: 'step', entityId: step.id, action: 'EDIT_INSTRUCTIONS', before, after: text, actorUid: uid, actorLabel: this.userName(uid), reason: 'Instructions edited', evidenceRefs: [], projectId: project.id });
-      this.addJournal({ projectId: project.id, stepIds: [step.id], type: 'PLAN_CHANGE', actorUid: uid, title: 'Instructions edited', summary: `Instructions for “${step.title}” were updated.`, verificationState: 'OFFICIAL' });
+      this.addJournal({ projectId: project.id, stepIds: [step.id], type: 'PLAN_CHANGE', actorUid: uid, title: 'Instructions edited', summary: `Someone changed the instructions for “${step.title}”.`, verificationState: 'OFFICIAL' });
       return step;
     });
   }
@@ -288,7 +288,7 @@ export class HubServer {
   toggleChecklist(uid: string, stepId: string, itemId: string): Step {
     const { step, project } = this.workStepFor(uid, stepId);
     const item = step.checklist.find((c) => c.id === itemId);
-    if (!item) throw new HubError('NOT_FOUND', 'Checklist item not found.');
+    if (!item) throw new HubError('NOT_FOUND', 'We could not find that checklist item.');
     return this.commit(() => {
       item.done = !item.done;
       item.doneByUid = item.done ? uid : null;
@@ -313,7 +313,7 @@ export class HubServer {
   shareProject(uid: string, projectId: string, targetUid: string, grant: boolean) {
     this.requireOwner(uid);
     const p = this.projectFor(uid, projectId);
-    if (p.visibility === 'OWNER_PRIVATE') throw new HubError('PRIVATE_PROJECT', 'Owner-private projects can only be shared by changing their visibility.');
+    if (p.visibility === 'OWNER_PRIVATE') throw new HubError('PRIVATE_PROJECT', 'A private project cannot be shared. Change who can see it first.');
     this.user(targetUid);
     return this.commit(() => {
       const before = [...p.sharedWithUids];
@@ -327,11 +327,11 @@ export class HubServer {
     this.requireOwner(uid);
     const p = this.projectFor(uid, projectId);
     const open = this.state.steps.filter((s) => s.projectId === projectId && !TERMINAL.includes(s.status));
-    if (open.length) throw new HubError('STEPS_OPEN', `${open.length} step(s) are not complete. A project is never closed automatically.`);
+    if (open.length) throw new HubError('STEPS_OPEN', `${open.length} step(s) are not finished. A project never closes by itself.`);
     return this.commit(() => {
       p.closedAt = this.state.now;
       this.audit({ entityType: 'project', entityId: p.id, action: 'CLOSE', before: null, after: p.closedAt, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner closed project', evidenceRefs: [], projectId: p.id });
-      this.addJournal({ projectId: p.id, type: 'DECISION', actorUid: uid, title: 'Project closed by owner', summary: 'Closure is an explicit owner decision.', verificationState: 'OFFICIAL' });
+      this.addJournal({ projectId: p.id, type: 'DECISION', actorUid: uid, title: 'Owner closed the project', summary: 'Only the owner can close a project.', verificationState: 'OFFICIAL' });
       return p;
     });
   }
@@ -341,18 +341,18 @@ export class HubServer {
     const { step, project } = this.workStepFor(uid, stepId);
     const u = this.user(uid);
     const from = step.status;
-    if (!TRANSITIONS[from].includes(to)) throw new HubError('INVALID_TRANSITION', `Cannot move a step from ${from} to ${to}.`);
+    if (!TRANSITIONS[from].includes(to)) throw new HubError('INVALID_TRANSITION', `This step cannot go from “${from.replace(/_/g, ' ').toLowerCase()}” to “${to.replace(/_/g, ' ').toLowerCase()}”.`);
     if (u.role !== 'OWNER') {
       if (!EMPLOYEE_TARGETS.includes(to)) throw new PermissionDenied();
       if (!step.assignedUids.includes(uid)) throw new PermissionDenied();
     }
-    if ((to === 'BLOCKED') && !(opts.reason ?? '').trim()) throw new HubError('REASON_REQUIRED', 'A blocker reason is required.');
+    if ((to === 'BLOCKED') && !(opts.reason ?? '').trim()) throw new HubError('REASON_REQUIRED', 'Please say why it is blocked.');
     let verificationSource = step.verificationSource;
     if (to === 'VERIFIED_COMPLETE') {
       const hasIndependent = step.verifications.some((v) => v.result === 'CONFIRMED');
       if (step.impact === 'HIGH') {
-        if (u.role !== 'OWNER') throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'High-impact steps need independent verification or owner approval.');
-        if (!hasIndependent && !opts.ownerApproval) throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'No independent verification exists. The owner must explicitly approve.');
+        if (u.role !== 'OWNER') throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'This is a big step. A system must double-check it, or the owner must approve it.');
+        if (!hasIndependent && !opts.ownerApproval) throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'No system has double-checked this yet. You must choose to approve it yourself.');
         verificationSource = hasIndependent ? 'INDEPENDENT' : 'OWNER_APPROVED';
       } else {
         verificationSource = u.role === 'OWNER' ? 'OWNER_APPROVED' : 'EMPLOYEE_CONFIRMED';
@@ -397,7 +397,7 @@ export class HubServer {
     const u = this.user(uid);
     const shift = this.openShift(uid);
     if (u.role !== 'OWNER' && !shift) {
-      throw new HubError('REVIEW_REQUIRES_PAID_SHIFT', 'Reviews are paid work. Clock in first, then review — nothing here is required while you are off the clock.');
+      throw new HubError('REVIEW_REQUIRES_PAID_SHIFT', 'Reviews are paid work. Clock in first, then do your review. You never have to work while clocked out.');
     }
     return shift;
   }
@@ -456,10 +456,10 @@ export class HubServer {
       .filter((x) => x.state !== 'FINAL');
     const aiDown = this.state.settings.aiOutage;
     const logDown = this.state.settings.logSyncOutage;
-    let message = cards.length ? `${cards.length} review card(s) ready.` : 'No review cards are ready.';
-    if (aiDown) message += ' The AI service is unavailable, so reports may be incomplete — this is not a record of no work.';
-    if (logDown) message += ' Log sync is delayed; activity data may be missing — this is not a record of no work.';
-    if (!aiDown && !logDown && !cards.length) message += ' Reports not ready yet will appear at your next paid shift.';
+    let message = cards.length ? `${cards.length} review card(s) are ready.` : 'No review cards are ready yet.';
+    if (aiDown) message += ' The AI helper is not working right now, so reports may be missing. That does not mean no work was done.';
+    if (logDown) message += ' Computer activity data is late, so some may be missing. That does not mean no work was done.';
+    if (!aiDown && !logDown && !cards.length) message += ' Anything not ready will show up at your next paid shift.';
     return { cards, provisional, coverageIssues, aiStatus: aiDown ? 'UNAVAILABLE' : 'OK', logSyncStatus: logDown ? 'DELAYED' : 'OK', message };
   }
 
@@ -471,12 +471,12 @@ export class HubServer {
     this.requireOwner(uid);
     const project = this.projectFor(uid, input.projectId);
     const step = input.stepId ? this.stepFor(uid, input.stepId).step : null;
-    if (step && step.projectId !== project.id) throw new HubError('VALIDATION', 'Step does not belong to the project.');
+    if (step && step.projectId !== project.id) throw new HubError('VALIDATION', 'That step is not part of this project.');
     return this.idem('req:' + input.idempotencyKey, () => {
       const authorized = (id: string) => this.state.users.some((u) => u.id === id && u.active && u.role === 'EMPLOYEE') && (project.memberUids.includes(id) || project.sharedWithUids.includes(id));
       const defaultRecipients = (step?.assignedUids.length ? step.assignedUids : project.memberUids).filter(authorized);
       const recipients = (input.recipientUids?.length ? input.recipientUids : defaultRecipients);
-      if (!recipients.length || !recipients.every(authorized)) throw new HubError('NO_AUTHORIZED_RECIPIENT', 'Choose an assigned person who is authorized for this project.');
+      if (!recipients.length || !recipients.every(authorized)) throw new HubError('NO_AUTHORIZED_RECIPIENT', 'Pick a person who works on this project.');
       return this.commit(() => {
         const req: UpdateRequest = {
           id: this.nid('req'), projectId: project.id, stepId: step?.id ?? null, requestedByUid: uid, recipientUids: recipients,
@@ -485,24 +485,24 @@ export class HubServer {
           parentRequestId: input.parentRequestId ?? null, createdAt: this.state.now, deliveryStatus: 'DELIVERED', idempotencyKey: input.idempotencyKey,
         };
         this.state.updateRequests.push(req);
-        const where = step ? `${project.key}, Step ${step.sortOrder}` : project.key;
+        const where = step ? `${project.key}, Step ${step.sortOrder} “${step.title}”` : project.key;
         for (const r of recipients) {
           const card: ReviewCard = {
             id: this.nid('card'), cardType: 'OWNER_REQUEST', recipientUid: r, projectId: project.id, stepId: step?.id ?? null, findingIds: [], updateRequestId: req.id,
-            title: `Update requested by ${this.userName(uid)}`, explanatoryText: req.question ?? `Please share a quick status for ${where}.`, status: 'PENDING', dueAt: req.dueAt,
+            title: `Update requested by ${this.userName(uid)}`, explanatoryText: req.question ?? `Please tell us how ${where} is going.`, status: 'PENDING', dueAt: req.dueAt,
             provisional: false, sourceCoverage: 'FINAL', canBulkReview: false, reviewStartedAt: null, createdAt: this.state.now, lastUpdatedAt: this.state.now, groupKey: `req:${req.id}:${r}`,
           };
           this.state.reviewCards.push(card);
           this.notify({
             recipientUid: r, senderUid: uid, type: input.parentRequestId ? 'FOLLOW_UP' : 'OWNER_UPDATE_REQUEST',
-            title: `${this.userName(uid)} requested an update — ${where}`, preview: req.question ?? 'Status requested.', projectId: project.id, stepId: step?.id ?? null,
+            title: `${this.userName(uid)} asked for an update — ${where}`, preview: req.question ?? 'Please tell me how this is going.', projectId: project.id, stepId: step?.id ?? null,
             sourceEntityId: req.id, deepLink: `/review?card=${card.id}`, key: `n:req:${req.id}:${r}`,
           });
         }
         this.audit({ entityType: 'updateRequest', entityId: req.id, action: 'CREATE', before: null, after: { recipients, stepId: req.stepId }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner requested an update', evidenceRefs: [], projectId: project.id });
         this.addJournal({
-          projectId: project.id, stepIds: step ? [step.id] : [], type: 'UPDATE_REQUESTED', actorUid: uid, title: `${this.userName(uid)} requested an update`,
-          summary: `${req.question ?? 'Status requested'} → ${recipients.map((r) => this.userName(r)).join(', ')}${req.importance === 'IMPORTANT' ? ' (Important)' : ''}.`,
+          projectId: project.id, stepIds: step ? [step.id] : [], type: 'UPDATE_REQUESTED', actorUid: uid, title: `${this.userName(uid)} asked for an update`,
+          summary: `${req.question ?? 'Asked how it is going'} → ${recipients.map((r) => this.userName(r)).join(', ')}${req.importance === 'IMPORTANT' ? ' (Important)' : ''}.`,
           verificationState: 'OFFICIAL', relatedRequestId: req.id,
         });
         return req;
@@ -534,7 +534,7 @@ export class HubServer {
     evidenceLinks?: string[]; needsOwnerHelp?: boolean; sourceCardId?: string | null; idempotencyKey: string;
   }): UpdateResponse {
     const u = this.user(uid);
-    if (u.role === 'OWNER') throw new HubError('VALIDATION', 'The owner does not answer update requests.');
+    if (u.role === 'OWNER') throw new HubError('VALIDATION', 'Only employees answer update requests.');
     let req: UpdateRequest | null = null;
     if (input.requestId) {
       req = this.state.updateRequests.find((r) => r.id === input.requestId) ?? null;
@@ -542,11 +542,11 @@ export class HubServer {
     }
     const projectId = req?.projectId ?? input.projectId;
     const stepId = req ? req.stepId : input.stepId ?? null;
-    if (!projectId) throw new HubError('VALIDATION', 'A project is required.');
+    if (!projectId) throw new HubError('VALIDATION', 'Please pick a project.');
     const project = this.projectFor(uid, projectId);
     if (!this.canWorkOnProject(u, project)) throw new PermissionDenied();
     const step = stepId ? this.stepFor(uid, stepId).step : null;
-    if (!(input.choice in CHOICE_LABEL)) throw new HubError('VALIDATION', 'Pick a status.');
+    if (!(input.choice in CHOICE_LABEL)) throw new HubError('VALIDATION', 'Please pick a status.');
     return this.idem('resp:' + input.idempotencyKey, () => {
       const shift = this.requirePaidShiftForEmployee(uid);
       return this.commit(() => {
@@ -570,19 +570,19 @@ export class HubServer {
           if (c && c.status !== 'SUBMITTED') { c.status = 'SUBMITTED'; c.lastUpdatedAt = this.state.now; }
         }
         if (step) this.applyHumanReport(step, project, input.choice, resp.note, uid);
-        const where = step ? `${project.key}, Step ${step.sortOrder}` : project.key;
+        const where = step ? `${project.key}, Step ${step.sortOrder} “${step.title}”` : project.key;
         const label = CHOICE_LABEL[input.choice];
-        const unverifiedNote = input.choice === 'COMPLETED' ? ' (employee-reported, not independently verified)' : '';
+        const unverifiedNote = input.choice === 'COMPLETED' ? ' (told to us by a person, not double-checked yet)' : '';
         this.audit({ entityType: 'updateResponse', entityId: resp.id, action: 'SUBMIT', before: req ? { requestState: 'OPEN' } : null, after: { choice: resp.choice, requestId: req?.id ?? null }, actorUid: uid, actorLabel: this.userName(uid), reason: req ? 'Answered owner request' : 'Proactive update', evidenceRefs: resp.evidenceLinks, projectId: project.id });
         const ev = this.addJournal({
           projectId: project.id, stepIds: step ? [step.id] : [], type: req ? 'UPDATE_RESPONSE' : 'PROACTIVE_UPDATE', actorUid: uid,
-          title: `${this.userName(uid)} ${req ? 'responded' : 'sent an update'}: ${label}`, summary: `${resp.note ?? 'No note.'}${unverifiedNote}`,
+          title: `${this.userName(uid)} ${req ? 'answered' : 'sent an update'}: ${label}`, summary: `${resp.note ?? 'No note.'}${unverifiedNote}`,
           verificationState: 'EMPLOYEE_CONFIRMED', relatedRequestId: req?.id ?? null, relatedResponseId: resp.id, sourceRefs: resp.evidenceLinks,
         });
         void ev;
         this.notify({
           recipientUid: project.ownerUid, senderUid: uid, type: needsHelp ? 'BLOCKER' : 'EMPLOYEE_RESPONSE',
-          title: `${this.userName(uid)} ${req ? 'responded to your update request' : 'sent you an update'} — ${where}: ${label}`,
+          title: `${this.userName(uid)} ${req ? 'answered your request' : 'sent you an update'} — ${where}: ${label}`,
           preview: `${resp.note ?? 'No note'}${unverifiedNote}`, projectId: project.id, stepId: step?.id ?? null, sourceEntityId: resp.id,
           deepLink: `/projects/${project.id}${step ? `/steps/${step.id}` : ''}?response=${resp.id}`, key: `n:resp:${resp.id}`,
         });
@@ -641,7 +641,7 @@ export class HubServer {
         const req = this.state.updateRequests.find((r) => r.id === resp.requestId);
         if (req && req.state !== 'CLOSED') req.state = 'ACKNOWLEDGED';
       }
-      if (n.projectId) this.addJournal({ projectId: n.projectId, stepIds: n.stepId ? [n.stepId] : [], type: 'ACK', actorUid: uid, title: `${this.userName(uid)} acknowledged a response`, summary: n.title, verificationState: 'OFFICIAL', relatedResponseId: resp?.id ?? null });
+      if (n.projectId) this.addJournal({ projectId: n.projectId, stepIds: n.stepId ? [n.stepId] : [], type: 'ACK', actorUid: uid, title: `${this.userName(uid)} saw the answer`, summary: n.title, verificationState: 'OFFICIAL', relatedResponseId: resp?.id ?? null });
       return n;
     });
   }
@@ -704,12 +704,12 @@ export class HubServer {
     const key = 'dec:' + input.idempotencyKey;
     // Cards for owner requests are answered through the response path (same idempotency, same atomic write).
     if (card.cardType === 'OWNER_REQUEST') {
-      if (input.action !== 'SEND_STATUS' || !input.statusAnswer) throw new HubError('VALIDATION', 'Choose a status, then send your update.');
+      if (input.action !== 'SEND_STATUS' || !input.statusAnswer) throw new HubError('VALIDATION', 'Pick a status, then send your update.');
       this.submitUpdateResponse(uid, { requestId: card.updateRequestId, choice: input.statusAnswer, note: input.note, evidenceLinks: input.evidenceLinks, needsOwnerHelp: input.needsOwnerHelp, idempotencyKey: input.idempotencyKey });
       return this.state.reviewDecisions.filter((d) => d.cardId === card.id).slice(-1)[0];
     }
-    if (input.action === 'NEEDS_CORRECTION' && !(input.correctionText ?? '').trim()) throw new HubError('VALIDATION', 'Tell us what is wrong so the correction can be recorded.');
-    if (input.action === 'SEND_STATUS' && !input.statusAnswer) throw new HubError('VALIDATION', 'Pick a status.');
+    if (input.action === 'NEEDS_CORRECTION' && !(input.correctionText ?? '').trim()) throw new HubError('VALIDATION', 'Tell us what is wrong so we can save your fix.');
+    if (input.action === 'SEND_STATUS' && !input.statusAnswer) throw new HubError('VALIDATION', 'Please pick a status.');
     if (card.status === 'SUBMITTED' && !(key in this.state.idempotency)) throw new HubError('ALREADY_SUBMITTED', 'This card was already answered.');
     return this.idem(key, () => {
       const shift = input.action === 'DEFER' ? this.openShift(uid) : this.requirePaidShiftForEmployee(uid);
@@ -731,11 +731,11 @@ export class HubServer {
             this.addJournal({
               projectId: f.projectId, stepIds: f.stepId ? [f.stepId] : [], type: 'EMPLOYEE_REVIEW', actorUid: uid,
               title: `${this.userName(uid)} ${newStatus === 'CONFIRMED' ? 'confirmed' : newStatus === 'CORRECTED' ? 'corrected' : newStatus === 'NOT_MINE' ? 'said “not my work” on' : 'dismissed'} an AI observation`,
-              summary: `${f.headline}${input.correctionText ? ` — correction: ${input.correctionText}` : ''}${input.note ? ` — note: ${input.note}` : ''}. Official status unchanged by this review.`,
+              summary: `${f.headline}${input.correctionText ? ` — correction: ${input.correctionText}` : ''}${input.note ? ` — note: ${input.note}` : ''}. The step status was not changed by this check.`,
               verificationState: 'EMPLOYEE_CONFIRMED', sourceRefs: f.sourceEventIds,
             });
           }
-          this.audit({ entityType: 'finding', entityId: f.id, action: `REVIEW_${newStatus}`, before: { status: 'PROPOSED' }, after: { status: newStatus, correction: input.correctionText ?? null }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Employee review decision', evidenceRefs: f.sourceEventIds, projectId: f.projectId });
+          this.audit({ entityType: 'finding', entityId: f.id, action: `REVIEW_${newStatus}`, before: { status: 'PROPOSED' }, after: { status: newStatus, correction: input.correctionText ?? null }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Person checked the AI guess', evidenceRefs: f.sourceEventIds, projectId: f.projectId });
         }
         const f0 = findings[0];
         if (input.action === 'SEND_STATUS' && input.statusAnswer && f0?.stepId && f0.projectId) {
@@ -904,27 +904,27 @@ export class HubServer {
   markSuperseded(uid: string, oldId: string, newId: string) {
     this.requireOwner(uid);
     const old = this.state.resources.find((r) => r.id === oldId); const nw = this.state.resources.find((r) => r.id === newId);
-    if (!old || !nw) throw new HubError('NOT_FOUND', 'Resource not found.');
+    if (!old || !nw) throw new HubError('NOT_FOUND', 'We could not find that file.');
     return this.commit(() => { old.supersededById = nw.id; this.audit({ entityType: 'resource', entityId: old.id, action: 'SUPERSEDE', before: null, after: nw.id, actorUid: uid, actorLabel: this.userName(uid), reason: 'Marked superseded; history retained', evidenceRefs: [], projectId: null }); return old; });
   }
 
   // ------------------------------------------------------------------ independent verification (simulated verifier)
   /** Stand-in for a trusted connector. A verifier result is recorded alongside — never in place of — earlier observations. */
   recordVerification(uid: string, stepId: string, input: { verifier: string; entity: string; result: 'CONFIRMED' | 'NOT_FOUND' | 'MISMATCH'; detail: string }) {
-    if (!DEMO_MODE) throw new HubError('DEMO_ONLY', 'Verifier simulation is demo-only.');
+    if (!DEMO_MODE) throw new HubError('DEMO_ONLY', 'This is only for the demo.');
     this.requireOwner(uid);
     const { step, project } = this.stepFor(uid, stepId);
     return this.commit(() => {
       const v = { id: this.nid('ver'), stepId, ...input, at: this.state.now, recordedBy: uid };
       step.verifications.push(v);
       if (input.result === 'CONFIRMED') { step.lastVerifiedAt = this.state.now; step.observedReview = 'EXTERNALLY_VERIFIED'; step.observedLevel = 'RESULT_OBSERVED'; project.lastVerifiedAt = this.state.now; }
-      this.audit({ entityType: 'verification', entityId: v.id, action: 'RECORD', before: null, after: v, actorUid: uid, actorLabel: `${this.userName(uid)} (via simulated verifier)`, reason: 'Independent verification result (simulated)', evidenceRefs: [], projectId: project.id });
+      this.audit({ entityType: 'verification', entityId: v.id, action: 'RECORD', before: null, after: v, actorUid: uid, actorLabel: `${this.userName(uid)} (via simulated verifier)`, reason: 'Independent verification result (pretend)', evidenceRefs: [], projectId: project.id });
       this.addJournal({
-        projectId: project.id, stepIds: [stepId], type: 'VERIFICATION', actorUid: null, actorLabel: `${input.verifier} (simulated)`, actorType: 'SERVICE',
-        title: `Verifier result: ${input.result.replace(/_/g, ' ')}`, summary: `${input.entity} — ${input.detail}. Earlier observations are unchanged. Step status is NOT changed automatically.`,
+        projectId: project.id, stepIds: [stepId], type: 'VERIFICATION', actorUid: null, actorLabel: `${input.verifier} (pretend)`, actorType: 'SERVICE',
+        title: `System check: ${input.result === 'CONFIRMED' ? 'it matches' : input.result === 'NOT_FOUND' ? 'not found' : 'does not match'}`, summary: `${input.entity} — ${input.detail}. Earlier notes are kept. The step status did not change by itself.`,
         verificationState: input.result === 'CONFIRMED' ? 'INDEPENDENTLY_VERIFIED' : 'NEEDS_REVIEW',
       });
-      if (input.result !== 'CONFIRMED') this.notify({ recipientUid: project.ownerUid, senderUid: null, type: 'NEEDS_VERIFICATION', title: `Verification did not confirm — ${project.key}`, preview: input.detail, projectId: project.id, stepId, sourceEntityId: v.id, deepLink: `/projects/${project.id}/steps/${stepId}`, key: `n:ver:${v.id}` });
+      if (input.result !== 'CONFIRMED') this.notify({ recipientUid: project.ownerUid, senderUid: null, type: 'NEEDS_VERIFICATION', title: `The system check did not match — ${project.key}`, preview: input.detail, projectId: project.id, stepId, sourceEntityId: v.id, deepLink: `/projects/${project.id}/steps/${stepId}`, key: `n:ver:${v.id}` });
       return v;
     });
   }
@@ -964,7 +964,7 @@ export class HubServer {
       const stage = (name: string, s: number, e: number | null, state: IntakeStage['state'], error?: string) => run.stages.push({ name, startedAt: at(s), endedAt: e === null ? null : at(e), state, error });
       stage('Detected file update', 0, 1, 'DONE');
       if (st.settings.logSyncOutage) {
-        stage('Fetching', 1, 3, 'FAILED', 'Google Drive unavailable (simulated). Retrying; clock-in/out and messaging are unaffected.');
+        stage('Fetching', 1, 3, 'FAILED', 'Google Drive is not reachable (pretend). We will try again. Clocking in and out still works.');
         return run;
       }
       const hash = hashText(input.text);
@@ -1038,13 +1038,13 @@ export class HubServer {
       promptVersion: this.adapter.promptVersion, sourceWatermark: Object.values(this.state.deviceLastSeen).sort().pop() ?? null, errors, ...extra,
     });
     const stats = { created: 0, updated: 0, late: 0 };
-    if (this.analysisInFlight) { const run = mkRun('SKIPPED_BUDGET', ['Another analysis is already running (overlap prevented).']); return { ...stats, run }; }
+    if (this.analysisInFlight) { const run = mkRun('SKIPPED_BUDGET', ['Another AI check is already running.']); return { ...stats, run }; }
     if (opts.optional && this.monthSpendUsd() >= this.state.settings.monthlyBudgetUsd * (this.state.settings.budgetCircuitBreakerPct / 100)) {
-      const run = this.commit(() => { const r = mkRun('SKIPPED_BUDGET', ['Optional analysis skipped: budget circuit-breaker reached. Required reviews continue.']); this.state.aiRuns.push(r); return r; });
+      const run = this.commit(() => { const r = mkRun('SKIPPED_BUDGET', ['Extra AI work was skipped because the money limit was reached. Needed reviews keep going.']); this.state.aiRuns.push(r); return r; });
       return { ...stats, run };
     }
     if (this.state.settings.aiOutage) {
-      const run = this.commit(() => { const r = mkRun('FAILED', ['AI provider unavailable (simulated). Time clock and update requests are unaffected; existing cards remain.']); this.state.aiRuns.push(r); return r; });
+      const run = this.commit(() => { const r = mkRun('FAILED', ['The AI helper is down (pretend). The time clock and requests still work. Your cards stay.']); this.state.aiRuns.push(r); return r; });
       return { ...stats, run };
     }
     this.analysisInFlight = true;
@@ -1096,19 +1096,19 @@ export class HubServer {
         // Late evidence: an immutable supplement. The earlier confirmation is never rewritten.
         const newEvs = st.events.filter((e) => newIds.includes(e.id));
         const f: Finding = {
-          ...d, ...base, id: this.nid('fnd'), findingType: 'LATE_EVIDENCE', claimType: d.claimType, headline: `Late evidence after your review: ${d.headline}`,
-          observedFacts: newEvs.map(describeEvent), inference: 'These events arrived after you reviewed this item. They may change the picture — please re-check. Your earlier answer is kept unchanged.',
+          ...d, ...base, id: this.nid('fnd'), findingType: 'LATE_EVIDENCE', claimType: d.claimType, headline: `New facts came in after your review: ${d.headline}`,
+          observedFacts: newEvs.map(describeEvent), inference: 'These events arrived after you checked this. They may change things, so please look again. Your first answer is kept as it was.',
           sourceEventIds: newIds, status: 'PROPOSED', supersedesFindingId: null, groupKey: `late:${prev.id}:${newIds[newIds.length - 1]}`,
         };
         st.findings.push(f);
         stats.late++;
         if (wantsCard) {
-          st.reviewCards.push(this.newCard('LATE_EVIDENCE', recipient.id, f, 'Late evidence arrived', f.inference));
-          this.notify({ recipientUid: recipient.id, senderUid: null, type: 'NEEDS_VERIFICATION', title: `Late evidence arrived — ${d.projectId ? st.projects.find((p) => p.id === d.projectId)?.key : 'review'}`, preview: f.headline, projectId: d.projectId, stepId: d.stepId, sourceEntityId: f.id, deepLink: '/review', key: `n:late:${f.id}` });
+          st.reviewCards.push(this.newCard('LATE_EVIDENCE', recipient.id, f, 'New facts came in late', f.inference));
+          this.notify({ recipientUid: recipient.id, senderUid: null, type: 'NEEDS_VERIFICATION', title: `New facts came in late — ${d.projectId ? st.projects.find((p) => p.id === d.projectId)?.key : 'review'}`, preview: f.headline, projectId: d.projectId, stepId: d.stepId, sourceEntityId: f.id, deepLink: '/review', key: `n:late:${f.id}` });
         }
         const step = d.stepId ? st.steps.find((s) => s.id === d.stepId) : null;
         if (step) { step.observedReview = 'PENDING_EMPLOYEE'; step.newActivityAt = lastEv; step.observedNote = 'Late evidence arrived after review — summary flagged for reconsideration.'; }
-        if (d.projectId) this.addJournal({ projectId: d.projectId, stepIds: d.stepId ? [d.stepId] : [], type: 'LATE_EVIDENCE', actorUid: null, actorType: 'AI', actorLabel: `${d.deviceId} device; actor unverified (automated AI suggestion)`, title: 'Late evidence arrived', summary: `${newEvs.length} event(s) arrived after review. Earlier confirmation preserved.`, verificationState: 'AI_DETECTED', confidenceBand: d.confidenceBand, sourceRefs: newIds });
+        if (d.projectId) this.addJournal({ projectId: d.projectId, stepIds: d.stepId ? [d.stepId] : [], type: 'LATE_EVIDENCE', actorUid: null, actorType: 'AI', actorLabel: `${d.deviceId} device; actor unverified (automated AI suggestion)`, title: 'New facts came in late', summary: `${newEvs.length} event(s) came in after the review. The first answer is kept.`, verificationState: 'AI_DETECTED', confidenceBand: d.confidenceBand, sourceRefs: newIds });
         this.audit({ entityType: 'finding', entityId: f.id, action: 'LATE_EVIDENCE_CREATED', before: null, after: { relatesTo: prev.id }, actorUid: null, actorLabel: 'AI engine (replay adapter)', reason: 'Material events arrived after review', evidenceRefs: newIds, projectId: d.projectId });
         continue;
       }
@@ -1128,7 +1128,7 @@ export class HubServer {
       if (f.projectId) {
         this.addJournal({
           projectId: f.projectId, stepIds: f.stepId ? [f.stepId] : [], type: 'AI_OBSERVATION', actorUid: null, actorType: 'AI', actorLabel: `${f.deviceId} device; actor unverified (automated AI suggestion)`,
-          title: 'AI noticed activity', summary: `${f.inference} Official status was not changed.`, verificationState: 'AI_DETECTED', confidenceBand: f.confidenceBand, sourceRefs: f.sourceEventIds, occurredAt: lastEv,
+          title: 'AI saw some activity', summary: `${f.inference} The step status was not changed.`, verificationState: 'AI_DETECTED', confidenceBand: f.confidenceBand, sourceRefs: f.sourceEventIds, occurredAt: lastEv,
         });
       }
       if (!wantsCard) continue; // print-only day: no mandatory daily review card
@@ -1197,10 +1197,10 @@ export class HubServer {
       comparisons: [...byType.entries()].map(([jobType, entries]) => ({ jobType, entries, comparable: entries.length > 1 })),
       opportunities: st.opportunities,
       caveats: [
-        'Four-state windows are OBSERVED digital/machine states. MACHINE_ONLY does not mean a person was idle (feeding, packing, handling product). NEITHER_OBSERVED is not proof of idleness.',
-        'Minutes with missing logger coverage are shown separately and are never counted as “neither observed”.',
-        'People are not ranked across unlike tasks, printers, or training. Compare like-for-like only.',
-        'These statistics are not payroll truth and must never be used to start/stop pay, infer breaks, or penalize missing keyboard activity.',
+        'These bars show what the computer and printer did. “Machine only” does not mean a person was doing nothing. They may be feeding paper or packing. “Neither” does not prove anyone was idle.',
+        'Minutes with no data are shown on their own. We never count them as “neither”.',
+        'We do not rank people who do different jobs, use different printers, or had different training.',
+        'These numbers are not pay records. Never use them to start or stop pay, guess breaks, or punish someone for little typing.',
       ],
     };
   }
@@ -1217,24 +1217,24 @@ export class HubServer {
     const pendingReview = st.reviewCards.filter((c) => ['PENDING', 'IN_REVIEW', 'DEFERRED'].includes(c.status) && c.cardType !== 'OWNER_REQUEST');
     const confirmedSteps = st.projectEvents.filter((e) => e.recordedAt > since && e.type === 'STATUS_CHANGE' && /→ (REPORTED|VERIFIED) COMPLETE/.test(e.title));
     const narrative = [
-      `${confirmedSteps.length} step(s) reported or confirmed complete`,
-      `${responses.length} reply(ies) to update requests or proactive updates`,
-      `${open.length} update request(s) still unanswered`,
-      `${unmatched.length} piece(s) of work not matched to a project`,
-      `${pendingReview.length} AI observation(s) waiting for employee review`,
+      `${confirmedSteps.length} step(s) marked finished`,
+      `${responses.length} answer(s) or updates from your team`,
+      `${open.length} request(s) still waiting for an answer`,
+      `${unmatched.length} piece(s) of work that is not in any project`,
+      `${pendingReview.length} AI guess(es) waiting for a person to check`,
     ];
     const queue: { kind: string; label: string; link: string; weight: number }[] = [];
-    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['EMPLOYEE_RESPONSE'].includes(n.type))) queue.push({ kind: 'Requested update replied', label: n.title, link: n.deepLink, weight: 100 });
+    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['EMPLOYEE_RESPONSE'].includes(n.type))) queue.push({ kind: 'They answered you', label: n.title, link: n.deepLink, weight: 100 });
     for (const s of st.steps) {
       const p = st.projects.find((p) => p.id === s.projectId)!;
-      if (s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Verification pending', label: `${p.key} — ${s.title} (reported complete, not independently verified)`, link: `/projects/${p.id}/steps/${s.id}`, weight: 80 });
-      if (s.status === 'BLOCKED') queue.push({ kind: 'Blocker', label: `${p.key} — ${s.title}: ${s.blockerReason ?? ''}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 90 });
-      if (s.dueAt && s.dueAt < st.now && !TERMINAL.includes(s.status)) queue.push({ kind: 'Overdue', label: `${p.key} — ${s.title}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 70 });
-      if (s.observedReview === 'PENDING_EMPLOYEE' && s.status === 'NOT_STARTED' && s.observedLevel !== 'NO_EVIDENCE') queue.push({ kind: 'Status differs from activity', label: `${p.key} — ${s.title}: activity observed, official status still Not Started`, link: `/projects/${p.id}/steps/${s.id}`, weight: 60 });
+      if (s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Needs a double-check', label: `${p.key} — ${s.title} (says it is done, but nobody double-checked)`, link: `/projects/${p.id}/steps/${s.id}`, weight: 80 });
+      if (s.status === 'BLOCKED') queue.push({ kind: 'Blocked', label: `${p.key} — ${s.title}: ${s.blockerReason ?? ''}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 90 });
+      if (s.dueAt && s.dueAt < st.now && !TERMINAL.includes(s.status)) queue.push({ kind: 'Late', label: `${p.key} — ${s.title}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 70 });
+      if (s.observedReview === 'PENDING_EMPLOYEE' && s.status === 'NOT_STARTED' && s.observedLevel !== 'NO_EVIDENCE') queue.push({ kind: 'Tracker and activity do not match', label: `${p.key} — ${s.title}: we saw activity, but the tracker still says “Not started”`, link: `/projects/${p.id}/steps/${s.id}`, weight: 60 });
     }
-    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['BLOCKER', 'NEEDS_VERIFICATION'].includes(n.type))) queue.push({ kind: n.type === 'BLOCKER' ? 'Blocker' : 'Needs verification', label: n.title, link: n.deepLink, weight: 85 });
-    for (const a of st.archives.filter((a) => a.coverageState === 'INCOMPLETE')) queue.push({ kind: 'Data issue', label: `${a.deviceId} ${a.hourWindow}:00 file has missing events (${a.sequenceGaps.join('; ')})`, link: '/owner/data-intake', weight: 50 });
-    if (st.settings.aiOutage || st.settings.logSyncOutage) queue.push({ kind: 'Data issue', label: st.settings.aiOutage ? 'AI provider unavailable (demo toggle)' : 'Log sync delayed (demo toggle)', link: '/owner/data-intake', weight: 55 });
+    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['BLOCKER', 'NEEDS_VERIFICATION'].includes(n.type))) queue.push({ kind: n.type === 'BLOCKER' ? 'Blocked' : 'Needs a double-check', label: n.title, link: n.deepLink, weight: 85 });
+    for (const a of st.archives.filter((a) => a.coverageState === 'INCOMPLETE')) queue.push({ kind: 'Data problem', label: `${a.deviceId} ${a.hourWindow}:00 file is missing some events (${a.sequenceGaps.join('; ')})`, link: '/owner/data-intake', weight: 50 });
+    if (st.settings.aiOutage || st.settings.logSyncOutage) queue.push({ kind: 'Data problem', label: st.settings.aiOutage ? 'The AI helper is off (demo switch)' : 'Computer data is late (demo switch)', link: '/owner/data-intake', weight: 55 });
     queue.sort((a, b) => b.weight - a.weight);
     const workers = st.users.filter((u) => u.role === 'EMPLOYEE' && ['PROJECT', 'MIXED'].includes(this.areaOn(u.id))).concat(st.users.filter((u) => u.role === 'OWNER'));
     const workerCards = workers.map((u) => {
@@ -1280,7 +1280,7 @@ export class HubServer {
   }
   addUser(uid: string, input: { name: string; area: Area }) {
     this.requireOwner(uid);
-    if (!input.name.trim()) throw new HubError('VALIDATION', 'Name required.');
+    if (!input.name.trim()) throw new HubError('VALIDATION', 'Please type a name.');
     return this.commit(() => {
       const u: User = { id: this.nid('u'), name: input.name.trim(), role: 'EMPLOYEE', area: input.area, active: true, capabilities: [], primaryDeviceId: null, rosterNote: 'Added in the demo. Verify against the real roster.' };
       this.state.users.push(u);
@@ -1290,14 +1290,14 @@ export class HubServer {
   setUserActive(uid: string, targetUid: string, active: boolean) {
     this.requireOwner(uid);
     const u = this.state.users.find((x) => x.id === targetUid);
-    if (!u || u.role === 'OWNER') throw new HubError('VALIDATION', 'Cannot change the owner account.');
+    if (!u || u.role === 'OWNER') throw new HubError('VALIDATION', 'The owner account cannot be changed.');
     return this.commit(() => { u.active = active; return u; });
   }
 
   decideOpportunity(uid: string, id: string, decision: 'APPROVED' | 'DEFERRED' | 'REJECTED' | 'MORE_EVIDENCE_REQUESTED', note: string) {
     this.requireOwner(uid);
     const op = this.state.opportunities.find((o) => o.id === id);
-    if (!op) throw new HubError('NOT_FOUND', 'Opportunity not found.');
+    if (!op) throw new HubError('NOT_FOUND', 'We could not find that idea.');
     return this.commit(() => {
       op.state = decision; op.decisionNote = note || null; op.decidedAt = this.state.now;
       if (decision === 'APPROVED' && !op.createdProjectId) {
@@ -1330,7 +1330,7 @@ export class HubServer {
         const user = this.primaryUserFor(d);
         return {
           deviceId: d, coverage: this.coverageFor(d), lastEvent: evs.map((e) => e.occurredAt).sort().pop() ?? null, eventCount: evs.length, archives: arch,
-          lastRun: last ?? null, runs, actorNote: `Computer ${d}; person unverified${user ? ` (default reviewer: ${user.name} — routing only)` : ''}`,
+          lastRun: last ?? null, runs, actorNote: `Computer ${d}; we cannot tell who used it${user ? ` (usually checked by ${user.name} — just to know who to ask)` : ''}`,
           episodes: st.episodes.filter((e) => e.deviceId === d).length,
           relatedProjects: [...new Set(st.findings.filter((f) => f.deviceId === d && f.projectId).map((f) => st.projects.find((p) => p.id === f.projectId)!.key))],
         };
@@ -1342,7 +1342,7 @@ export class HubServer {
   traceFinding(uid: string, findingId: string) {
     this.requireOwner(uid);
     const f = this.state.findings.find((x) => x.id === findingId);
-    if (!f) throw new HubError('NOT_FOUND', 'Finding not found.');
+    if (!f) throw new HubError('NOT_FOUND', 'We could not find that finding.');
     const events = this.state.events.filter((e) => f.sourceEventIds.includes(e.id));
     return {
       finding: f,
@@ -1423,7 +1423,7 @@ export class HubServer {
   demoSimulateReviewResponse() {
     this.assertDemo();
     const card = this.state.reviewCards.find((c) => c.recipientUid === 'u-erika' && c.cardType === 'OWNER_REQUEST' && c.status !== 'SUBMITTED');
-    if (!card) throw new HubError('NOT_FOUND', 'No open owner request for Erika.');
+    if (!card) throw new HubError('NOT_FOUND', 'Erika has no open request from Dalia.');
     if (!this.openShift('u-erika')) this.clockIn('u-erika', 'demo-clock-in-' + this.state.now);
     return this.submitDecision('u-erika', card.id, { action: 'SEND_STATUS', statusAnswer: 'IN_PROGRESS', note: 'Test attempted; investigating permissions (simulated reply).', idempotencyKey: 'demo-sim-' + card.id });
   }

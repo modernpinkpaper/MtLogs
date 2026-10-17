@@ -4,3 +4,4 @@ dist
 .env.local
 *.log
 e2e/out
+dist-single

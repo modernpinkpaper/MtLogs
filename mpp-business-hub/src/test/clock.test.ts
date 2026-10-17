@@ -31,7 +31,7 @@ describe('A. clock and paid-time protections', () => {
     hub.setPrintPendingSync(U.printA, true);
     expect(hub.clockOut(U.printA, key()).shift?.clockOutAt).not.toBeNull();
     const r = hub.reviewReadiness(U.erika);
-    expect(r.message).toMatch(/not a record of no work/i);
+    expect(r.message).toMatch(/does not mean no work was done/i);
   });
 
   it('duplicate clock-in/out presses do not create duplicate or corrupted shifts', async () => {

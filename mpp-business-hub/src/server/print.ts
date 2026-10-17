@@ -98,12 +98,12 @@ export function computeShiftStats(
     awaitingResult: mine.filter((j) => j.status === 'IN_PROGRESS').length,
     sheets: mine.filter((j) => j.status === 'COMPLETED').reduce((s, j) => s + j.sheets, 0),
     printMinutes: Math.round(printMinutes),
-    retryRateNote: `Retries = jobs resubmitted after a failure (${retries} of ${mine.length} attempted jobs).`,
+    retryRateNote: `Retries are jobs sent again after a fail. ${retries} of ${mine.length} jobs were retries.`,
     coverage,
     coverageNote:
-      coverage === 'NONE' ? 'No data received for this day yet. This is NOT zero work.'
-      : coverage === 'PARTIAL' ? `${uncovered * 5} minutes of logger coverage missing — figures may be lower than actual.`
-      : 'Logger coverage complete for the observed window.',
+      coverage === 'NONE' ? 'No data has come in for this day yet. That does NOT mean zero work.'
+      : coverage === 'PARTIAL' ? `We are missing ${uncovered * 5} minutes of data. The real numbers may be higher.`
+      : 'All the data for today has arrived.',
     pendingSync,
   };
 }

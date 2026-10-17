@@ -41,13 +41,13 @@ export function Clock() {
 
   return (
     <div className="stack">
-      <div><h1>Clock in / out</h1><p className="muted">Your time clock never waits for reviews, AI, logs or print figures. Reviewing your work is paid time.</p></div>
+      <div><h1>Clock in / out</h1><p className="muted">Your time clock never waits for anything. Reviewing your work counts as paid time.</p></div>
 
-      {confirmIn && <div className="card ok" role="status"><strong>Clocked in at {formatTime(confirmIn.clockInAt)}.</strong> Your paid time has started.</div>}
+      {confirmIn && <div className="card ok" role="status"><strong>You clocked in at {formatTime(confirmIn.clockInAt)}.</strong> Your pay clock has started.</div>}
       {confirmOut && (
         <div className="card ok" role="status">
-          <strong>Clocked out at {formatTime(confirmOut.shift.clockOutAt)}.</strong> Paid shift: {formatDuration(minutesBetween(confirmOut.shift.clockInAt, confirmOut.shift.clockOutAt!))}.
-          {confirmOut.pending > 0 && <div className="small">{confirmOut.pending} review card(s) are saved for your next paid shift. Nothing was closed or marked reviewed.</div>}
+          <strong>You clocked out at {formatTime(confirmOut.shift.clockOutAt)}.</strong> You worked: {formatDuration(minutesBetween(confirmOut.shift.clockInAt, confirmOut.shift.clockOutAt!))}.
+          {confirmOut.pending > 0 && <div className="small">{confirmOut.pending} review card(s) are saved for your next shift. Nothing was closed.</div>}
         </div>
       )}
 
@@ -55,12 +55,12 @@ export function Clock() {
         {shift ? (
           <div className="stack">
             <div className="row between"><div><Chip tone="ok" glyph="●">Clocked in since {formatDateTime(shift.clockInAt)}</Chip><div className="muted small">Elapsed: {formatDuration(minutesBetween(shift.clockInAt, hub.now))}</div></div></div>
-            <h2>Before you go</h2>
+            <h2>Before you leave</h2>
             {readiness.cards.length > 0 ? (
               <div className="card pink">
-                <strong>{readiness.cards.length} review card(s) are ready.</strong>{readiness.provisional > 0 && <> <Chip tone="warn" glyph="…">{readiness.provisional} Provisional</Chip></>}
-                <p className="small">Reviewing now is part of your paid shift (about 1–3 minutes). Or clock out right away and review next shift.</p>
-                <div className="row"><button className="primary" onClick={() => nav('/review')}>Review now</button><button onClick={clockOut}>Clock out now / Review next shift</button></div>
+                <strong>{readiness.cards.length} review card(s) are ready.</strong>{readiness.provisional > 0 && <> <Chip tone="warn" glyph="…">{readiness.provisional} Not final yet</Chip></>}
+                <p className="small">If you review now, you still get paid (about 1 to 3 minutes). Or you can clock out now and review next time.</p>
+                <div className="row"><button className="primary" onClick={() => nav('/review')}>Review now</button><button onClick={clockOut}>Clock out now, review next time</button></div>
               </div>
             ) : (
               <div className="card flat">
@@ -69,21 +69,21 @@ export function Clock() {
               </div>
             )}
             {(readiness.aiStatus !== 'OK' || readiness.logSyncStatus !== 'OK') && <div className="card warn small" role="status">{readiness.message}</div>}
-            {readiness.coverageIssues.length > 0 && <div className="small muted">Data coverage: {readiness.coverageIssues.map((c) => <span key={c.deviceId}>{c.deviceId} <CoverageChip state={c.state} /> </span>)}</div>}
+            {readiness.coverageIssues.length > 0 && <div className="small muted">Computer data: {readiness.coverageIssues.map((c) => <span key={c.deviceId}>{c.deviceId} <CoverageChip state={c.state} /> </span>)}</div>}
           </div>
         ) : (
           <div className="stack">
             <Chip tone="gray" glyph="○">Clocked out</Chip>
-            <p>Clock in first. Any outstanding reviews appear <em>after</em> your clock-in is saved.</p>
+            <p>Clock in first. If you have reviews waiting, you will see them <em>after</em> you clock in.</p>
             <div><button className="primary" onClick={clockIn}>Clock in</button></div>
-            <p className="small muted">Production note: the existing time-clock PIN flow stays as is. This prototype is not connected to it.</p>
+            <p className="small muted">Note: the real clock PIN is not used here. This is only a practice copy.</p>
           </div>
         )}
       </div>
 
       {print && (
         <div className="card">
-          <div className="row between"><h2>Today’s print figures</h2>{print.stats.pendingSync && <Chip tone="warn" glyph="…">Pending synchronization</Chip>}</div>
+          <div className="row between"><h2>Today’s printing numbers</h2>{print.stats.pendingSync && <Chip tone="warn" glyph="…">Still catching up</Chip>}</div>
           <p className="small muted">{print.stats.coverageNote}</p>
           <div className="statrow">
             <div className="stat"><div className="v">{print.stats.completed}</div><div className="l">Completed jobs</div></div>
@@ -92,16 +92,16 @@ export function Clock() {
             <div className="stat"><div className="v">{print.stats.failed}</div><div className="l">Failed</div></div>
             <div className="stat"><div className="v">{print.stats.retries}</div><div className="l">Retries</div></div>
           </div>
-          <p className="small muted">{print.stats.retryRateNote} These are figures, not a performance rating, and are not used for pay.</p>
+          <p className="small muted">{print.stats.retryRateNote} These are just numbers. They are not a grade and they do not change your pay.</p>
         </div>
       )}
 
       {overlay !== null && (
-        <Modal title="You’re clocked in" onClose={() => setOverlay(null)}>
+        <Modal title="You clocked in" onClose={() => setOverlay(null)}>
           <div className="stack">
-            <div className="card ok">Your clock-in is saved. Paid time has started.</div>
-            <p>You have <strong>{overlay}</strong> outstanding review card(s). Reviewing is working time. You can also do it later today.</p>
-            <div className="row"><button className="primary" onClick={() => { setOverlay(null); nav('/review'); }}>Review now (paid)</button><button onClick={() => setOverlay(null)}>Later</button></div>
+            <div className="card ok">You are clocked in. Your pay clock has started.</div>
+            <p>You have <strong>{overlay}</strong> review card(s) waiting. Reviewing is paid work. You can also do it later today.</p>
+            <div className="row"><button className="primary" onClick={() => { setOverlay(null); nav('/review'); }}>Review now (you get paid)</button><button onClick={() => setOverlay(null)}>Later</button></div>
           </div>
         </Modal>
       )}

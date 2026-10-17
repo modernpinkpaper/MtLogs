@@ -10,7 +10,7 @@ describe('B. owner update request round trip', () => {
     expect(req.recipientUids).toEqual([U.erika]);
     // recipient receives notification + persistent card immediately
     const n = hub.listNotifications(U.erika).find((x) => x.sourceEntityId === req.id)!;
-    expect(n.title).toMatch(/requested an update/);
+    expect(n.title).toMatch(/asked for an update/);
     expect(n.state).toBe('DELIVERED');
     const card = hub.listReviewCards(U.erika).find((c) => c.updateRequestId === req.id)!;
     expect(card.explanatoryText).toBe('Did the test product get created?');
@@ -63,7 +63,7 @@ describe('B. owner update request round trip', () => {
     expect(step.verificationSource).toBe('NONE');
     expect(step.humanReported?.choice).toBe('COMPLETED');
     const n = hub.listNotifications(U.dalia).find((x) => x.type === 'EMPLOYEE_RESPONSE')!;
-    expect(n.preview).toMatch(/employee-reported, not independently verified/);
+    expect(n.preview).toMatch(/told to us by a person, not double-checked/);
     expect(hub.getProject(U.dalia, 'prj-081').closedAt).toBeNull();
   });
 
@@ -107,7 +107,7 @@ describe('B. owner update request round trip', () => {
 
   it('recipients must be authorized for the project', async () => {
     const hub = await newHub();
-    expect(() => hub.createUpdateRequest(U.dalia, { projectId: 'prj-044', recipientUids: [U.erika], idempotencyKey: key() })).toThrow(/authorized/);
+    expect(() => hub.createUpdateRequest(U.dalia, { projectId: 'prj-044', recipientUids: [U.erika], idempotencyKey: key() })).toThrow(/works on this project/);
   });
 
   it('a request can be answered at clock-out or after next clock-in, and the card survives skipping', async () => {

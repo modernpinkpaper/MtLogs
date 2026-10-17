@@ -8,21 +8,21 @@ export function Chip({ tone = 'gray', glyph, children, title }: { tone?: Tone; g
 
 const STATUS: Record<StepStatus, [string, Tone, string]> = {
   NOT_STARTED: ['Not started', 'gray', '○'], IN_PROGRESS: ['In progress', 'info', '◔'], BLOCKED: ['Blocked', 'bad', '⛔'], WAITING: ['Waiting', 'warn', '⏸'],
-  REPORTED_COMPLETE: ['Reported complete', 'warn', '◑'], VERIFIED_COMPLETE: ['Complete (confirmed)', 'ok', '✔'], CANCELLED: ['Cancelled', 'gray', '✕'], NOT_APPLICABLE: ['Not applicable', 'gray', '–'], REOPENED: ['Reopened', 'warn', '↺'],
+  REPORTED_COMPLETE: ['Says it is done', 'warn', '◑'], VERIFIED_COMPLETE: ['Done and confirmed', 'ok', '✔'], CANCELLED: ['Cancelled', 'gray', '✕'], NOT_APPLICABLE: ['Not applicable', 'gray', '–'], REOPENED: ['Reopened', 'warn', '↺'],
 };
 export function StatusChip({ status }: { status: StepStatus }) {
   const [label, tone, glyph] = STATUS[status];
-  return <Chip tone={tone} glyph={glyph} title="Official status (the tracked state, set by people)">Official: {label}</Chip>;
+  return <Chip tone={tone} glyph={glyph} title="This is what the tracker says. People set it.">Tracker says: {label}</Chip>;
 }
 export const statusLabel = (s: StepStatus) => STATUS[s][0];
 
 const VSTATE: Record<VerificationState, [string, Tone, string, string]> = {
-  OFFICIAL: ['Official', 'gray', '◆', 'Recorded as the official state.'],
-  AI_DETECTED: ['AI Detected', 'violet', '✦', 'Suggested by the AI from observed events. Not confirmed by anyone.'],
-  EMPLOYEE_CONFIRMED: ['Employee Confirmed', 'info', '☑', 'A person confirmed or reported this. Not independently verified.'],
-  INDEPENDENTLY_VERIFIED: ['Independently Verified', 'ok', '✔', 'Confirmed by an independent source of truth (verifier).'],
-  NEEDS_REVIEW: ['Needs Review', 'warn', '!', 'Someone needs to look at this.'],
-  UNKNOWN: ['Unknown', 'gray', '?', 'Not enough evidence.'],
+  OFFICIAL: ['Tracker says', 'gray', '◆', 'This is what the tracker says.'],
+  AI_DETECTED: ['AI guess', 'violet', '✦', 'The AI made this guess from computer activity. No person has checked it.'],
+  EMPLOYEE_CONFIRMED: ['Person says so', 'info', '☑', 'A person said or confirmed this. No system has double-checked it.'],
+  INDEPENDENTLY_VERIFIED: ['Double-checked', 'ok', '✔', 'A separate system checked this and it matches.'],
+  NEEDS_REVIEW: ['Needs a look', 'warn', '!', 'Someone needs to look at this.'],
+  UNKNOWN: ['Not known', 'gray', '?', 'We do not have enough facts.'],
 };
 export function VerifyBadge({ state }: { state: VerificationState }) {
   const [label, tone, glyph, tip] = VSTATE[state];
@@ -31,30 +31,31 @@ export function VerifyBadge({ state }: { state: VerificationState }) {
 
 export function SourceChip({ source }: { source: VerificationSource }) {
   const map: Record<VerificationSource, [string, Tone, string]> = {
-    NONE: ['No verification', 'gray', '○'], EMPLOYEE_CONFIRMED: ['Employee Confirmed', 'info', '☑'], INDEPENDENT: ['Independently Verified', 'ok', '✔'], OWNER_APPROVED: ['Owner Approved', 'ok', '★'],
+    NONE: ['Not double-checked', 'gray', '○'], EMPLOYEE_CONFIRMED: ['Person says so', 'info', '☑'], INDEPENDENT: ['Double-checked', 'ok', '✔'], OWNER_APPROVED: ['Owner approved', 'ok', '★'],
   };
   const [l, t, g] = map[source];
   return <Chip tone={t} glyph={g}>{l}</Chip>;
 }
 
 const LEVEL: Record<InferenceLevel, [string, string]> = {
-  NO_EVIDENCE: ['No matching activity detected', '○'], POSSIBLE_ACTIVITY: ['Possible activity', '◔'], STRONG_ACTIVITY: ['Strong activity observed', '◑'],
-  DELIVERABLE_OBSERVED: ['Deliverable observed', '◕'], RESULT_OBSERVED: ['Result observed', '●'], INCONCLUSIVE: ['Inconclusive', '?'],
+  NO_EVIDENCE: ['No matching activity seen', '○'], POSSIBLE_ACTIVITY: ['Maybe some activity', '◔'], STRONG_ACTIVITY: ['Clear activity', '◑'],
+  DELIVERABLE_OBSERVED: ['Finished file seen', '◕'], RESULT_OBSERVED: ['Result seen', '●'], INCONCLUSIVE: ['Not clear', '?'],
 };
 export function ObservedChip({ level, review }: { level: InferenceLevel; review?: ObservedReviewState }) {
-  if (level === 'NO_EVIDENCE') return <Chip tone="gray" glyph="○" title="No events matched. This does NOT mean no work happened — coverage may be incomplete.">AI: no matching activity detected</Chip>;
+  if (level === 'NO_EVIDENCE') return <Chip tone="gray" glyph="○" title="We saw nothing that matches. That does NOT mean no work happened. Some data may be missing.">AI: no matching activity seen</Chip>;
   const [l, g] = LEVEL[level];
-  const rv = review && review !== 'NONE' ? ` · ${review.replace(/_/g, ' ').toLowerCase()}` : '';
-  return <Chip tone="violet" glyph={g} title="AI observation — separate from the official status.">AI noticed: {l}{rv}</Chip>;
+  const RV: Record<string, string> = { PENDING_EMPLOYEE: 'waiting for a person to check', EMPLOYEE_CONFIRMED: 'a person said yes', CORRECTED: 'a person fixed it', DISMISSED: 'skipped', EXTERNALLY_VERIFIED: 'double-checked' };
+  const rv = review && review !== 'NONE' ? ` · ${RV[review] ?? ''}` : '';
+  return <Chip tone="violet" glyph={g} title="This is what the AI saw. It is separate from the tracker.">AI saw: {l}{rv}</Chip>;
 }
 
 export function CoverageChip({ state }: { state: CoverageState }) {
-  const m: Record<CoverageState, [string, Tone, string]> = { FINAL: ['Coverage complete', 'ok', '✔'], PROVISIONAL: ['Provisional', 'warn', '…'], INCOMPLETE: ['Coverage incomplete', 'bad', '!'], MISSING: ['No data yet', 'gray', '?'] };
+  const m: Record<CoverageState, [string, Tone, string]> = { FINAL: ['All data arrived', 'ok', '✔'], PROVISIONAL: ['Not final yet', 'warn', '…'], INCOMPLETE: ['Some data missing', 'bad', '!'], MISSING: ['No data yet', 'gray', '?'] };
   const [l, t, g] = m[state];
   return <Chip tone={t} glyph={g}>{l}</Chip>;
 }
 export function LinkChip({ state }: { state: LinkState }) {
-  const m: Record<LinkState, [string, Tone, string]> = { VERIFIED: ['Link verified (simulated)', 'ok', '✔'], ACCESS_DENIED: ['Access denied', 'bad', '⛔'], MOVED: ['Moved', 'warn', '→'], MISSING: ['Missing', 'bad', '✕'], UNKNOWN: ['Link unknown', 'gray', '?'], LOCAL_ONLY: ['Local / network path', 'info', '⌂'] };
+  const m: Record<LinkState, [string, Tone, string]> = { VERIFIED: ['Link works (pretend)', 'ok', '✔'], ACCESS_DENIED: ['No access', 'bad', '⛔'], MOVED: ['Moved', 'warn', '→'], MISSING: ['Missing', 'bad', '✕'], UNKNOWN: ['Link not known', 'gray', '?'], LOCAL_ONLY: ['On a company computer', 'info', '⌂'] };
   const [l, t, g] = m[state];
   return <Chip tone={t} glyph={g}>{l}</Chip>;
 }

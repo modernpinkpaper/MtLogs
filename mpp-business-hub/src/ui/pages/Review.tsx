@@ -20,20 +20,20 @@ export function Review() {
 
   return (
     <div className="stack">
-      <div><h1>Daily review</h1><p className="muted">Confirm, correct or dismiss what the system noticed, and answer requests. Usually 1–3 minutes. Nothing here blocks clocking in or out.</p></div>
+      <div><h1>Your review</h1><p className="muted">Tell us if the AI got it right. Answer any requests. It takes about 1 to 3 minutes. It never stops you from clocking in or out.</p></div>
       {offClock && (
         <div className="card warn" role="status">
-          Reviews are paid work, so you can submit them while clocked in. <Link to="/clock">Clock in</Link> first — your cards will be waiting.
+          Reviews are paid work, so do them while you are clocked in. <Link to="/clock">Clock in</Link> first. Your cards will wait for you.
         </div>
       )}
-      {cards.length === 0 && <Empty>No cards are waiting. {hub.reviewReadiness(uid).message}</Empty>}
+      {cards.length === 0 && <Empty>You have no cards. {hub.reviewReadiness(uid).message}</Empty>}
       {bulkable.length > 1 && !offClock && (
         <div className="card flat row between">
-          <span className="small">Low-risk, observed-only items can be confirmed together. High-risk or conflicting items always need individual confirmation.</span>
+          <span className="small">Easy, low-risk cards can be confirmed together. Big or unclear ones need a close look, one at a time.</span>
           <button disabled={!picked.length} onClick={async () => {
             const r = await act(() => hub.bulkConfirm(uid, picked, bulkKey.current), 'Confirmed selected cards');
             if (r) { setPicked([]); bulkKey.current = newKey('bulk'); }
-          }}>Confirm selected ({picked.length})</button>
+          }}>Confirm picked ({picked.length})</button>
         </div>
       )}
       {cards.map((c) => (
@@ -41,7 +41,7 @@ export function Review() {
           bulk={c.canBulkReview && !offClock ? { checked: picked.includes(c.id), onChange: (v) => setPicked(v ? [...picked, c.id] : picked.filter((x) => x !== c.id)) } : undefined} />
       ))}
       {done.length > 0 && (
-        <details className="card flat"><summary>Recently submitted ({done.length})</summary>
+        <details className="card flat"><summary>Done recently ({done.length})</summary>
           {done.map((c) => <div key={c.id} className="small muted">{c.title} — {formatDateTime(c.lastUpdatedAt)}</div>)}
         </details>
       )}
@@ -86,26 +86,26 @@ function CardView({ card, highlight, disabled, bulk }: { card: ReviewCard; highl
     <article className={`card ${isRequest ? 'pink' : ''} ${highlight ? 'focus' : ''}`} aria-labelledby={`t-${card.id}`} onFocus={start} onMouseEnter={start}>
       <div className="row between">
         <div>
-          <h2 id={`t-${card.id}`}>{isRequest ? `Update requested by ${hub.userName(req?.requestedByUid ?? null)}` : card.title}</h2>
+          <h2 id={`t-${card.id}`}>{isRequest ? `${hub.userName(req?.requestedByUid ?? null)} asked for an update` : card.title}</h2>
           <div className="row small muted">
             {project && <Link to={`/projects/${project.id}${step ? `/steps/${step.id}` : ''}`}>{project.key}{step ? `, Step ${step.sortOrder}` : ''}</Link>}
             <span>{formatDateTime(card.createdAt)}</span>
-            {card.provisional && <Chip tone="warn" glyph="…" title="Final reconciliation of today’s logs is still in progress.">Provisional</Chip>}
+            {card.provisional && <Chip tone="warn" glyph="…" title="Final reconciliation of today’s logs is still in progress.">Not final yet</Chip>}
             {!isRequest && <CoverageChip state={card.sourceCoverage} />}
             {req?.importance === 'IMPORTANT' && <Chip tone="bad" glyph="!">Important</Chip>}
           </div>
         </div>
-        {bulk && <label className="row" style={{ fontWeight: 500 }}><input type="checkbox" checked={bulk.checked} onChange={(e) => bulk.onChange(e.target.checked)} /> Include in bulk</label>}
+        {bulk && <label className="row" style={{ fontWeight: 500 }}><input type="checkbox" checked={bulk.checked} onChange={(e) => bulk.onChange(e.target.checked)} /> Pick for group confirm</label>}
       </div>
 
       {isRequest ? (
         <div className="stack" style={{ marginTop: '.6rem' }}>
           <p style={{ fontSize: '1.05rem' }}><strong>{card.explanatoryText}</strong></p>
-          {step && <div className="row small"><StatusChip status={step.status} /> <span className="muted">Replies are recorded as employee-reported.</span></div>}
+          {step && <div className="row small"><StatusChip status={step.status} /> <span className="muted">Your answer is saved as “told to us by a person.”</span></div>}
           <ChoiceGroup value={choice} onChange={setChoice} name={`c-${card.id}`} />
-          <div><label htmlFor={`n-${card.id}`}>Notes (optional)</label><textarea id={`n-${card.id}`} value={note} onChange={(e) => setNote(e.target.value)} /></div>
-          <div><label htmlFor={`l-${card.id}`}>Evidence link or file path (optional)</label><input id={`l-${card.id}`} type="text" value={link} onChange={(e) => setLink(e.target.value)} /></div>
-          <label style={{ fontWeight: 500 }}><input type="checkbox" checked={help} onChange={(e) => setHelp(e.target.checked)} /> I need Dalia’s help (separate from sending a routine update)</label>
+          <div><label htmlFor={`n-${card.id}`}>Add a note (if you want)</label><textarea id={`n-${card.id}`} value={note} onChange={(e) => setNote(e.target.value)} /></div>
+          <div><label htmlFor={`l-${card.id}`}>A link or file name that shows your work (if you want)</label><input id={`l-${card.id}`} type="text" value={link} onChange={(e) => setLink(e.target.value)} /></div>
+          <label style={{ fontWeight: 500 }}><input type="checkbox" checked={help} onChange={(e) => setHelp(e.target.checked)} /> I need Dalia’s help (leave this off for a normal update)</label>
           <div className="row">
             <button className="primary" disabled={!choice || disabled} onClick={() => submit('SEND_STATUS')}>Send Requested Update</button>
             <button disabled={disabled} onClick={() => submit('DEFER')}>Answer later</button>
@@ -119,9 +119,9 @@ function CardView({ card, highlight, disabled, bulk }: { card: ReviewCard; highl
             <div className="card flat stack">
               <strong>What was this work?</strong>
               <div className="grid cols-2">
-                <div><label htmlFor={`cls-${card.id}`}>Classify as</label>
+                <div><label htmlFor={`cls-${card.id}`}>This work was</label>
                   <select id={`cls-${card.id}`} value={cls} onChange={(e) => setCls(e.target.value as typeof cls)}>
-                    <option value="LINK_EXISTING">Link to existing project/step</option><option value="NEW_STEP">Create new task</option><option value="ROUTINE">Routine production</option><option value="POTENTIAL_PROJECT">Potential new project</option>
+                    <option value="LINK_EXISTING">Part of a project step</option><option value="NEW_STEP">A new task</option><option value="ROUTINE">Everyday work</option><option value="POTENTIAL_PROJECT">Maybe a new project</option>
                   </select></div>
                 {(cls === 'LINK_EXISTING' || cls === 'NEW_STEP') && (
                   <div><label htmlFor={`cp-${card.id}`}>Project</label>
@@ -136,27 +136,27 @@ function CardView({ card, highlight, disabled, bulk }: { card: ReviewCard; highl
             </div>
           )}
           <div className="row">
-            <button className="primary" disabled={disabled || (f0?.findingType === 'AI_UNMATCHED_WORK' && cls === 'LINK_EXISTING' && !linkStep)} onClick={() => submit('CONFIRM')}>Accurate / Confirm</button>
-            <button disabled={disabled} onClick={() => setMode(mode === 'correct' ? 'none' : 'correct')}>Needs correction</button>
-            <button disabled={disabled} onClick={() => submit('NOT_MY_WORK')}>Not my work</button>
-            <button disabled={disabled} onClick={() => submit('DISMISS')}>Not relevant / Dismiss</button>
-            {step && <button disabled={disabled} onClick={() => setMode(mode === 'status' ? 'none' : 'status')}>Report status…</button>}
+            <button className="primary" disabled={disabled || (f0?.findingType === 'AI_UNMATCHED_WORK' && cls === 'LINK_EXISTING' && !linkStep)} onClick={() => submit('CONFIRM')}>Yes, that is right</button>
+            <button disabled={disabled} onClick={() => setMode(mode === 'correct' ? 'none' : 'correct')}>Not quite right</button>
+            <button disabled={disabled} onClick={() => submit('NOT_MY_WORK')}>That was not me</button>
+            <button disabled={disabled} onClick={() => submit('DISMISS')}>Skip it</button>
+            {step && <button disabled={disabled} onClick={() => setMode(mode === 'status' ? 'none' : 'status')}>Tell my status…</button>}
             <button className="ghost" disabled={disabled} onClick={() => submit('DEFER')}>Later</button>
           </div>
           {mode === 'correct' && (
-            <div className="stack"><label htmlFor={`co-${card.id}`}>What’s wrong? (your correction is saved next to the original, which is kept)</label>
+            <div className="stack"><label htmlFor={`co-${card.id}`}>What is wrong? (We keep the AI’s first guess and save your fix next to it.)</label>
               <textarea id={`co-${card.id}`} value={correction} onChange={(e) => setCorrection(e.target.value)} />
-              <div><button className="primary" disabled={!correction.trim()} onClick={() => submit('NEEDS_CORRECTION')}>Save correction</button></div></div>
+              <div><button className="primary" disabled={!correction.trim()} onClick={() => submit('NEEDS_CORRECTION')}>Save my fix</button></div></div>
           )}
           {mode === 'status' && (
             <div className="stack"><ChoiceGroup value={choice} onChange={setChoice} name={`s-${card.id}`} />
               <textarea aria-label="Notes" placeholder="Notes (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
               <label style={{ fontWeight: 500 }}><input type="checkbox" checked={help} onChange={(e) => setHelp(e.target.checked)} /> I need Dalia’s help</label>
-              <div><button className="primary" disabled={!choice} onClick={() => submit('SEND_STATUS')}>Confirm and send status</button></div></div>
+              <div><button className="primary" disabled={!choice} onClick={() => submit('SEND_STATUS')}>Send my status</button></div></div>
           )}
         </div>
       )}
-      {disabled && <p className="small muted">Clock in to submit (reviews are paid work).</p>}
+      {disabled && <p className="small muted">Clock in to send this. Reviews are paid work.</p>}
     </article>
   );
 }
@@ -170,13 +170,13 @@ function FindingBody({ f }: { f: Finding }) {
   return (
     <div className="stack">
       <p><strong>{f.headline}</strong></p>
-      <div className="row"><Chip tone="violet" glyph="✦">AI Detected · {f.claimType.replace(/_/g, ' ').toLowerCase()}</Chip><Chip tone="gray">Confidence: {f.confidenceBand.toLowerCase()}</Chip>
-        <Chip tone="warn" glyph="?" title="Log events show the device, not who was signed in.">Device activity; actor unverified</Chip></div>
+      <div className="row"><Chip tone="violet" glyph="✦">AI guess</Chip><Chip tone="gray">How sure: {f.confidenceBand.toLowerCase()}</Chip>
+        <Chip tone="warn" glyph="?" title="The log shows the computer, not who was using it.">We cannot tell who was at the computer</Chip></div>
       <p>{f.inference}</p>
-      {f.uncertainties.length > 0 && <div className="small"><strong>Not known:</strong><ul style={{ margin: '.2rem 0 0 1.1rem' }}>{f.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
-      {f.verificationNeeded.length > 0 && <div className="small"><strong>Needs checking:</strong><ul style={{ margin: '.2rem 0 0 1.1rem' }}>{f.verificationNeeded.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
-      {f.refs.submissionRefs.length > 0 && <div className="small">References seen (oldest first): {f.refs.submissionRefs.map((r) => <code key={r} style={{ marginRight: 8 }}>{r}</code>)}</div>}
-      <button className="link" onClick={() => setOpen(!open)}>{open ? 'Hide evidence' : `Show evidence (${f.sourceEventIds.length} events)`}</button>
+      {f.uncertainties.length > 0 && <div className="small"><strong>What we do not know:</strong><ul style={{ margin: '.2rem 0 0 1.1rem' }}>{f.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
+      {f.verificationNeeded.length > 0 && <div className="small"><strong>Please check:</strong><ul style={{ margin: '.2rem 0 0 1.1rem' }}>{f.verificationNeeded.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
+      {f.refs.submissionRefs.length > 0 && <div className="small">Upload numbers we saw (oldest first): {f.refs.submissionRefs.map((r) => <code key={r} style={{ marginRight: 8 }}>{r}</code>)}</div>}
+      <button className="link" onClick={() => setOpen(!open)}>{open ? 'Hide proof' : `Show proof (${f.sourceEventIds.length} events)`}</button>
       {open && <ul className="small" style={{ margin: 0, paddingLeft: '1.1rem' }}>{evs.map((e) => <li key={e.id}>{formatTime(e.occurredAt)} — {e.allowedSummary} <span className="muted">[{e.id}]</span></li>)}</ul>}
     </div>
   );

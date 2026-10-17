@@ -22,13 +22,13 @@ describe('F. print analytics', () => {
     const hub = await newHub();
     const mine = hub.myPrintStats(U.printA);
     expect(mine.stats.completed).toBeGreaterThan(0);
-    expect(mine.stats.retryRateNote).toMatch(/of \d+ attempted/);
+    expect(mine.stats.retryRateNote).toMatch(/of \d+ jobs were retries/);
     const gap = hub.myPrintStats(U.printC, U.printC, '2026-10-14');
     expect(gap.stats.coverage).toBe('PARTIAL');
     expect(gap.stats.coverageNote).toMatch(/missing/);
     const none = hub.myPrintStats(U.printC, U.printC, '2026-10-17');
     expect(none.stats.coverage).toBe('NONE');
-    expect(none.stats.coverageNote).toMatch(/NOT zero work/);
+    expect(none.stats.coverageNote).toMatch(/does NOT mean zero work/);
     hub.setPrintPendingSync(U.printB, true);
     expect(hub.myPrintStats(U.printB).stats.pendingSync).toBe(true);
     expect(hub.clockOut(U.printB, key()).shift?.clockOutAt).toBeTruthy();
@@ -40,8 +40,8 @@ describe('F. print analytics', () => {
     expect(() => hub.weeklyPrintReport(U.printA)).toThrow(PermissionDenied);
     const wk = hub.weeklyPrintReport(U.dalia);
     const joined = wk.caveats.join(' ');
-    expect(joined).toMatch(/MACHINE_ONLY does not mean a person was idle/);
-    expect(joined).toMatch(/not payroll truth/);
+    expect(joined).toMatch(/does not mean a person was doing nothing/);
+    expect(joined).toMatch(/not pay records/);
     expect(wk.comparisons.every((c) => c.comparable === false)).toBe(true); // no like-for-like peer → no comparison
     const s3 = wk.stations.find((s) => s.deviceId === 'PRINT-3')!;
     expect(s3.coverageGaps).toHaveLength(1);

@@ -23,7 +23,7 @@ export function ProjectDetail() {
   let project;
   try { project = hub.getProject(uid, projectId); } catch {
     // Same message for "not found" and "not allowed": nothing about the item is revealed.
-    return <div className="card bad" role="alert"><h1>Permission denied</h1><p>You don’t have access to this page.</p><Link to="/projects">Back to projects</Link></div>;
+    return <div className="card bad" role="alert"><h1>Permission denied</h1><p>You cannot open this page.</p><Link to="/projects">Back to projects</Link></div>;
   }
   const steps = hub.projectSteps(uid, projectId);
   const pr = progressOf(steps);
@@ -32,8 +32,8 @@ export function ProjectDetail() {
   const blockers = steps.filter((s) => s.status === 'BLOCKED');
   const openReq = hub.state.updateRequests.filter((r) => r.projectId === projectId && ['OPEN', 'PARTIALLY_RESPONDED'].includes(r.state) && (me.role === 'OWNER' || r.recipientUids.includes(uid)));
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'overview', label: 'Overview' }, { id: 'plan', label: 'Plan & Steps' }, { id: 'resources', label: 'Resources' }, { id: 'journal', label: 'Journal' }, { id: 'results', label: 'Results & Impact' },
-    ...(me.role === 'OWNER' ? [{ id: 'people' as Tab, label: 'People & Permissions' }] : []),
+    { id: 'overview', label: 'Overview' }, { id: 'plan', label: 'Plan & steps' }, { id: 'resources', label: 'Files' }, { id: 'journal', label: 'History' }, { id: 'results', label: 'Results' },
+    ...(me.role === 'OWNER' ? [{ id: 'people' as Tab, label: 'Who can see it' }] : []),
   ];
 
   return (
@@ -46,20 +46,20 @@ export function ProjectDetail() {
             <p className="muted">{project.objective}</p>
           </div>
           <div className="row">
-            {me.role === 'OWNER' && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setReqOpen(true)}>Request Update</button>}
-            {me.role === 'EMPLOYEE' && canWork && <button className={openReq.length ? 'primary' : ''} onClick={() => setUpdOpen(true)}>Send Update to Dalia</button>}
-            {canWork && <button onClick={() => setTab('plan')}>Edit Plan</button>}
+            {me.role === 'OWNER' && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setReqOpen(true)}>Ask for an update</button>}
+            {me.role === 'EMPLOYEE' && canWork && <button className={openReq.length ? 'primary' : ''} onClick={() => setUpdOpen(true)}>Send Dalia an update</button>}
+            {canWork && <button onClick={() => setTab('plan')}>Change plan</button>}
           </div>
         </div>
         <dl className="kv">
-          <dt>Owner / team</dt><dd>{hub.userName(project.ownerUid)} · {project.memberUids.map((m) => hub.userName(m)).join(', ') || '—'}{project.sharedWithUids.length ? ` (shared read-only: ${project.sharedWithUids.map((m) => hub.userName(m)).join(', ')})` : ''}</dd>
-          <dt>Privacy</dt><dd>{project.visibility === 'OWNER_PRIVATE' ? <Chip tone="violet" glyph="🔒">Owner private</Chip> : project.visibility === 'TEAM_SHARED' ? 'Team shared' : 'Assigned people only'}</dd>
+          <dt>Who works on it</dt><dd>{hub.userName(project.ownerUid)} · {project.memberUids.map((m) => hub.userName(m)).join(', ') || '—'}{project.sharedWithUids.length ? ` (shared read-only: ${project.sharedWithUids.map((m) => hub.userName(m)).join(', ')})` : ''}</dd>
+          <dt>Who can see it</dt><dd>{project.visibility === 'OWNER_PRIVATE' ? <Chip tone="violet" glyph="🔒">Only Dalia</Chip> : project.visibility === 'TEAM_SHARED' ? 'The whole team' : 'Only the people on it'}</dd>
           <dt>Deadline</dt><dd>{project.deadlineAt ? formatDate(project.deadlineAt) : 'None set'}</dd>
-          <dt>Progress (method)</dt><dd>{pr.label}<div className="small muted">Counted by confirmed top-level steps; effort is not weighted. No percentages are guessed from activity.</div></dd>
-          <dt>Last verified update</dt><dd>{project.lastVerifiedAt ? formatDateTime(project.lastVerifiedAt) : 'No independent verification yet'}</dd>
-          <dt>Current blockers / risk</dt><dd>{blockers.length ? blockers.map((b) => `${b.title}: ${b.blockerReason}`).join('; ') : project.currentRisk ?? 'None recorded'}</dd>
+          <dt>How far along</dt><dd>{pr.label}<div className="small muted">We only count steps that are confirmed done. We do not guess a percent from computer activity.</div></dd>
+          <dt>Last double-check</dt><dd>{project.lastVerifiedAt ? formatDateTime(project.lastVerifiedAt) : 'Nothing double-checked yet'}</dd>
+          <dt>What is in the way</dt><dd>{blockers.length ? blockers.map((b) => `${b.title}: ${b.blockerReason}`).join('; ') : project.currentRisk ?? 'Nothing so far'}</dd>
         </dl>
-        {openReq.length > 0 && <div className="card pink small" style={{ marginTop: 8 }}>{openReq.length} update request(s) open on this project.</div>}
+        {openReq.length > 0 && <div className="card pink small" style={{ marginTop: 8 }}>{openReq.length} request(s) for an update are open on this project.</div>}
       </header>
       <Tabs tabs={tabs} value={tab} onChange={setTab} />
 
@@ -67,10 +67,10 @@ export function ProjectDetail() {
         <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.2fr)' }}>
           <div className="stack">
             <section className="card">
-              <h2>Next action & blockers</h2>
-              {selected && !TERMINAL.includes(selected.status) ? <p>Next: <strong>Step {selected.sortOrder} — {selected.title}</strong></p> : <p className="muted">All steps are finished or closed.</p>}
+              <h2>What is next</h2>
+              {selected && !TERMINAL.includes(selected.status) ? <p>Next: <strong>Step {selected.sortOrder} — {selected.title}</strong></p> : <p className="muted">All steps are done.</p>}
               {blockers.map((b) => <div key={b.id} className="card bad small">⛔ {b.title}: {b.blockerReason}</div>)}
-              {steps.filter((s) => s.observedReview === 'PENDING_EMPLOYEE' && s.observedLevel !== 'NO_EVIDENCE').map((s) => <div key={s.id} className="small">✦ AI finding waiting for review on Step {s.sortOrder}</div>)}
+              {steps.filter((s) => s.observedReview === 'PENDING_EMPLOYEE' && s.observedLevel !== 'NO_EVIDENCE').map((s) => <div key={s.id} className="small">✦ The AI saw something on Step {s.sortOrder}</div>)}
             </section>
             <section className="card">
               <h2>Step plan</h2>
@@ -82,13 +82,13 @@ export function ProjectDetail() {
       )}
       {tab === 'overview' && (
         <div className="grid cols-2">
-          <section className="card"><h2>Recent history</h2><JournalList events={hub.getJournal(uid, { projectId }).slice(0, 5)} /></section>
-          <section className="card"><h2>Linked resources</h2>
+          <section className="card"><h2>What happened lately</h2><JournalList events={hub.getJournal(uid, { projectId }).slice(0, 5)} /></section>
+          <section className="card"><h2>Files for this project</h2>
             {hub.projectResources(uid, projectId).slice(0, 5).map((x) => <div key={x.link.id} className="small"><Chip tone="gray">{x.link.role.replace(/_/g, ' ').toLowerCase()}</Chip> {x.resource.label}</div>)}
             {hub.projectResources(uid, projectId).length === 0 && <span className="muted">None yet.</span>}
             <p><button className="link" onClick={() => setTab('resources')}>See all</button></p>
-            <h3>Outcome / impact</h3>
-            <p className="small">{project.impactPlan ? <>Target: {project.impactPlan.target}. Observed: {project.impactPlan.observed ?? <em>Not yet measured</em>}</> : <em>Not yet measured</em>}</p>
+            <h3>Did it work?</h3>
+            <p className="small">{project.impactPlan ? <>Goal: {project.impactPlan.target}. What we saw: {project.impactPlan.observed ?? <em>Not measured yet</em>}</> : <em>Not measured yet</em>}</p>
           </section>
         </div>
       )}
@@ -104,7 +104,7 @@ export function ProjectDetail() {
       )}
       {tab === 'journal' && (
         <div className="stack">
-          <div className="row"><label className="row" style={{ margin: 0, fontWeight: 500 }}>View: <select style={{ width: 'auto' }} value={stepId ?? ''} onChange={(e) => nav(e.target.value ? `/projects/${projectId}/steps/${e.target.value}` : `/projects/${projectId}`)}><option value="">Whole project</option>{steps.map((s) => <option key={s.id} value={s.id}>Step {s.sortOrder}: {s.title.slice(0, 50)}</option>)}</select></label>
+          <div className="row"><label className="row" style={{ margin: 0, fontWeight: 500 }}>View: <select style={{ width: 'auto' }} value={stepId ?? ''} onChange={(e) => nav(e.target.value ? `/projects/${projectId}/steps/${e.target.value}` : `/projects/${projectId}`)}><option value="">The whole project</option>{steps.map((s) => <option key={s.id} value={s.id}>Step {s.sortOrder}: {s.title.slice(0, 50)}</option>)}</select></label>
             <span className="small muted">Same stored entries, filtered — not a separate diary.</span></div>
           <JournalFilters key={stepId ?? 'all'} projectId={projectId} stepId={stepId} />
           {me.role === 'OWNER' && <AuditPanel projectId={projectId} />}
@@ -124,7 +124,7 @@ function StepList({ steps, projectId, selectedId, onPick }: { steps: Step[]; pro
   const render = (s: Step, depth: number): React.ReactNode => (
     <div key={s.id} className={depth ? 'substep' : ''}>
       <button className={`step ${selectedId === s.id ? 'sel' : ''}`} onClick={() => onPick(s.id)} aria-current={selectedId === s.id} data-project={projectId}>
-        <div className="row"><span className="num">{depth ? '↳' : s.sortOrder}</span><strong style={{ flex: 1 }}>{s.title}</strong>{s.newActivityAt && s.observedReview === 'PENDING_EMPLOYEE' && <Chip tone="violet" glyph="✦" title="New AI-detected activity awaiting review">New activity detected · awaiting review</Chip>}</div>
+        <div className="row"><span className="num">{depth ? '↳' : s.sortOrder}</span><strong style={{ flex: 1 }}>{s.title}</strong>{s.newActivityAt && s.observedReview === 'PENDING_EMPLOYEE' && <Chip tone="violet" glyph="✦" title="New AI-detected activity awaiting review">New activity · waiting for a person to check</Chip>}</div>
         <div className="row" style={{ marginTop: 4 }}><StatusChip status={s.status} />{s.observedLevel !== 'NO_EVIDENCE' && <ObservedChip level={s.observedLevel} review={s.observedReview} />}{s.impact === 'HIGH' && <Chip tone="warn" glyph="!">High impact</Chip>}</div>
       </button>
       {kids(s.id).map((k) => render(k, depth + 1))}
@@ -167,22 +167,22 @@ function StepPanel({ step, canWork }: { step: Step; canWork: boolean }) {
       <div><h2>Step {step.sortOrder}: {step.title}</h2>
         <div className="row"><StatusChip status={step.status} /><SourceChip source={step.verificationSource} />{step.impact === 'HIGH' && <Chip tone="warn" glyph="!" title="High-impact: needs independent verification or owner approval">High impact</Chip>}</div></div>
       {step.observedLevel !== 'NO_EVIDENCE' ? (
-        <div className="card violet small"><strong>AI noticed activity on Step {step.sortOrder}</strong> <ObservedChip level={step.observedLevel} review={step.observedReview} />
+        <div className="card violet small"><strong>The AI saw activity on Step {step.sortOrder}</strong> <ObservedChip level={step.observedLevel} review={step.observedReview} />
           <div>{step.observedNote}</div>
-          <div className="muted">Official status above is separate and unchanged until a person (or an independent verifier) updates it.</div></div>
+          <div className="muted">The tracker status above did not change. Only a person or a system check can change it.</div></div>
       ) : (
-        <div className="small muted">AI: no matching activity detected. That does not mean nothing happened — log coverage may be incomplete.</div>
+        <div className="small muted">The AI saw nothing for this step. That does not mean nothing happened. Some data may be missing.</div>
       )}
-      {step.humanReported && <div className="small"><Chip tone="info" glyph="☑">Employee-reported</Chip> {hub.userName(step.humanReported.byUid)}: {CHOICE_LABEL[step.humanReported.choice]} · {formatDateTime(step.humanReported.at)}{step.humanReported.note ? ` — “${step.humanReported.note}”` : ''}</div>}
+      {step.humanReported && <div className="small"><Chip tone="info" glyph="☑">Told to us by a person</Chip> {hub.userName(step.humanReported.byUid)}: {CHOICE_LABEL[step.humanReported.choice]} · {formatDateTime(step.humanReported.at)}{step.humanReported.note ? ` — “${step.humanReported.note}”` : ''}</div>}
       {step.blockerReason && <div className="card bad small">{step.status === 'BLOCKED' ? 'Blocked' : 'Waiting'}: {step.blockerReason}</div>}
 
       <div className="row">
-        <button onClick={() => { setEditing(false); setShowFiles(false); document.getElementById(`ins-${step.id}`)?.scrollIntoView(); }}>Open Instructions</button>
+        <button onClick={() => { setEditing(false); setShowFiles(false); document.getElementById(`ins-${step.id}`)?.scrollIntoView(); }}>Open instructions</button>
         <button onClick={() => setShowFiles(!showFiles)}>Files</button>
-        {canWork && me.role === 'EMPLOYEE' && <button onClick={() => setUpd(true)}>Report Progress</button>}
-        {canWork && me.role === 'EMPLOYEE' && assigned && ['NOT_STARTED', 'IN_PROGRESS', 'REOPENED'].includes(step.status) && <button onClick={() => move('REPORTED_COMPLETE')}>Mark Done (reported)</button>}
-        {canWork && me.role === 'EMPLOYEE' && <button onClick={() => setHelp(true)}>Ask for Help</button>}
-        {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setReq(true)}>Request Update</button>}
+        {canWork && me.role === 'EMPLOYEE' && <button onClick={() => setUpd(true)}>Tell my progress</button>}
+        {canWork && me.role === 'EMPLOYEE' && assigned && ['NOT_STARTED', 'IN_PROGRESS', 'REOPENED'].includes(step.status) && <button onClick={() => move('REPORTED_COMPLETE')}>I finished this</button>}
+        {canWork && me.role === 'EMPLOYEE' && <button onClick={() => setHelp(true)}>Ask for help</button>}
+        {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setReq(true)}>Ask for an update</button>}
       </div>
 
       <div id={`ins-${step.id}`}>
@@ -198,36 +198,36 @@ function StepPanel({ step, canWork }: { step: Step; canWork: boolean }) {
       )}
 
       {showFiles && (
-        <div><h3>Files & tools for this step</h3>
-          {resources.length === 0 && <span className="muted small">No resources linked.</span>}
+        <div><h3>Files for this step</h3>
+          {resources.length === 0 && <span className="muted small">No files yet.</span>}
           {resources.map(({ link, resource }) => (
-            <div key={link.id} className="small" style={{ marginBottom: 4 }}><Chip tone="gray">{link.role.replace(/_/g, ' ').toLowerCase()}</Chip> <strong>{resource.label}</strong> {link.associationState === 'SUGGESTED' && <Chip tone="violet" glyph="✦">AI suggested</Chip>}
+            <div key={link.id} className="small" style={{ marginBottom: 4 }}><Chip tone="gray">{link.role.replace(/_/g, ' ').toLowerCase()}</Chip> <strong>{resource.label}</strong> {link.associationState === 'SUGGESTED' && <Chip tone="violet" glyph="✦">AI idea</Chip>}
               {resource.checklistSummary && <span className="muted"> · {resource.checklistSummary.yes}/{resource.checklistSummary.total} Yes ({resource.checklistSummary.sourceNote})</span>}
               {resource.suggestedVersion && <Chip tone="warn" glyph="!">newer version, not approved</Chip>}
               {resource.canonicalUrl === null && resource.normalizedPath && <span className="muted"> · local path (copy in Resources)</span>}</div>))}
-          <Link className="small" to="/resources">Open resource library</Link>
+          <Link className="small" to="/resources">See all files</Link>
         </div>
       )}
 
       {step.verifications.length > 0 && (
-        <div><h3>Independent verification</h3>{step.verifications.map((v) => (
-          <div key={v.id} className="small"><VerifyBadge state={v.result === 'CONFIRMED' ? 'INDEPENDENTLY_VERIFIED' : 'NEEDS_REVIEW'} /> {v.verifier} (simulated) — {v.entity}: <strong>{v.result.replace(/_/g, ' ')}</strong>. {v.detail} · {formatDateTime(v.at)}</div>))}</div>
+        <div><h3>System double-checks</h3>{step.verifications.map((v) => (
+          <div key={v.id} className="small"><VerifyBadge state={v.result === 'CONFIRMED' ? 'INDEPENDENTLY_VERIFIED' : 'NEEDS_REVIEW'} /> {v.verifier} (pretend) — {v.entity}: <strong>{v.result.replace(/_/g, ' ')}</strong>. {v.detail} · {formatDateTime(v.at)}</div>))}</div>
       )}
 
       <div>
-        <h3>Change status</h3>
-        {lockedHigh && <p className="small muted">This is a high-impact step. It can only be confirmed by independent verification or the owner’s explicit approval.</p>}
-        {choices.length === 0 ? <span className="muted small">No further status changes available to you.</span> : (
+        <h3>Change the status</h3>
+        {lockedHigh && <p className="small muted">This is a big step. Only a system double-check or the owner can say it is done.</p>}
+        {choices.length === 0 ? <span className="muted small">You cannot change the status right now.</span> : (
           <div className="stack">
-            <input type="text" aria-label="Reason or note" placeholder="Reason / note (required for Blocked)" value={reason} onChange={(e) => setReason(e.target.value)} />
+            <input type="text" aria-label="Reason or note" placeholder="Why? (needed if blocked)" value={reason} onChange={(e) => setReason(e.target.value)} />
             <div className="row">{choices.map((t) => <button key={t} onClick={() => move(t)}>{statusLabel(t)}</button>)}
-              {owner && step.status === 'REPORTED_COMPLETE' && step.impact === 'HIGH' && !step.verifications.some((v) => v.result === 'CONFIRMED') && <button className="danger" onClick={() => move('VERIFIED_COMPLETE', true)}>Owner-approve without verification</button>}</div>
+              {owner && step.status === 'REPORTED_COMPLETE' && step.impact === 'HIGH' && !step.verifications.some((v) => v.result === 'CONFIRMED') && <button className="danger" onClick={() => move('VERIFIED_COMPLETE', true)}>Approve it myself, no double-check</button>}</div>
           </div>
         )}
-        {owner && <div style={{ marginTop: 8 }}><button onClick={() => setVerify(true)}>Record verifier result (demo simulator)…</button></div>}
+        {owner && <div style={{ marginTop: 8 }}><button onClick={() => setVerify(true)}>Add a pretend system check (demo)…</button></div>}
       </div>
 
-      <div><h3>Last 3 journal entries</h3><JournalList events={journal} /></div>
+      <div><h3>Last 3 things that happened</h3><JournalList events={journal} /></div>
 
       {upd && <SendUpdateDialog projectId={step.projectId} stepId={step.id} onClose={() => setUpd(false)} />}
       {req && <RequestUpdateDialog projectId={step.projectId} stepId={step.id} onClose={() => setReq(false)} />}
@@ -249,23 +249,23 @@ function ResponseDetail({ responseId }: { responseId: string }) {
   const note = hub.listNotifications(uid).find((n) => n.sourceEntityId === resp.id);
   return (
     <div className="card pink stack" role="region" aria-label="Response detail">
-      <div className="row between"><strong>{resp.requestId ? 'Response to your update request' : 'Update sent without a request'}</strong><Chip tone="info" glyph="☑">Employee-reported (not independently verified)</Chip></div>
-      {req && <div className="small"><span className="muted">Your question:</span> “{req.question ?? 'Status requested'}” · {formatDateTime(req.createdAt)}</div>}
+      <div className="row between"><strong>{resp.requestId ? 'Answer to your request' : 'An update nobody asked for'}</strong><Chip tone="info" glyph="☑">Told to us by a person (not double-checked)</Chip></div>
+      {req && <div className="small"><span className="muted">You asked:</span> “{req.question ?? 'Status requested'}” · {formatDateTime(req.createdAt)}</div>}
       <div><strong>{hub.userName(resp.fromUid)}</strong> answered <strong>{CHOICE_LABEL[resp.choice]}</strong> · {formatDateTime(resp.submittedAt)}</div>
       {resp.note && <blockquote style={{ margin: 0, paddingLeft: 10, borderLeft: '3px solid var(--pink)' }}>{resp.note}</blockquote>}
       {resp.evidenceLinks.length > 0 && <div className="small">Evidence: {resp.evidenceLinks.join(', ')}</div>}
       {me.role === 'OWNER' && (
         <div className="row">
-          {note && !note.acknowledgedAt && <button className="primary" onClick={() => act(() => hub.acknowledge(uid, note.id), 'Acknowledged')}>Acknowledge</button>}
+          {note && !note.acknowledgedAt && <button className="primary" onClick={() => act(() => hub.acknowledge(uid, note.id), 'Marked as seen')}>I saw this</button>}
           {note?.acknowledgedAt && <Chip tone="ok" glyph="✔">Acknowledged {formatDateTime(note.acknowledgedAt)}</Chip>}
-          {req && <button onClick={() => setFu(true)}>Ask follow-up</button>}
-          {req && req.state !== 'CLOSED' && <button onClick={() => act(() => hub.closeRequest(uid, req.id), 'Request closed')}>Close request</button>}
-          {req && <span className="small muted">Request state: {req.state.toLowerCase()}</span>}
+          {req && <button onClick={() => setFu(true)}>Ask a follow-up</button>}
+          {req && req.state !== 'CLOSED' && <button onClick={() => act(() => hub.closeRequest(uid, req.id), 'Request closed')}>Close this request</button>}
+          {req && <span className="small muted">Request is {req.state.toLowerCase()}</span>}
         </div>
       )}
       {fu && req && (
         <Modal title="Ask a follow-up" onClose={() => setFu(false)}>
-          <div className="stack"><p className="small muted">This creates a new request. {hub.userName(resp.fromUid)}’s earlier answer stays exactly as it is.</p>
+          <div className="stack"><p className="small muted">This sends a new request. {hub.userName(resp.fromUid)}’s first answer stays just as it is.</p>
             <textarea aria-label="Follow-up question" value={q} onChange={(e) => setQ(e.target.value)} />
             <div className="row"><button className="primary" disabled={!q.trim()} onClick={async () => { const r = await act(() => hub.followUp(uid, req.id, q, fuKey.current), 'Follow-up sent'); if (r) setFu(false); }}>Send follow-up</button></div></div>
         </Modal>
@@ -282,7 +282,7 @@ function HelpDialog({ step, onClose }: { step: Step; onClose: () => void }) {
   return (
     <Modal title="Ask Dalia for help" onClose={onClose}>
       <div className="stack">
-        <p className="small">This sends Dalia a blocker notification for Step {step.sortOrder}. Your step status stays as it is unless you change it.</p>
+        <p className="small">Dalia will get a note that you need help with Step {step.sortOrder}. Your step status stays the same unless you change it.</p>
         <textarea aria-label="What do you need?" value={note} onChange={(e) => setNote(e.target.value)} placeholder="What do you need help with?" />
         <div className="row"><button className="primary" disabled={!note.trim()} onClick={async () => { const r = await act(() => hub.sendProactiveUpdate(uid, { projectId: step.projectId, stepId: step.id, choice: 'BLOCKED', note, needsOwnerHelp: true, idempotencyKey: key.current }), 'Dalia has been notified'); if (r) onClose(); }}>Send</button></div>
       </div>
@@ -297,11 +297,11 @@ function VerifyDialog({ step, onClose }: { step: Step; onClose: () => void }) {
   const [entity, setEntity] = useState(step.projectId === 'prj-081' ? 'FBA_TY001 → PC107' : 'MA041 draft product');
   const [detail, setDetail] = useState('');
   return (
-    <Modal title="Record verifier result (demo simulator)" onClose={onClose}>
+    <Modal title="Add a pretend system check (demo)" onClose={onClose}>
       <div className="stack">
-        <div className="card violet small">Stands in for a trusted connector (Shopify/Amazon lookup). It records a verification alongside earlier observations and never rewrites them. It does not complete the step by itself.</div>
-        <div><label htmlFor="v-e">Entity checked</label><input id="v-e" type="text" value={entity} onChange={(e) => setEntity(e.target.value)} /></div>
-        <div><label htmlFor="v-r">Result</label><select id="v-r" value={result} onChange={(e) => setResult(e.target.value as typeof result)}><option value="CONFIRMED">Confirmed (state is correct)</option><option value="NOT_FOUND">Not found</option><option value="MISMATCH">Mismatch</option></select></div>
+        <div className="card violet small">This pretends to be a system that looks things up in Shopify or Amazon. It adds a note next to the earlier notes. It does not finish the step by itself.</div>
+        <div><label htmlFor="v-e">What was checked</label><input id="v-e" type="text" value={entity} onChange={(e) => setEntity(e.target.value)} /></div>
+        <div><label htmlFor="v-r">Result</label><select id="v-r" value={result} onChange={(e) => setResult(e.target.value as typeof result)}><option value="CONFIRMED">It matches</option><option value="NOT_FOUND">Not found</option><option value="MISMATCH">Does not match</option></select></div>
         <div><label htmlFor="v-d">Detail</label><input id="v-d" type="text" value={detail} onChange={(e) => setDetail(e.target.value)} /></div>
         <button className="primary" onClick={async () => { const r = await act(() => hub.recordVerification(uid, step.id, { verifier: step.projectId === 'prj-081' ? 'Amazon family lookup' : 'Shopify product lookup', entity, result, detail: detail || (result === 'CONFIRMED' ? 'Matches expected state' : 'Does not match expected state') }), 'Verification recorded'); if (r) onClose(); }}>Record</button>
       </div>
@@ -319,13 +319,13 @@ function PlanTab({ projectId, steps, canWork }: { projectId: string; steps: Step
       <div className="card"><h2>Plan & steps</h2><StepList steps={steps} projectId={projectId} onPick={(id) => { window.location.hash = `#/projects/${projectId}/steps/${id}`; }} /></div>
       {canWork && (
         <form className="card stack" onSubmit={async (e) => { e.preventDefault(); const r = await act(() => hub.addStep(uid, projectId, { title, parentStepId: parent || null }), 'Step added'); if (r) setTitle(''); }}>
-          <h3>{me.role === 'OWNER' ? 'Add a step or substep' : 'Add a substep under one of your steps'}</h3>
+          <h3>{me.role === 'OWNER' ? 'Add a step or a smaller step' : 'Add a smaller step under one of your steps'}</h3>
           <div className="grid cols-2">
             <div><label htmlFor="as-t">Title</label><input id="as-t" type="text" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
             <div><label htmlFor="as-p">Parent step</label><select id="as-p" value={parent} onChange={(e) => setParent(e.target.value)}>{me.role === 'OWNER' && <option value="">Top-level step</option>}{steps.filter((s) => !s.parentStepId && (me.role === 'OWNER' || s.assignedUids.includes(uid))).map((s) => <option key={s.id} value={s.id}>Under: {s.title.slice(0, 40)}</option>)}</select></div>
           </div>
           <div><button className="primary" type="submit" disabled={!title.trim() || (me.role !== 'OWNER' && !parent)}>Add</button></div>
-          <p className="small muted">AI may suggest plan changes, but only a person can approve reordering or reassignment.</p>
+          <p className="small muted">The AI can suggest changes. Only a person can move steps around or hand them to someone else.</p>
         </form>
       )}
     </div>
@@ -338,8 +338,8 @@ function ResultsTab({ projectId, steps }: { projectId: string; steps: Step[] }) 
   const verified = steps.flatMap((s) => s.verifications.map((v) => ({ s, v })));
   return (
     <div className="stack">
-      <div className="card"><h2>Target vs observed</h2><p>{p.impactPlan ? <>Target: {p.impactPlan.target}<br />Observed: {p.impactPlan.observed ?? <em>Not yet measured</em>}</> : <em>Not yet measured. No savings or benefits are assumed.</em>}</p></div>
-      <div className="card"><h2>Independent verifications</h2>{verified.length === 0 ? <span className="muted">None yet.</span> : verified.map(({ s, v }) => <div key={v.id} className="small">Step {s.sortOrder}: {v.entity} — {v.result.replace(/_/g, ' ')} ({v.verifier}, simulated) · {formatDateTime(v.at)}</div>)}</div>
+      <div className="card"><h2>Goal and what we saw</h2><p>{p.impactPlan ? <>Target: {p.impactPlan.target}<br />Observed: {p.impactPlan.observed ?? <em>Not measured yet</em>}</> : <em>Not measured yet. We do not guess how much time or money was saved.</em>}</p></div>
+      <div className="card"><h2>System double-checks</h2>{verified.length === 0 ? <span className="muted">None yet.</span> : verified.map(({ s, v }) => <div key={v.id} className="small">Step {s.sortOrder}: {v.entity} — {v.result.replace(/_/g, ' ')} ({v.verifier}, simulated) · {formatDateTime(v.at)}</div>)}</div>
     </div>
   );
 }
@@ -352,17 +352,17 @@ function PeopleTab({ projectId }: { projectId: string }) {
   const log = hub.getJournal(uid, { projectId, types: ['ACCESS'] });
   return (
     <div className="stack">
-      {p.visibility === 'OWNER_PRIVATE' ? <div className="card violet">Owner-private: no employee can see this project, its resources, journal, counts or notifications. It cannot be assigned or shared without changing its visibility.</div> : (
+      {p.visibility === 'OWNER_PRIVATE' ? <div className="card violet">Private: no employee can see this project, its files, its history, or even that it exists. To share it, you must change who can see it first.</div> : (
         <div className="card"><h2>Who can see this project</h2>
-          <div className="tablewrap"><table><thead><tr><th>Person</th><th>Assigned (can work)</th><th>Shared (read-only)</th></tr></thead><tbody>
+          <div className="tablewrap"><table><thead><tr><th>Person</th><th>Works on it</th><th>Can only look</th></tr></thead><tbody>
             {employees.map((u) => (
               <tr key={u.id}><td>{u.name}</td>
                 <td><input type="checkbox" aria-label={`${u.name} assigned`} checked={p.memberUids.includes(u.id)} onChange={(e) => act(() => hub.setProjectMembers(uid, p.id, e.target.checked ? [...p.memberUids, u.id] : p.memberUids.filter((m) => m !== u.id)))} /></td>
                 <td><input type="checkbox" aria-label={`${u.name} shared`} checked={p.sharedWithUids.includes(u.id)} onChange={(e) => act(() => hub.shareProject(uid, p.id, u.id, e.target.checked))} /></td></tr>))}
           </tbody></table></div>
-          <p className="small muted">Access is checked on every read. Removing someone takes effect immediately, even for old links.</p></div>
+          <p className="small muted">We check access every time. If you remove someone, they lose access right away, even with an old link.</p></div>
       )}
-      <div className="card"><h2>Access & assignment changes</h2><JournalList events={log} /></div>
+      <div className="card"><h2>Changes to who can see it</h2><JournalList events={log} /></div>
     </div>
   );
 }
@@ -372,7 +372,7 @@ function AuditPanel({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
   const rows = open ? hub.getAudit(uid, projectId).slice(0, 40) : [];
   return (
-    <div className="card flat"><button className="link" onClick={() => setOpen(!open)}>{open ? 'Hide' : 'Show'} technical audit history (owner only)</button>
+    <div className="card flat"><button className="link" onClick={() => setOpen(!open)}>{open ? 'Hide' : 'Show'} the detailed change log (owner only)</button>
       {open && <div className="tablewrap"><table><thead><tr><th>Time</th><th>Entity</th><th>Action</th><th>Actor</th><th>Before → After</th><th>Reason</th></tr></thead><tbody>
         {rows.map((a) => <tr key={a.id}><td>{formatDateTime(a.recordedAt)}</td><td>{a.entityType}</td><td>{a.action}</td><td>{a.actorLabel}</td><td className="small"><code>{JSON.stringify(a.before)?.slice(0, 80)}</code> → <code>{JSON.stringify(a.after)?.slice(0, 80)}</code></td><td>{a.reason}</td></tr>)}
       </tbody></table></div>}</div>

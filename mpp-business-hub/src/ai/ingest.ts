@@ -4,7 +4,7 @@ import { minutesBetween } from '../domain/time';
 export interface ParseResult {
   events: MtLogEvent[];
   parseFailures: number;
-  /** True when the last line was not newline-terminated and did not parse (file still being written). */
+  /** True when the last line was not newline-terminated and did not parse (file still being saved). */
   partialTail: boolean;
   completeLines: number;
 }

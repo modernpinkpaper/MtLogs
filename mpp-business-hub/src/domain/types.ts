@@ -103,7 +103,7 @@ export interface Step {
 export interface Verification {
   id: string;
   stepId: string;
-  verifier: string; // e.g. "Shopify product lookup (simulated)"
+  verifier: string; // e.g. "Shopify product lookup (pretend)"
   entity: string;
   result: 'CONFIRMED' | 'NOT_FOUND' | 'MISMATCH';
   detail: string;
@@ -131,7 +131,7 @@ export interface Resource {
   sourceProvider: 'demo-drive' | 'demo-local' | 'demo-network' | 'demo-shopify' | 'demo-amazon' | 'none';
   /** Stable provider identity. Filenames alone are weak and never merge resources. */
   sourceId: string | null;
-  /** Only set for a verified (simulated) openable link. */
+  /** Only set for a verified (pretend) openable link. */
   canonicalUrl: string | null;
   normalizedPath: string | null;
   linkState: LinkState;
