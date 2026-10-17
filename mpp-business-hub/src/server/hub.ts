@@ -14,7 +14,7 @@ import { ReplayAnalyzer } from '../ai/replay';
 import { cardTitle, cardTypeFor, Hub_rank } from './cards';
 import { computeShiftStats, groupProblemEpisodes, fourStateMinutes, weeklyPrinterSummary } from './print';
 import * as FX from '../ai/fixtures';
-import type { AiRun, CardType, CoverageState, IntakeRun, IntakeStage } from '../domain/types';
+import type { AiRun, CardType, CoverageState, IntakeRun, IntakeStage, WorkLogEntry } from '../domain/types';
 
 export const STORAGE_KEY = 'mpp-hub-demo-state-v1';
 /** Compile-time guard: demo-only operations exist only in this prototype build. */
@@ -744,7 +744,6 @@ export class HubServer {
           if (this.canWorkOnProject(this.user(uid), project)) this.applyHumanReport(step, project, input.statusAnswer, input.note?.trim() || null, uid);
         }
         if (input.action === 'CONFIRM' && f0?.findingType === 'AI_UNMATCHED_WORK') this.applyClassification(uid, f0, input.classification ?? null);
-        if (input.classification && f0?.findingType === 'AI_UNMATCHED_WORK' && input.action !== 'CONFIRM') this.applyClassification(uid, f0, input.classification);
         // Optional, separate owner-help flag: a routine note never auto-flags a crisis.
         if (input.needsOwnerHelp && f0?.projectId) {
           const project = this.state.projects.find((p) => p.id === f0.projectId)!;
@@ -757,8 +756,22 @@ export class HubServer {
 
   protected applyClassification(uid: string, f: Finding, c: { kind: string; projectId?: string; stepId?: string; newStepTitle?: string } | null) {
     if (!c) return;
-    if (c.kind === 'ROUTINE') { f.classification = 'ROUTINE_PRODUCTION'; return; }
-    if (c.kind === 'POTENTIAL_PROJECT') { f.classification = 'POTENTIAL_NEW_PROJECT'; return; }
+    if (c.kind === 'ROUTINE' || c.kind === 'POTENTIAL_PROJECT') {
+      // Saved to the person's own "other work" list. It does NOT create a step or change any project.
+      f.classification = c.kind === 'ROUTINE' ? 'ROUTINE_PRODUCTION' : 'POTENTIAL_NEW_PROJECT';
+      const evs = this.state.events.filter((e) => f.sourceEventIds.includes(e.id));
+      const fallback = f.refs.fileNames[0] ? `Work on “${f.refs.fileNames[0]}”` : f.headline;
+      this.state.workLog.push({
+        id: this.nid('wl'), uid, findingId: f.id, kind: c.kind === 'ROUTINE' ? 'EVERYDAY' : 'MAYBE_PROJECT',
+        title: c.newStepTitle?.trim() || fallback, loggedAt: this.state.now, deviceId: f.deviceId, evidenceSummaries: evs.map((e) => e.allowedSummary),
+      });
+      this.audit({ entityType: 'workLog', entityId: f.id, action: c.kind === 'ROUTINE' ? 'LOG_EVERYDAY' : 'LOG_MAYBE_PROJECT', before: null, after: { title: c.newStepTitle ?? fallback }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Employee saved unmatched work', evidenceRefs: f.sourceEventIds, projectId: null });
+      if (c.kind === 'POTENTIAL_PROJECT') {
+        const owner = this.state.users.find((u) => u.role === 'OWNER')!;
+        this.notify({ recipientUid: owner.id, senderUid: uid, type: 'DIRECT_MENTION', title: `${this.userName(uid)} thinks this may be a new project`, preview: c.newStepTitle?.trim() || fallback, projectId: null, sourceEntityId: f.id, deepLink: '/owner/other-work', key: `n:maybeproj:${f.id}` });
+      }
+      return;
+    }
     if (!c.projectId) return;
     const project = this.projectFor(uid, c.projectId);
     if (!this.canWorkOnProject(this.user(uid), project)) throw new PermissionDenied();
@@ -1360,6 +1373,55 @@ export class HubServer {
     return { projects: r.projects.map((p) => p.key), steps: r.steps.map((s) => s.title), resources: r.resources.map((x) => x.label) };
   }
 
+  // ------------------------------------------------------------------ "other work" (unmatched work outcomes)
+  myWorkLog(uid: string): WorkLogEntry[] {
+    this.user(uid);
+    return this.state.workLog.filter((w) => w.uid === uid).slice().reverse();
+  }
+
+  /** Owner view of everything that was not matched to a project, including what people skipped. Nothing is hidden by a dismissal. */
+  otherWork(uid: string) {
+    this.requireOwner(uid);
+    const unmatched = this.state.findings.filter((f) => f.findingType === 'AI_UNMATCHED_WORK' && f.status !== 'SUPERSEDED');
+    const row = (f: Finding) => {
+      const dec = this.state.reviewDecisions.find((d) => d.id === f.reviewDecisionId) ?? null;
+      const card = this.state.reviewCards.find((c) => c.findingIds.includes(f.id));
+      return {
+        finding: f, decision: dec, byName: dec ? this.userName(dec.actorUid) : card ? this.userName(card.recipientUid) : 'Unknown',
+        events: this.state.events.filter((e) => f.sourceEventIds.includes(e.id)).map((e) => e.allowedSummary),
+        linkedTo: f.projectId ? `${this.state.projects.find((p) => p.id === f.projectId)?.key}${f.stepId ? ` · Step ${this.state.steps.find((s) => s.id === f.stepId)?.sortOrder}` : ''}` : null,
+        logEntry: this.state.workLog.find((w) => w.findingId === f.id) ?? null,
+      };
+    };
+    const rows = unmatched.map(row);
+    return {
+      waiting: rows.filter((r) => r.finding.status === 'PROPOSED'),
+      everyday: rows.filter((r) => r.logEntry?.kind === 'EVERYDAY'),
+      maybeProject: rows.filter((r) => r.logEntry?.kind === 'MAYBE_PROJECT'),
+      attached: rows.filter((r) => r.finding.status === 'CONFIRMED' && r.linkedTo),
+      skipped: rows.filter((r) => r.finding.status === 'DISMISSED'),
+      notMine: rows.filter((r) => r.finding.status === 'NOT_MINE'),
+    };
+  }
+
+  /** Owner can send a skipped or "not me" item back to the person for another look. History is kept. */
+  restoreFinding(uid: string, findingId: string) {
+    this.requireOwner(uid);
+    const f = this.state.findings.find((x) => x.id === findingId);
+    if (!f || !['DISMISSED', 'NOT_MINE'].includes(f.status)) throw new HubError('VALIDATION', 'Only skipped items can be sent back.');
+    const card = this.state.reviewCards.find((c) => c.findingIds.includes(f.id));
+    return this.commit(() => {
+      const before = f.status;
+      f.status = 'PROPOSED'; f.reviewedAt = null; f.reviewDecisionId = null;
+      if (card) {
+        card.status = 'PENDING'; card.lastUpdatedAt = this.state.now; card.reviewStartedAt = null;
+        this.notify({ recipientUid: card.recipientUid, senderUid: uid, type: 'DIRECT_MENTION', title: `${this.userName(uid)} asked you to look at this again`, preview: f.headline, projectId: null, sourceEntityId: f.id, deepLink: `/review?card=${card.id}`, key: `n:restore:${f.id}:${this.state.now}` });
+      }
+      this.audit({ entityType: 'finding', entityId: f.id, action: 'RESTORED_BY_OWNER', before: { status: before }, after: { status: 'PROPOSED' }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner sent a skipped item back for review. Earlier decision kept in history.', evidenceRefs: f.sourceEventIds, projectId: null });
+      return f;
+    });
+  }
+
   // ------------------------------------------------------------------ demo-only operations (never production)
   private assertDemo() { if (!DEMO_MODE) throw new HubError('DEMO_ONLY', 'Demo operation.'); }
 
@@ -1436,7 +1498,7 @@ export class HubServer {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw) as HubState;
-          if (parsed && Array.isArray(parsed.users) && parsed.users.length) return new HubServer(parsed, persist);
+          if (parsed && Array.isArray(parsed.users) && parsed.users.length) { parsed.workLog ??= []; return new HubServer(parsed, persist); }
         }
       } catch { /* fall through to fresh seed */ }
     }

@@ -29,6 +29,7 @@ export function Layout() {
   ];
   const ownerLinks = [
     { to: '/owner/print-weekly', label: 'Weekly printing', icon: '🖨' },
+    { to: '/owner/other-work', label: 'Other work', icon: '◌' },
     { to: '/owner/team', label: 'Team', icon: '☺' },
     { to: '/owner/insights', label: 'Ideas', icon: '✦' },
     { to: '/owner/data-intake', label: 'Computer data & AI', icon: '⇩' },

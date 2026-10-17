@@ -280,6 +280,6 @@ export function buildSeedState(): HubState {
     projectEvents: journal(), auditEvents: audit, archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [],
     updateRequests: [], updateResponses: [], notifications: notifications(), shifts: shifts(), intakeRuns: [], aiRuns: [],
     printJobs: p.jobs, printerProblems: p.problems, activityBins: p.bins, stations: STATIONS, opportunities: opportunities(),
-    settings: settings(), idempotency: {}, counters: {}, printPendingSync: {}, deviceLastSeen: {}, seenInjection: false,
+    settings: settings(), idempotency: {}, counters: {}, printPendingSync: {}, deviceLastSeen: {}, seenInjection: false, workLog: [],
   };
 }

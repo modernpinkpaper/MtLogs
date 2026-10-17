@@ -15,6 +15,7 @@ import { PrintMyStats } from './pages/PrintMyStats';
 import { OwnerOverview } from './pages/OwnerOverview';
 import { OwnerPrintWeekly } from './pages/OwnerPrintWeekly';
 import { OwnerTeam } from './pages/OwnerTeam';
+import { OwnerOtherWork } from './pages/OwnerOtherWork';
 import { OwnerInsights } from './pages/OwnerInsights';
 import { OwnerDataIntake } from './pages/OwnerDataIntake';
 import { Settings } from './pages/Settings';
@@ -44,6 +45,7 @@ export function App() {
             <Route path="/owner/overview" element={<OwnerOverview />} />
             <Route path="/owner/print-weekly" element={<OwnerPrintWeekly />} />
             <Route path="/owner/team" element={<OwnerTeam />} />
+            <Route path="/owner/other-work" element={<OwnerOtherWork />} />
             <Route path="/owner/insights" element={<OwnerInsights />} />
             <Route path="/owner/data-intake" element={<OwnerDataIntake />} />
             <Route path="/settings" element={<Settings />} />

@@ -37,6 +37,12 @@ export function MyWork() {
             {s.observedLevel !== 'NO_EVIDENCE' && s.status !== 'IN_PROGRESS' && <div className="small muted" style={{ marginTop: 4 }}>The AI saw activity on Step {s.sortOrder}, but the tracker says something else. Please check it in your review.</div>}
           </Link>))}</div>
       </section>
+      {hub.myWorkLog(uid).length > 0 && (
+        <section><h2>Other work you saved</h2>
+          <div className="stack">{hub.myWorkLog(uid).map((w) => (
+            <div key={w.id} className="card flat"><strong>{w.title}</strong> <Chip tone={w.kind === 'EVERYDAY' ? 'gray' : 'violet'}>{w.kind === 'EVERYDAY' ? 'Everyday work' : 'Maybe a new project'}</Chip>
+              <div className="small muted">Saved {formatDateTime(w.loggedAt)}. This is not part of a project, and Dalia can see it.</div></div>))}</div></section>
+      )}
       {blocked.length > 0 && <section><h2>Blocked</h2>{blocked.map(({ p, s }) => <div key={s.id} className="card bad"><Link to={`/projects/${p.id}/steps/${s.id}`}>{p.key} · {s.title}</Link><div className="small">{s.blockerReason}</div></div>)}</section>}
     </div>
   );

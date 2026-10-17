@@ -62,7 +62,7 @@ function CardView({ card, highlight, disabled, bulk }: { card: ReviewCard; highl
   const [link, setLink] = useState('');
   const [mode, setMode] = useState<'none' | 'correct' | 'status'>('none');
   const [correction, setCorrection] = useState('');
-  const [cls, setCls] = useState<'LINK_EXISTING' | 'NEW_STEP' | 'ROUTINE' | 'POTENTIAL_PROJECT'>('LINK_EXISTING');
+  const [cls, setCls] = useState<'LINK_EXISTING' | 'NEW_STEP' | 'ROUTINE' | 'POTENTIAL_PROJECT'>('ROUTINE');
   const [linkStep, setLinkStep] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const projects = hub.listProjects(uid).filter((p) => p.visibility !== 'OWNER_PRIVATE');
@@ -115,34 +115,54 @@ function CardView({ card, highlight, disabled, bulk }: { card: ReviewCard; highl
         <div className="stack" style={{ marginTop: '.6rem' }}>
           {findings.map((f) => <FindingBody key={f.id} f={f} />)}
           {step && <div className="row small"><StatusChip status={step.status} /> <ObservedChip level={step.observedLevel} review={step.observedReview} /></div>}
-          {f0?.findingType === 'AI_UNMATCHED_WORK' && (
+          {f0?.findingType === 'AI_UNMATCHED_WORK' ? (
             <div className="card flat stack">
-              <strong>What was this work?</strong>
-              <div className="grid cols-2">
-                <div><label htmlFor={`cls-${card.id}`}>This work was</label>
-                  <select id={`cls-${card.id}`} value={cls} onChange={(e) => setCls(e.target.value as typeof cls)}>
-                    <option value="LINK_EXISTING">Part of a project step</option><option value="NEW_STEP">A new task</option><option value="ROUTINE">Everyday work</option><option value="POTENTIAL_PROJECT">Maybe a new project</option>
-                  </select></div>
-                {(cls === 'LINK_EXISTING' || cls === 'NEW_STEP') && (
-                  <div><label htmlFor={`cp-${card.id}`}>Project</label>
-                    <select id={`cp-${card.id}`} value={clsProject} onChange={(e) => { setClsProject(e.target.value); setLinkStep(''); }}>{projects.filter((p) => p.memberUids.includes(uid) || me_is_owner(hub, uid)).map((p) => <option key={p.id} value={p.id}>{p.key} — {p.title.slice(0, 40)}</option>)}</select></div>
-                )}
+              <strong>What do you want to do with this work?</strong>
+              <div>
+                <label htmlFor={`cls-${card.id}`}>Choose one</label>
+                <select id={`cls-${card.id}`} value={cls} onChange={(e) => setCls(e.target.value as typeof cls)}>
+                  <option value="ROUTINE">Save it as everyday work (not part of a project)</option>
+                  <option value="LINK_EXISTING">Add it to a project step</option>
+                  <option value="NEW_STEP">Make a new step in a project</option>
+                  <option value="POTENTIAL_PROJECT">This might be a new project (tell Dalia)</option>
+                </select>
               </div>
+              {(cls === 'ROUTINE' || cls === 'POTENTIAL_PROJECT') && (
+                <div><label htmlFor={`nt-${card.id}`}>What was it? (a few words)</label><input id={`nt-${card.id}`} type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Example: Fixed the front artwork for “MS066”" />
+                  <p className="small muted">It goes in your own “Other work” list and Dalia can see it. It does not change any project.</p></div>
+              )}
+              {(cls === 'LINK_EXISTING' || cls === 'NEW_STEP') && (
+                <div><label htmlFor={`cp-${card.id}`}>Project</label>
+                  <select id={`cp-${card.id}`} value={clsProject} onChange={(e) => { setClsProject(e.target.value); setLinkStep(''); }}>{projects.filter((p) => p.memberUids.includes(uid) || me_is_owner(hub, uid)).map((p) => <option key={p.id} value={p.id}>{p.key} — {p.title.slice(0, 40)}</option>)}</select></div>
+              )}
               {cls === 'LINK_EXISTING' && clsProject && (
                 <div><label htmlFor={`ls-${card.id}`}>Step</label>
                   <select id={`ls-${card.id}`} value={linkStep} onChange={(e) => setLinkStep(e.target.value)}><option value="">Choose a step…</option>{hub.projectSteps(uid, clsProject).map((s) => <option key={s.id} value={s.id}>{s.sortOrder}. {s.title.slice(0, 60)}</option>)}</select></div>
               )}
-              {cls === 'NEW_STEP' && <div><label htmlFor={`nt-${card.id}`}>New step title</label><input id={`nt-${card.id}`} type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} /></div>}
+              {cls === 'NEW_STEP' && <div><label htmlFor={`nt2-${card.id}`}>New step title</label><input id={`nt2-${card.id}`} type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} /></div>}
+              <div className="row">
+                <button className="primary" disabled={disabled || (cls === 'LINK_EXISTING' && !linkStep) || (cls === 'NEW_STEP' && !newTitle.trim())} onClick={() => submit('CONFIRM')}>Save this</button>
+              </div>
+              <hr style={{ border: 0, borderTop: '1px solid var(--border)', width: '100%' }} />
+              <div><label htmlFor={`sk-${card.id}`}>Or skip it and do not log it (why? if you want)</label>
+                <input id={`sk-${card.id}`} type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: just a quick look, nothing to record" />
+                <p className="small muted">Skipped items are not added to any list. Dalia can still see that it was skipped.</p></div>
+              <div className="row">
+                <button disabled={disabled} onClick={() => submit('DISMISS')}>Skip it (do not log)</button>
+                <button disabled={disabled} onClick={() => submit('NOT_MY_WORK')}>That was not me</button>
+                <button className="ghost" disabled={disabled} onClick={() => submit('DEFER')}>Later</button>
+              </div>
             </div>
-          )}
+          ) : (
           <div className="row">
-            <button className="primary" disabled={disabled || (f0?.findingType === 'AI_UNMATCHED_WORK' && cls === 'LINK_EXISTING' && !linkStep)} onClick={() => submit('CONFIRM')}>Yes, that is right</button>
+            <button className="primary" disabled={disabled} onClick={() => submit('CONFIRM')}>Yes, that is right</button>
             <button disabled={disabled} onClick={() => setMode(mode === 'correct' ? 'none' : 'correct')}>Not quite right</button>
             <button disabled={disabled} onClick={() => submit('NOT_MY_WORK')}>That was not me</button>
             <button disabled={disabled} onClick={() => submit('DISMISS')}>Skip it</button>
             {step && <button disabled={disabled} onClick={() => setMode(mode === 'status' ? 'none' : 'status')}>Tell my status…</button>}
             <button className="ghost" disabled={disabled} onClick={() => submit('DEFER')}>Later</button>
           </div>
+          )}
           {mode === 'correct' && (
             <div className="stack"><label htmlFor={`co-${card.id}`}>What is wrong? (We keep the AI’s first guess and save your fix next to it.)</label>
               <textarea id={`co-${card.id}`} value={correction} onChange={(e) => setCorrection(e.target.value)} />

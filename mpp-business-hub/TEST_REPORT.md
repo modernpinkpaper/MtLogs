@@ -61,6 +61,14 @@ $ npm test
  ✓ src/test/print.test.ts > F. print analytics > print-only users receive no daily AI review card even when their device has activity
  ✓ src/test/print.test.ts > F. print analytics > opportunities distinguish expected capacity from realized value and approval creates a measured project
  ✓ src/test/print.test.ts > time handling (America/Chicago, DST-aware) > converts local wall time to UTC across DST and displays in CT
+ ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > skipping logs nothing, keeps the item, and the owner can still see it with the reason
+ ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > “everyday work” is saved to the person’s own list and shown to the owner, without touching any project
+ ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > “maybe a new project” tells the owner; “add to a step” links it to the project
+ ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > the owner can send a skipped item back; the earlier decision stays in history; only the owner can see this page
+ ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > “not me” also stays visible to the owner
+ ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > AI finding text, notifications and messages read easily
+ ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > error messages are short and plain
+ ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > names of steps are shown in quotes in notifications
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > clock-in commits even with pending reviews, AI outage and log outage; reviews are only offered AFTER commit
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > clock-out works immediately with pending cards, and leaves them untouched
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > clock-out is unaffected by AI outage, missing logs and missing print stats
@@ -68,10 +76,10 @@ $ npm test
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > a review submitted at clock-out is recorded before the time-out, inside the paid shift
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > unpaid review is refused: an employee off the clock cannot submit; next-shift review works
 
- Test Files  6 passed (6)
-      Tests  59 passed (59)
-   Start at  19:01:16
-   Duration  1.39s (transform 511ms, setup 0ms, collect 1.45s, tests 845ms, environment 7ms, prepare 453ms)
+ Test Files  8 passed (8)
+      Tests  67 passed (67)
+   Start at  19:19:15
+   Duration  2.01s (transform 613ms, setup 0ms, collect 1.73s, tests 1.09s, environment 2ms, prepare 656ms)
 
 ```
 
@@ -87,6 +95,8 @@ Flow executed against a production build: Dalia sends a request on P-012 Step 3 
 | D Resources/journal/audit | `resources.test.ts` | Automated, passing |
 | E Permissions (incl. direct id guesses, removed collaborator) | `permissions.test.ts` | Automated, passing |
 | F Print analytics, time/DST | `print.test.ts` | Automated, passing |
+| Plain language, quoted names | `plainlanguage.test.ts` | Automated, passing |
+| Other work (skip / everyday / add to project / owner view) | `otherwork.test.ts` | Automated, passing |
 | G Operational quality (ingest, late events, budget, injection) | `evidence.test.ts` | Automated, passing |
 | UI accessibility / responsive / keyboard | Manual spot-check only | **Not fully automated** — no axe/keyboard suite yet |
 | Firestore rules tests | — | **Not applicable**: no Firestore/emulator in this prototype |

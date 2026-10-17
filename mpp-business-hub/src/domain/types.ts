@@ -525,3 +525,15 @@ export interface Settings {
 }
 
 export interface Verifier { id: string }
+
+/** Work an employee saved as "everyday work" or "maybe a new project" — not part of a tracked project step. */
+export interface WorkLogEntry {
+  id: string;
+  uid: string;
+  findingId: string;
+  kind: 'EVERYDAY' | 'MAYBE_PROJECT';
+  title: string;
+  loggedAt: string;
+  deviceId: string;
+  evidenceSummaries: string[];
+}

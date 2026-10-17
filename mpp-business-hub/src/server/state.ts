@@ -1,7 +1,7 @@
 import type {
   ActivityBin, AiRun, AuditEvent, Finding, IntakeRun, MtLogEvent, NormalizedEvent, Notification, Opportunity, PrintJob,
   PrinterProblemEvent, PrintStation, Project, ProjectEvent, Resource, ResourceLink, ReviewCard, ReviewDecision, Settings,
-  Shift, SourceArchive, Step, UpdateRequest, UpdateResponse, User, WorkAssignment, WorkEpisode,
+  Shift, SourceArchive, Step, UpdateRequest, UpdateResponse, User, WorkAssignment, WorkEpisode, WorkLogEntry,
 } from '../domain/types';
 
 export interface HubState {
@@ -41,6 +41,7 @@ export interface HubState {
   printPendingSync: Record<string, boolean>;
   deviceLastSeen: Record<string, string>;
   seenInjection: boolean;
+  workLog: WorkLogEntry[];
 }
 
 export type { MtLogEvent };

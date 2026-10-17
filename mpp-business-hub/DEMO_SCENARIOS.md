@@ -34,3 +34,6 @@ Erika → P-012 → Step 2 → **Report Progress** → Completed + note → Dali
 
 ## I. Late sync
 Erika confirms the Step 3 card. Demo operations → **Simulate late event** → a **Late evidence** card appears; her earlier confirmation is unchanged.
+
+## J. Work that is not part of a project
+As Erika, open Review and find “Work that is not in the tracker: MS066”. Choose one: save it as everyday work (goes in her “Other work you saved” list on My Work, Dalia can see it), add it to a project step, make a new step, or flag it as maybe a new project (Dalia gets a notification). Or skip it and do not log it, with an optional reason. As Dalia, open “Other work” in the menu: tabs show waiting, everyday, maybe a new project, added to a project, skipped, and not them. Skipped items stay visible with who skipped them and why, and “Send back for another look” puts the card back in front of the employee. The first decision stays in the history.
