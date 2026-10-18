@@ -5,8 +5,8 @@ import type {
 } from '../domain/types';
 import { addMinutes, chicagoDate, chicagoToUtc, formatDate, minutesBetween, nextBusinessMorning } from '../domain/time';
 import { buildSeedState, NOW } from './seed';
-import { buildRealState, type RealTracker, type RealLogs } from './realSeed';
-import { REAL_TRACKER, REAL_LOGS, REAL_MODE } from './realLoader';
+import { buildRealState, type RealTracker, type RealLogs, type RealFinding } from './realSeed';
+import { REAL_TRACKER, REAL_LOGS, REAL_FINDINGS, REAL_MODE } from './realLoader';
 import type { HubState } from './state';
 import { HubError, PermissionDenied } from './errors';
 import { assignEpisodes, findSequenceGaps, hashText, normalizeEvent, parseJsonl } from '../ai/ingest';
@@ -41,7 +41,7 @@ export interface QueueItem {
   action?: { type: 'APPROVE_VERSION'; resourceId: string; version: string; label: string; confirm: string } | { type: 'MARK_SEEN'; notificationId: string; label: string };
 }
 export const STORAGE_KEY = REAL_MODE ? 'mpp-hub-real-state-v1' : 'mpp-hub-demo-state-v3';
-const freshState = () => (REAL_MODE ? buildRealState(buildSeedState(), REAL_TRACKER as RealTracker, '2026-10-18 11:00', REAL_LOGS as RealLogs | null) : buildSeedState());
+const freshState = () => (REAL_MODE ? buildRealState(buildSeedState(), REAL_TRACKER as RealTracker, '2026-10-18 11:00', REAL_LOGS as RealLogs | null, REAL_FINDINGS as RealFinding[] | null) : buildSeedState());
 /** Compile-time guard: demo-only operations exist only in this prototype build. */
 export const DEMO_MODE = true as const;
 

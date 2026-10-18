@@ -1,8 +1,9 @@
 import type { Project, Step, User, ProjectEvent } from '../domain/types';
 import { chicagoToUtc } from '../domain/time';
 import type { HubState } from './state';
-import type { ActivityBin, PrintJob, PrinterProblemEvent, PrintStation } from '../domain/types';
+import type { OwnerFinding, FindingEvidence, ActivityBin, PrintJob, PrinterProblemEvent, PrintStation } from '../domain/types';
 
+export interface RealFinding { code: string; kind: OwnerFinding['kind']; area: string; urgency: OwnerFinding['urgency']; fact: OwnerFinding['factLabel']; project: OwnerFinding['projectMatch']; title: string; summary: string; action: string; uncertainties: string[]; evidence: [string, FindingEvidence['sourceType'], string, FindingEvidence['quality']][] }
 export interface RealLogs { printers: Record<string, string[]>; printJobs: PrintJob[]; printerProblems: PrinterProblemEvent[]; activityBins: ActivityBin[] }
 import { base, stepBase, settings } from './seed';
 
@@ -13,7 +14,7 @@ export interface RealTracker { people: { id: string; name: string; role: User['r
 const ts = (s: string | null) => (s ? chicagoToUtc(s.slice(0, 10), s.slice(11, 16)) : null);
 
 /** Builds a state from the owner's real tracker rows. Used only by the private real-data build. */
-export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string, logs?: RealLogs | null): HubState {
+export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string, logs?: RealLogs | null, findings?: RealFinding[] | null): HubState {
   const now = ts(nowLocal)!;
   const users: User[] = t.people.map(p => ({ id: p.id, name: p.name, role: p.role, area: p.area, active: true, capabilities: [], primaryDeviceId: p.device, rosterNote: p.note }));
   const projects: Project[] = [];
@@ -48,6 +49,9 @@ export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string,
     auditEvents: [], archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [], updateRequests: [], updateResponses: [], notifications: [], shifts: [],
     printJobs: logs?.printJobs.map(j => ({ ...j, uid: t.people.find(p => p.device === j.deviceId)?.id ?? null })) ?? [], printerProblems: logs?.printerProblems ?? [], activityBins: logs?.activityBins ?? [],
     stations: Object.entries(logs?.printers ?? {}).map(([deviceId, printers]): PrintStation => ({ deviceId, printers, defaultUid: t.people.find(p => p.device === deviceId)?.id ?? null })), opportunities: [], settings: settings(), workLog: [], workingVersions: [],
-    ownerFindings: [], ownerModels: [], outcomes: [], goals: [], sources: [], workspaces: {},
+    ownerFindings: (findings ?? []).map((f, i): OwnerFinding => ({ id: `af-r${i + 1}`, code: f.code, kind: f.kind, area: f.area, title: f.title, summary: f.summary, urgency: f.urgency, factLabel: f.fact,
+      discoveredAt: now, lastEvidenceAt: now, analyzedAt: now, occurrences: [], decisions: [], status: 'NEW', projectMatch: f.project, linkedProjectId: null, approvedProjectId: null, modelId: null, plan: null,
+      dedupeKey: f.code, recommendedAction: f.action, uncertainties: f.uncertainties, ownerNotes: '', seenByOwner: false, goalIds: [],
+      evidence: f.evidence.map(([label, sourceType, sourceName, quality], k) => ({ id: `e${k + 1}`, label, sourceType, sourceName, url: null, observedAt: now, quality })) })), ownerModels: [], outcomes: [], goals: [], sources: [], workspaces: {},
   };
 }
