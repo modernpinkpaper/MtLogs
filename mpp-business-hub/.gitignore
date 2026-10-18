@@ -5,3 +5,8 @@ dist
 *.log
 e2e/out
 dist-single
+
+# Real business data. Never commit it.
+real-data/
+*.real.json
+*.real.jsonl
