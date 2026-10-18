@@ -5,6 +5,8 @@ import type {
 } from '../domain/types';
 import { addMinutes, chicagoDate, chicagoToUtc, formatDate, minutesBetween, nextBusinessMorning } from '../domain/time';
 import { buildSeedState, NOW } from './seed';
+import { buildRealState, type RealTracker } from './realSeed';
+import { REAL_TRACKER, REAL_MODE } from './realLoader';
 import type { HubState } from './state';
 import { HubError, PermissionDenied } from './errors';
 import { assignEpisodes, findSequenceGaps, hashText, normalizeEvent, parseJsonl } from '../ai/ingest';
@@ -38,7 +40,8 @@ export interface QueueItem {
   /** A quick action she can take right on Home. Always asks her to confirm first. */
   action?: { type: 'APPROVE_VERSION'; resourceId: string; version: string; label: string; confirm: string } | { type: 'MARK_SEEN'; notificationId: string; label: string };
 }
-export const STORAGE_KEY = 'mpp-hub-demo-state-v3';
+export const STORAGE_KEY = REAL_MODE ? 'mpp-hub-real-state-v1' : 'mpp-hub-demo-state-v3';
+const freshState = () => (REAL_MODE ? buildRealState(buildSeedState(), REAL_TRACKER as RealTracker, '2026-10-18 11:00') : buildSeedState());
 /** Compile-time guard: demo-only operations exist only in this prototype build. */
 export const DEMO_MODE = true as const;
 
@@ -1986,12 +1989,13 @@ export class HubServer {
         }
       } catch { /* fall through to fresh seed */ }
     }
-    const hub = new HubServer(buildSeedState(), persist);
+    const hub = new HubServer(freshState(), persist);
     await hub.bootstrap();
     return hub;
   }
 
   async bootstrap() {
+    if (REAL_MODE) { this.emit(); return; }
     this.ingestFile({ ...FX.FILE_ERIKA_14, text: FX.erika14Rev1() });
     this.ingestFile({ ...FX.FILE_PC04_13, text: FX.pc04_13() });
     await this.runAnalysis('seed: initial replay');
@@ -1999,7 +2003,7 @@ export class HubServer {
   }
 
   async reset() {
-    this.state = buildSeedState();
+    this.state = freshState();
     await this.bootstrap();
   }
 }

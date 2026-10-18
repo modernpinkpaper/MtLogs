@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAct, useMe } from '../hubContext';
 import { Chip } from '../common';
 import type { Area } from '../../domain/types';
+import { REAL_MODE } from '../../server/realLoader';
 
 export function OwnerTeam({ embedded }: { embedded?: boolean } = {}) {
   const { hub, uid } = useMe();
@@ -29,6 +30,7 @@ export function OwnerTeam({ embedded }: { embedded?: boolean } = {}) {
         <button type="submit" disabled={!name.trim()}>Add with no jobs</button>
         <span className="small muted">New people start with no access to anything.</span>
       </form>
+      {REAL_MODE && <div className="card info small"><strong>Holiday season:</strong> everyone prints. Set each person’s “Job today” to <em>Mixed</em> to give them both project work and printing for the day. Mo’s physical inventory work cannot be seen by the computer, so it will not show up in his numbers. Use “Log something I did” for that.</div>}
       <div className="card info small">Carolina’s job can change each day. Set today to <em>Project</em> to give her review cards. Set it to <em>Print</em> to show only her printing numbers. What she can open does not change.</div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { REAL_MODE } from '../server/realLoader';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useMe, useSession } from './hubContext';
 import { formatDateTime, formatTime } from '../domain/time';
@@ -54,7 +55,7 @@ export function Layout() {
   return (
     <div className="app">
       <aside className="side" aria-label="Main navigation">
-        <div className="brand">MPP Business Hub<small>Practice copy · made-up data</small></div>
+        <div className="brand">MPP Business Hub<small>{REAL_MODE ? 'Private copy · real tracker data' : 'Practice copy · made-up data'}</small></div>
         <nav className="nav">
           {primary.map((it) => (
             <Link key={it.to} to={it.to} className={isActive(it) ? 'active' : ''} aria-current={isActive(it) ? 'page' : undefined}>
@@ -71,7 +72,7 @@ export function Layout() {
       </aside>
       <div className="main">
         <div className="demo-banner" role="note">
-          <strong>Practice copy</strong> · made-up data · not connected to anything real · pretend time {formatDateTime(hub.now)}
+          {REAL_MODE ? <><strong>Private copy</strong> · real tracker data from Oct 18 · read-only snapshot, nothing is sent back · for Dalia only</> : <><strong>Practice copy</strong> · made-up data · not connected to anything real</>} · {REAL_MODE ? 'snapshot time' : 'pretend time'} {formatDateTime(hub.now)}
         </div>
         <header className="topbar">
           <div className="searchbox">
