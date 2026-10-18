@@ -22,69 +22,79 @@ export function OwnerOverview() {
     ...(ai.needsDecision - ai.urgent > 0 ? [{ kind: 'AI Recommendations', label: `${ai.needsDecision - ai.urgent} recommendation${ai.needsDecision - ai.urgent === 1 ? '' : 's'} waiting for your decision`, link: '/owner/ai', weight: 55 }] : []),
     ...o.queue,
   ].sort((a, b) => b.weight - a.weight);
-  const shown = all ? decisions : decisions.slice(0, 5);
+  const first = decisions[0];
+  const others = decisions.slice(1);
+  const shown = all ? others : others.slice(0, 4);
 
   return (
     <div className="stack">
-      <div className="row between">
+      <div className="pagehead">
         <div>
           <h1>Home</h1>
-          <p className="muted small" style={{ margin: 0 }}>{formatDateTime(o.today)} · {o.lastSync ? `Last activity processed ${formatTime(o.lastSync)} (${relativeAgo(o.lastSync, o.today)})` : 'No activity received yet'}</p>
+          <p>
+            {decisions.length === 0 ? 'Nothing needs you right now.' : `${decisions.length} thing${decisions.length === 1 ? ' needs' : 's need'} you.`}{' '}
+            <Link to="/projects">{o.counts.active} active project{o.counts.active === 1 ? '' : 's'}</Link>
+            {o.counts.paused > 0 && <>, <Link to="/projects?status=PAUSED">{o.counts.paused} paused</Link></>}.
+          </p>
         </div>
-        <div className="row">
-          <button className="primary" onClick={() => setReq(true)}>Ask for an update</button>
-          <Link to="/projects"><button>All projects</button></Link>
-        </div>
+        <button onClick={() => setReq(true)}>Ask for an update</button>
       </div>
 
-      <div className="tiles" aria-label="Project counts">
-        <Link className="tile" to="/projects" style={{ color: 'inherit', textDecoration: 'none' }}><div className="n">{o.counts.active}</div><div className="t">Active projects</div></Link>
-        <Link className="tile" to="/projects?status=PAUSED" style={{ color: 'inherit', textDecoration: 'none' }}><div className="n">{o.counts.paused}</div><div className="t">Paused projects</div></Link>
-        <a className="tile" href="#decide" style={{ color: 'inherit', textDecoration: 'none' }}><div className="n">{decisions.length}</div><div className="t">Waiting for you</div></a>
-      </div>
-
-      <section id="decide" className="card" aria-labelledby="dec" style={{ borderLeft: '5px solid var(--pink)' }}>
-        <h2 id="dec">Needs your decision</h2>
-        {decisions.length === 0 ? <p className="muted">Nothing needs you right now.</p> : (
-          <div className="list">
-            {shown.map((q, i) => (
-              <Link key={i} to={q.link} className="lrow">
-                <span className="t">{q.label}</span>
-                <span className="m"><span>{q.kind}</span></span>
-              </Link>
-            ))}
-            {decisions.length > 5 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${decisions.length}`}</button>}
-          </div>
+      <section id="decide" className="card focal" aria-labelledby="dec">
+        {!first ? (
+          <>
+            <div className="eyebrow" id="dec">All clear</div>
+            <p className="focus-title">You are all caught up.</p>
+            <p className="muted" style={{ margin: '.4rem 0 0' }}>New things that need you will show up here.</p>
+          </>
+        ) : (
+          <>
+            <div className="eyebrow" id="dec">Start here</div>
+            <p className="focus-title" style={{ margin: '.35rem 0 .2rem' }}>{first.label}</p>
+            <p className="muted" style={{ margin: 0 }}>{first.kind}</p>
+            <div style={{ marginTop: 'var(--sp-4)' }}><Link to={first.link}><button className="primary big">Open it</button></Link></div>
+            {others.length > 0 && (
+              <div style={{ marginTop: 'var(--sp-5)' }}>
+                <h3 style={{ marginBottom: 0 }}>Also waiting <span className="count">{others.length}</span></h3>
+                <div className="list">
+                  {shown.map((q, i) => (
+                    <Link key={i} to={q.link} className="lrow">
+                      <span className="t" style={{ fontWeight: 550 }}>{q.label}</span>
+                      <span className="m"><span>{q.kind}</span></span>
+                    </Link>
+                  ))}
+                </div>
+                {others.length > 4 && <button className="link small" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${others.length}`}</button>}
+              </div>
+            )}
+          </>
         )}
       </section>
 
-      <section className="card" aria-labelledby="chg">
-        <div className="row between">
-          <h2 id="chg">What changed since you last looked</h2>
-          <button onClick={() => act(() => hub.markOwnerLooked(uid), 'Marked as seen')}>Mark as seen</button>
+      <details className="soft">
+        <summary>What changed since you last looked <span className="count">{o.changeCount} new</span></summary>
+        <div className="stack" style={{ marginTop: 'var(--sp-3)' }}>
+          <p className="small muted" style={{ margin: 0 }}>Since {formatDateTime(o.lastOwnerLookAt)}. If something is not listed, it does not mean nobody worked.</p>
+          <p style={{ margin: 0 }}>{o.changeCount} new history note{o.changeCount === 1 ? '' : 's'}{unread ? ` · ${unread} unread notification${unread === 1 ? '' : 's'}` : ''}. <Link to="/notifications">Open notifications</Link></p>
+          <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>{o.narrative.map((n) => <li key={n}>{n}</li>)}</ul>
+          <div><button onClick={() => act(() => hub.markOwnerLooked(uid), 'Marked as seen')}>Mark as seen</button></div>
         </div>
-        <p className="small muted" style={{ margin: '0 0 .3rem' }}>Since {formatDateTime(o.lastOwnerLookAt)}. If something is not listed, it does not mean nobody worked.</p>
-        <p style={{ margin: 0 }}>{o.changeCount} new history note{o.changeCount === 1 ? '' : 's'}{unread ? ` · ${unread} unread notification${unread === 1 ? '' : 's'}` : ''}. <button className="link" onClick={() => nav('/notifications')}>Open notifications</button></p>
-        <details style={{ marginTop: 6 }}><summary className="small">Show details</summary><ul style={{ margin: '.3rem 0 0 1.1rem' }}>{o.narrative.map((n) => <li key={n}>{n}</li>)}</ul></details>
-      </section>
+      </details>
 
-      <section className="card" aria-labelledby="team">
-        <details>
-          <summary id="team" style={{ cursor: 'pointer', fontWeight: 650, fontSize: '1.15rem' }}>Who is doing project work today</summary>
-          <div className="stack" style={{ marginTop: 8 }}>
-            {o.workerCards.map((w) => (
-              <div key={w.user.id} className="row between">
-                <span><strong>{w.user.name}</strong> <span className="muted small">{w.projectKeys.join(', ') || 'no projects'} · {w.pendingCards} to review · {w.openRequests} waiting for an answer</span></span>
-                <Chip tone={w.clockedIn ? 'ok' : 'gray'} glyph={w.clockedIn ? '●' : '○'}>{w.clockedIn ? 'Clocked in' : 'Clocked out'}</Chip>
-              </div>
-            ))}
-            <p className="small muted" style={{ margin: 0 }}>“To review” means not checked yet. It does not mean not working.</p>
-            <Link to="/owner/team">Open Team &amp; Print</Link>
-          </div>
-        </details>
-      </section>
+      <details className="soft">
+        <summary>Who is doing project work today</summary>
+        <div className="card list" style={{ marginTop: 'var(--sp-3)' }}>
+          {o.workerCards.map((w) => (
+            <div key={w.user.id} className="lline static">
+              <span className="t">{w.user.name}<span className="muted small"> · {w.projectKeys.join(', ') || 'no projects'} · {w.pendingCards} to review · {w.openRequests} waiting for an answer</span></span>
+              <span /><Chip tone={w.clockedIn ? 'ok' : 'gray'} glyph={w.clockedIn ? '●' : '○'}>{w.clockedIn ? 'Clocked in' : 'Clocked out'}</Chip>
+            </div>
+          ))}
+          <div style={{ padding: '.6rem 1rem' }}><p className="small muted" style={{ margin: '0 0 .4rem' }}>“To review” means not checked yet. It does not mean not working.</p><Link to="/owner/team">Open Team &amp; Print</Link></div>
+        </div>
+      </details>
 
-      <div className="row small muted">
+      <div className="row small">
         <button className="link" onClick={() => setDigest(true)}>Daily summary</button>
         <Link to="/owner/team?tab=print">This week’s printing</Link>
         <Link to="/projects?mine=1">Private projects ({o.privateProjects})</Link>

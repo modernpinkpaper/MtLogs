@@ -95,6 +95,7 @@ export function FindingDetail() {
   let f: OwnerFinding;
   try { f = hub.getFinding(uid, id); } catch { return <div className="card bad" role="alert"><h1>We could not find that</h1><Link to="/owner/ai">Back to recommendations</Link></div>; }
   const [dlg, setDlg] = useState<null | 'approve' | 'link' | 'snooze' | 'dismiss' | 'ask'>(null);
+  const [choices, setChoices] = useState(false);
   const m = hub.findingModel(uid, f.id);
   const open = ['NEW', 'INVESTIGATING'].includes(f.status);
   const projects = hub.listProjects(uid).filter((p) => p.visibility !== 'OWNER_PRIVATE');
@@ -102,33 +103,47 @@ export function FindingDetail() {
   return (
     <div className="stack">
       <nav className="small muted" aria-label="Breadcrumb"><Link to="/owner/ai">AI Recommendations</Link> › {f.code}</nav>
-      <header className="card stack">
-        <div className="row"><Chip tone={URG[f.urgency][1]}>{URG[f.urgency][0]}</Chip><Chip tone="gray">{f.kind}</Chip><Chip tone="gray">{f.area}</Chip><Chip tone={FACT[f.factLabel][1]} title={FACT[f.factLabel][2]}>{FACT[f.factLabel][0]}</Chip><Chip tone="info">{STATUS_LABEL[f.status]}{f.status === 'SNOOZED' && f.snoozedUntil ? ` until ${formatLocalDate(chicagoDate(f.snoozedUntil))}` : ''}</Chip></div>
-        <h1>{f.code} — {f.title}</h1>
-        <p className="q" style={{ margin: 0 }}>{f.summary}</p>
-        <dl className="kv">
-          <dt>Recommended</dt><dd>{f.recommendedAction}</dd>
-          <dt>Found</dt><dd>{formatDateTime(f.discoveredAt)} · latest activity {formatDateTime(f.lastEvidenceAt)} · checked {formatDateTime(f.analyzedAt)}</dd>
+      <header className="card focal stack">
+        <div className="row" style={{ gap: '.4rem' }}>
+          <span className="eyebrow">{f.code} · {f.kind} · {f.area}</span>
+          {f.urgency !== 'NORMAL' && <Chip tone={URG[f.urgency][1]}>{URG[f.urgency][0]}</Chip>}
+          <Chip tone={FACT[f.factLabel][1]} title={FACT[f.factLabel][2]}>{FACT[f.factLabel][0]}</Chip>
+          {f.status !== 'NEW' && <Chip tone="info">{STATUS_LABEL[f.status]}{f.status === 'SNOOZED' && f.snoozedUntil ? ` until ${formatLocalDate(chicagoDate(f.snoozedUntil))}` : ''}</Chip>}
+        </div>
+        <h1>{f.title}</h1>
+        <p className="lead" style={{ margin: 0 }}>{f.summary}</p>
+        <dl className="kv" style={{ marginTop: 'var(--sp-2)' }}>
+          <dt>Recommended</dt><dd><strong>{f.recommendedAction}</strong></dd>
           {f.projectMatch.type !== 'NONE' && <><dt>Existing work</dt><dd>{({ ALREADY_COVERED: `Already covered by ${f.projectMatch.projectKey}`, POSSIBLE_DUPLICATE: `May overlap with ${f.projectMatch.projectKey}. Consider linking instead of starting a new project.`, CANDIDATE_NEW: 'No project covers this yet. It could become a new project.', UNASSIGNED_INSIGHT: 'An insight with no project yet.', NONE: '' } as const)[f.projectMatch.type]}</dd></>}
         </dl>
+        <p className="small muted" style={{ margin: 0 }}>Found {formatDateTime(f.discoveredAt)} · latest activity {formatDateTime(f.lastEvidenceAt)} · checked {formatDateTime(f.analyzedAt)}</p>
         {f.approvedProjectId && <p style={{ margin: 0 }}>Project created: <Link to={`/projects/${f.approvedProjectId}`}>open it</Link></p>}
         {f.linkedProjectId && <p style={{ margin: 0 }}>Linked to: <Link to={`/projects/${f.linkedProjectId}`}>{hub.state.projects.find((p) => p.id === f.linkedProjectId)?.key}</Link></p>}
-        <div className="row">
-          {open && f.plan && <button className="primary" onClick={() => setDlg('approve')}>Approve as project</button>}
-          {open && !f.plan && <button className="primary" onClick={() => setDlg('link')}>Link to an existing project</button>}
+        <div className="row" style={{ marginTop: 'var(--sp-2)' }}>
+          {open && f.plan && <button className="primary big" onClick={() => setDlg('approve')}>Approve as project</button>}
+          {open && !f.plan && <button className="primary big" onClick={() => setDlg('link')}>Link to an existing project</button>}
           {open && f.plan && <button onClick={() => setDlg('link')}>Link to an existing project</button>}
-          {f.status !== 'INVESTIGATING' && open && <button onClick={() => act(() => hub.investigateMore(uid, f.id), 'We will take a closer look (practice). Nothing changes anywhere.')}>Look into it more</button>}
           {f.linkedProjectId && <button onClick={() => setDlg('ask')}>Ask for an update</button>}
-          {open && <button onClick={() => setDlg('snooze')}>Snooze</button>}
-          {open && <button onClick={() => setDlg('dismiss')}>Dismiss</button>}
-          {open && <button onClick={() => act(() => hub.markInformational(uid, f.id), 'Kept as information')}>Keep as information</button>}
-          {open && <button onClick={() => act(() => hub.archiveFinding(uid, f.id), 'Archived')}>Archive</button>}
           {!open && !['APPROVED'].includes(f.status) && <button onClick={() => act(() => hub.reopenFinding(uid, f.id), 'Back in your list')}>Put it back in my list</button>}
+          {open && (
+            <div className="menu">
+              <button className="quiet" aria-haspopup="menu" aria-expanded={choices} onClick={() => setChoices(!choices)}>Other choices ▾</button>
+              {choices && (
+                <div role="menu" onClick={() => setChoices(false)}>
+                  {f.status !== 'INVESTIGATING' && <button role="menuitem" onClick={() => act(() => hub.investigateMore(uid, f.id), 'We will take a closer look (practice). Nothing changes anywhere.')}>Look into it more</button>}
+                  <button role="menuitem" onClick={() => setDlg('snooze')}>Snooze</button>
+                  <button role="menuitem" onClick={() => setDlg('dismiss')}>Dismiss</button>
+                  <button role="menuitem" onClick={() => act(() => hub.markInformational(uid, f.id), 'Kept as information')}>Keep as information</button>
+                  <button role="menuitem" onClick={() => act(() => hub.archiveFinding(uid, f.id), 'Archived')}>Archive</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
-      <section className="card stack" aria-labelledby="ev">
-        <h2 id="ev">Why we think so</h2>
+      <section className="stack" aria-labelledby="ev">
+        <h2 id="ev" style={{ marginBottom: 0 }}>Why we think so</h2>
         {f.evidence.map((e) => <EvidenceRow key={e.id} e={e} />)}
         {f.uncertainties.length > 0 && <div><h3>What we do not know</h3><ul style={{ margin: 0, paddingLeft: '1.1rem' }}>{f.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></div>}
       </section>
@@ -136,12 +151,12 @@ export function FindingDetail() {
       {m ? <Calculator f={f} /> : <section className="card"><h2>Numbers</h2><p className="muted" style={{ margin: 0 }}>Impact not calculated yet. We need real numbers first, so we do not guess.</p></section>}
 
       {f.plan && (
-        <section className="card" aria-labelledby="plan"><details><summary id="plan" style={{ cursor: 'pointer', fontWeight: 650, fontSize: '1.15rem' }}>The proposed plan ({f.plan.steps.length} steps)</summary>
+        <section aria-labelledby="plan"><details className="soft"><summary id="plan">The proposed plan ({f.plan.steps.length} steps)</summary>
           <ol style={{ margin: '.6rem 0 0 1.2rem' }}>{f.plan.steps.map((s, i) => <li key={i} style={{ marginBottom: 6 }}><strong>{s.title}</strong><div className="small muted">{s.instructions}</div></li>)}</ol>
           {f.plan.risks.length > 0 && <p className="small"><strong>Risks:</strong> {f.plan.risks.join(' ')}</p>}</details></section>
       )}
 
-      <section className="card"><details><summary style={{ cursor: 'pointer', fontWeight: 650, fontSize: '1.15rem' }}>Timeline and your decisions</summary>
+      <section><details className="soft"><summary>Timeline and your decisions</summary>
         <div className="stack" style={{ marginTop: 8 }}>
           {f.occurrences.map((o, i) => <div key={i} className="small">{formatDateTime(o.at)} — {o.note}</div>)}
           {f.decisions.map((d) => <div key={d.id} className="small"><strong>{d.decision.replace(/_/g, ' ').toLowerCase()}</strong> by {hub.userName(d.actorUid)} · {formatDateTime(d.at)}{d.rationale ? ` — ${d.rationale}` : ''}</div>)}
@@ -164,7 +179,7 @@ function EvidenceRow({ e }: { e: FindingEvidence }) {
   const cls = e.sourceType === 'WEB' && e.publishedAt && e.retrievedAt ? classifyWebSource({ publishedAt: e.publishedAt, effectiveDate: e.effectiveDate, retrievedAt: e.retrievedAt }) : null;
   const Q: Record<FindingEvidence['quality'], [string, Tone]> = { MEASURED: ['Measured', 'ok'], SOURCED: ['From a source', 'info'], ASSUMPTION: ['Assumption', 'warn'], HYPOTHESIS: ['Idea to test', 'warn'] };
   return (
-    <div className="card flat small">
+    <div className="erow small">
       <div className="row between"><strong>{e.label}</strong><Chip tone={Q[e.quality][1]}>{Q[e.quality][0]}</Chip></div>
       <div className="muted">{e.sourceName} · seen {formatDateTime(e.observedAt)}</div>
       {e.sourceType === 'WEB' && (
@@ -222,7 +237,7 @@ function Calculator({ f }: { f: OwnerFinding }) {
         {r.paybackMonths !== null && <div className="tile"><div className="n">{r.paybackMonths.toFixed(1)}</div><div className="t">Months to pay back</div></div>}
         {r.implementationLaborValue !== null && <div className="tile"><div className="n">{money(r.implementationLaborValue)}</div><div className="t">Worker time to build it (not cash)</div></div>}
       </div>
-      {r.notes.map((n, i) => <div key={i} className="banner warn small">{n}</div>)}
+      {r.notes.length > 0 && <div className="card warn small"><strong>Read this before you decide</strong><ul style={{ margin: '.3rem 0 0', paddingLeft: '1.1rem' }}>{r.notes.map((n, i) => <li key={i}>{n}</li>)}</ul></div>}
       {r.missing.length > 0 && <div className="small"><strong>We still need:</strong> {r.missing.join('; ')}.</div>}
       <details><summary>Show how each number is worked out</summary>
         <div className="stack" style={{ marginTop: 8 }}>{r.lines.map((l, i) => <div key={i} className="small card flat"><strong>{l.label}</strong><br />Rule: {l.formula}<br />Working: {l.inputs}<br />Result: <strong>{l.result}</strong></div>)}

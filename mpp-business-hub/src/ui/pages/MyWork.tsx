@@ -63,7 +63,7 @@ export function MyWork() {
               ? <><strong>{hub.userName(hub.getRequest(uid, firstReq.updateRequestId!)?.requestedByUid ?? null)} asked you for an update.</strong>{requests.length > 1 ? ` (${requests.length} requests)` : ''}</>
               : <><strong>{others} item{others === 1 ? '' : 's'} to check.</strong> About 1 to 3 minutes, and it is paid time.</>}
           </span>
-          <Link to={firstReq ? `/review?card=${firstReq.id}` : '/review'}><button className="primary">{firstReq ? 'Answer' : 'Check my work'}</button></Link>
+          <Link to={firstReq ? `/review?card=${firstReq.id}` : '/review'}><button>{firstReq ? 'Answer' : 'Check my work'}</button></Link>
         </div>
       )}
 

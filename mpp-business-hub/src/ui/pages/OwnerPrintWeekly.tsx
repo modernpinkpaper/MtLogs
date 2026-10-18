@@ -8,7 +8,10 @@ export function OwnerPrintWeekly({ embedded }: { embedded?: boolean } = {}) {
   return (
     <div className="stack">
       {!embedded && (<div><h1>Weekly printing <Chip tone="violet" glyph="◆">Practice data</Chip></h1><p className="muted">{w.weekStart} to {w.weekEnd} · data up to {formatDateTime(w.dataThrough)} · only you can see this</p></div>)}
-      <div className="card info"><strong>Please read first</strong><ul style={{ margin: '.3rem 0 0 1.1rem' }}>{w.caveats.map((c) => <li key={c}>{c}</li>)}</ul></div>
+      <details className="soft readfirst">
+        <summary>Before you read: these numbers are not pay records, and they do not rank people. <span className="muted" style={{ fontWeight: 400 }}>Show all notes</span></summary>
+        <ul style={{ margin: '.5rem 0 0 1.1rem' }}>{w.caveats.map((c) => <li key={c}>{c}</li>)}</ul>
+      </details>
 
       <section className="card"><h2>Printers</h2>
         <div className="tablewrap"><table><thead><tr><th>Printer</th><th>Jobs</th><th>Completed</th><th>Failed</th><th>Retries</th><th>Sheets</th><th>Run time</th><th>Incidents</th></tr></thead><tbody>

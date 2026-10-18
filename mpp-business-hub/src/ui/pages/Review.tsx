@@ -24,6 +24,7 @@ export function Review() {
   const bulkKey = useRef(newKey('bulk'));
   const requests = cards.filter((c) => c.cardType === 'OWNER_REQUEST');
   const findings = cards.filter((c) => c.cardType !== 'OWNER_REQUEST');
+  const firstId = (requests[0] ?? findings[0])?.id;
   const eligible = (c: ReviewCard) => c.canBulkReview;
   const eligibleCount = findings.filter(eligible).length;
   const done = hub.listReviewCards(uid, 'all').filter((c) => c.status === 'SUBMITTED').slice(-5).reverse();
@@ -50,7 +51,7 @@ export function Review() {
 
       {requests.length > 0 && (
         <section aria-labelledby="rq"><h2 id="rq" className="group-title">Dalia asked you <span className="count">{requests.length}</span></h2>
-          <div className="stack">{requests.map((c) => <CardView key={c.id} card={c} highlight={sp.get('card') === c.id} disabled={offClock} />)}</div></section>
+          <div className="stack">{requests.map((c) => <CardView key={c.id} first={c.id === firstId} card={c} highlight={sp.get('card') === c.id} disabled={offClock} />)}</div></section>
       )}
 
       {findings.length > 0 && (
@@ -64,7 +65,7 @@ export function Review() {
           )}
           <div className="stack" style={{ marginTop: 8 }}>
             {findings.map((c) => (
-              <CardView key={c.id} card={c} highlight={sp.get('card') === c.id} disabled={offClock}
+              <CardView key={c.id} first={c.id === firstId} card={c} highlight={sp.get('card') === c.id} disabled={offClock}
                 select={selecting ? (eligible(c) ? { checked: picked.includes(c.id), onChange: (v) => setPicked(v ? [...picked, c.id] : picked.filter((x) => x !== c.id)) } : 'blocked') : undefined} />
             ))}
           </div>
@@ -90,7 +91,7 @@ export function Review() {
 
 type SelectProp = { checked: boolean; onChange: (v: boolean) => void } | 'blocked' | undefined;
 
-function CardView({ card, highlight, disabled, select }: { card: ReviewCard; highlight: boolean; disabled: boolean; select?: SelectProp }) {
+function CardView({ card, highlight, disabled, select, first }: { card: ReviewCard; highlight: boolean; disabled: boolean; select?: SelectProp; first?: boolean }) {
   const { hub, uid, me } = useMe();
   const act = useAct();
   const key = useRef(newKey('card'));
@@ -130,7 +131,7 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
     : 'Tell us if this is accurate.';
 
   return (
-    <article className={`card ${isRequest ? 'pink' : ''} ${highlight ? 'focus' : ''}`} aria-labelledby={`t-${card.id}`} onFocus={start} onMouseEnter={start}>
+    <article className={`card ${first ? 'focal' : ''} ${isRequest && !first ? 'pink' : ''} ${highlight ? 'focus' : ''}`} aria-labelledby={`t-${card.id}`} onFocus={start} onMouseEnter={start}>
       <div className="row between">
         <div style={{ minWidth: 0 }}>
           <div className="row small muted">
@@ -159,7 +160,7 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
           <div><label htmlFor={`l-${card.id}`}>A link or file name that shows your work (optional)</label><input id={`l-${card.id}`} type="text" value={link} onChange={(e) => setLink(e.target.value)} /></div>
           <label style={{ fontWeight: 500 }}><input type="checkbox" checked={help} onChange={(e) => setHelp(e.target.checked)} /> I need Dalia’s help (leave this off for a normal update)</label>
           <div className="row">
-            <button className="primary" disabled={!choice || choice === 'NOT_SURE' || disabled} onClick={() => submit('SEND_STATUS', 'Update sent to Dalia')}>Send update to Dalia</button>
+            <button className={first ? 'primary' : ''} disabled={!choice || choice === 'NOT_SURE' || disabled} onClick={() => submit('SEND_STATUS', 'Update sent to Dalia')}>Send update to Dalia</button>
             <button disabled={disabled} onClick={() => submit('DEFER', 'Saved for your next paid shift')}>Answer later</button>
           </div>
         </div>
@@ -187,7 +188,7 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
                 <div><label htmlFor={`ls-${card.id}`}>Step</label>
                   <select id={`ls-${card.id}`} value={linkStep} onChange={(e) => setLinkStep(e.target.value)}><option value="">Choose a step…</option>{hub.projectSteps(uid, clsProject).map((s) => <option key={s.id} value={s.id}>Step {s.sortOrder}: {s.title.slice(0, 60)}</option>)}</select></div>)}
               {cls === 'NEW_STEP' && <div><label htmlFor={`nt2-${card.id}`}>New step name</label><input id={`nt2-${card.id}`} type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} /></div>}
-              <div className="row"><button className="primary" disabled={disabled || (cls === 'LINK_EXISTING' && !linkStep) || (cls === 'NEW_STEP' && !newTitle.trim())} onClick={() => submit('CONFIRM', 'Saved')}>Save this</button></div>
+              <div className="row"><button className={first ? 'primary' : ''} disabled={disabled || (cls === 'LINK_EXISTING' && !linkStep) || (cls === 'NEW_STEP' && !newTitle.trim())} onClick={() => submit('CONFIRM', 'Saved')}>Save this</button></div>
               <hr style={{ border: 0, borderTop: '1px solid var(--border)', width: '100%' }} />
               <div><label htmlFor={`sk-${card.id}`}>Or skip it and do not log it. Why? (optional)</label>
                 <input id={`sk-${card.id}`} type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: just a quick look, nothing to record" />
@@ -196,9 +197,9 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
             </div>
           ) : (
             <>
-              <div className="card flat stack">
+              <div className="stack answers">
                 <div className="row">
-                  <button className="primary" disabled={disabled} onClick={() => submit('CONFIRM', f0.whilePaused ? 'Added to the project history' : 'Thank you. Saved as accurate.')}>{f0.whilePaused ? 'Yes. Add it to the project history' : WORDS.yesAccurate}</button>
+                  <button className={first ? 'primary' : ''} disabled={disabled} onClick={() => submit('CONFIRM', f0.whilePaused ? 'Added to the project history' : 'Thank you. Saved as accurate.')}>{f0.whilePaused ? 'Yes. Add it to the project history' : WORDS.yesAccurate}</button>
                   <button disabled={disabled} onClick={() => setFix(!fix)} aria-expanded={fix}>{WORDS.somethingIncorrect}</button>
                   <button disabled={disabled} onClick={() => submit('NOT_MY_WORK', 'Saved')}>{WORDS.notMyWork}</button>
                   <button className="ghost" disabled={disabled} onClick={() => submit('DEFER', 'Saved for your next paid shift')}>Answer later</button>
@@ -206,11 +207,11 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
                 {fix && (
                   <div className="stack"><label htmlFor={`co-${card.id}`}>What is incorrect? (We keep what the system noticed and save your fix next to it.)</label>
                     <textarea id={`co-${card.id}`} value={correction} onChange={(e) => setCorrection(e.target.value)} />
-                    <div><button className="primary" disabled={!correction.trim()} onClick={() => submit('NEEDS_CORRECTION', 'Saved your fix')}>Save my fix</button></div></div>)}
+                    <div><button className={first ? 'primary' : ''} disabled={!correction.trim()} onClick={() => submit('NEEDS_CORRECTION', 'Saved your fix')}>Save my fix</button></div></div>)}
               </div>
               {step && (
-                <details className="card flat">
-                  <summary><strong>What was the result?</strong> <span className="muted small">(optional, a separate question)</span></summary>
+                <details className="soft">
+                  <summary>What was the result? <span className="muted small" style={{ fontWeight: 400 }}> (optional, a separate question)</span></summary>
                   <div className="stack" style={{ marginTop: 8 }}>
                     <p className="small muted" style={{ margin: 0 }}>Saying “yes, accurate” only confirms what the system noticed. If you also know the result, pick it here. Your answer is {WORDS.employeeConfirmed.toLowerCase()}. It is not {WORDS.checkedInSource.toLowerCase()}.</p>
                     <ResultPicker value={choice} onChange={setChoice} name={`r-${card.id}`} />

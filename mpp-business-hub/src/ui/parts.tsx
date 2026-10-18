@@ -22,14 +22,14 @@ export function JournalList({ events, showProject, grouped }: { events: (Project
         const step = e.stepIds[0] ? hub.state.steps.find((s) => s.id === e.stepIds[0]) : null;
         return (
           <div key={e.id}>{head}<div className={`journal-item ${kind}`}>
-            <div className="row small muted"><span aria-hidden="true">{JT_ICON[e.type] ?? '•'}</span><span>{formatDateTime(e.occurredAt)}</span>
+            <div><strong><span aria-hidden="true" className="jicon">{JT_ICON[e.type] ?? '•'}</span>{e.title}</strong></div>
+            <div className="small" style={{ color: 'var(--text-2)' }}>{e.summary}</div>
+            <div className="row small muted" style={{ gap: '.2rem .75rem', marginTop: 2 }}><span>{formatDateTime(e.occurredAt)}</span>
               {showProject && <Link to={`/projects/${e.projectId}`}>{e.projectKey}</Link>}
               {step && <Link to={`/projects/${e.projectId}/steps/${step.id}`}>Step {step.sortOrder}</Link>}
               <VerifyBadge state={e.verificationState} />
-              {e.confidenceBand !== 'N_A' && <Chip tone="gray">confidence {e.confidenceBand.toLowerCase()}</Chip>}</div>
-            <div><strong>{e.title}</strong></div>
-            <div className="small">{e.summary}</div>
-            <div className="small muted">{e.actorLabel}{e.sourceRefs.length ? <> · <button className="link" onClick={() => setRaw(e.id)}>Show proof ({e.sourceRefs.length})</button></> : null}</div>
+              {e.confidenceBand !== 'N_A' && <Chip tone="gray">confidence {e.confidenceBand.toLowerCase()}</Chip>}
+              <span>{e.actorLabel}</span>{e.sourceRefs.length ? <button className="link" onClick={() => setRaw(e.id)}>Show proof ({e.sourceRefs.length})</button> : null}</div>
             {raw === e.id && (
               <ul className="small" style={{ margin: '.2rem 0 0 1rem' }}>
                 {hub.state.events.filter((x) => e.sourceRefs.includes(x.id)).map((x) => <li key={x.id}>{formatDateTime(x.occurredAt)} — {x.allowedSummary} <span className="muted">[{x.id}]</span></li>)}

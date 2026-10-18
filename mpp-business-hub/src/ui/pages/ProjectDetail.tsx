@@ -62,18 +62,25 @@ export function ProjectDetail() {
       <nav className="small muted" aria-label="Breadcrumb"><Link to="/projects">Projects</Link> › <Link to={`/projects/${projectId}`}>{project.key}</Link>{stepId && selected ? <> › Step {selected.sortOrder}</> : null}</nav>
 
       <header className="card stack">
-        <div className="row between">
-          <div style={{ minWidth: 0 }}>
-            <h1 style={{ marginBottom: 4 }}>{project.key} — {project.title}</h1>
-            <div className="row"><ProjectStatusChip status={status} />{paused && <Chip tone="violet">{pauseLine(project, owner)}</Chip>}{project.visibility === 'OWNER_PRIVATE' && <Chip tone="violet" glyph="🔒">Only Dalia</Chip>}{project.pinned && <Chip tone="gray" glyph="📌">Pinned</Chip>}</div>
+        <div className="row between" style={{ alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 0, flex: '1 1 340px' }}>
+            <div className="row" style={{ gap: '.4rem' }}>
+              <span className="eyebrow">{project.key}</span>
+              {status !== 'IN_PROGRESS' && <ProjectStatusChip status={status} />}
+              {paused && <Chip tone="violet">{pauseLine(project, owner)}</Chip>}
+              {project.visibility === 'OWNER_PRIVATE' && <Chip tone="violet" glyph="🔒">Only Dalia</Chip>}
+              {project.pinned && <Chip tone="gray" glyph="📌">Pinned</Chip>}
+            </div>
+            <h1 style={{ margin: '.2rem 0 0', fontSize: '1.5rem' }}>{project.title}</h1>
+            <p className="muted" style={{ margin: '.35rem 0 0', maxWidth: '64ch' }}>{project.objective}</p>
           </div>
           <div className="row">
-            {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setDlg('request')}>Ask for an update</button>}
-            {!owner && canWork && <button className="primary" onClick={() => setDlg('update')}>Send Dalia an update</button>}
-            {canControl && !paused && status !== 'COMPLETED' && status !== 'CANCELED' && <button onClick={() => setDlg('pause')}>Pause project</button>}
-            {canControl && paused && <button onClick={() => setDlg('resume')}>Resume project</button>}
+            {owner && project.visibility !== 'OWNER_PRIVATE' && <button onClick={() => setDlg('request')}>Ask for an update</button>}
+            {!owner && canWork && <button onClick={() => setDlg('update')}>Send Dalia an update</button>}
+            {canControl && !paused && status !== 'COMPLETED' && status !== 'CANCELED' && <button className="quiet" onClick={() => setDlg('pause')}>Pause project</button>}
+            {canControl && paused && <button className="primary" onClick={() => setDlg('resume')}>Resume project</button>}
             <div className="menu">
-              <button aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>More actions ▾</button>
+              <button className="quiet" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>More ▾</button>
               {menu && (
                 <div role="menu" onClick={() => setMenu(false)}>
                   {owner && !project.pilot?.enabled && <button role="menuitem" onClick={() => setDlg('pilot')}>Set up a limited test</button>}
@@ -90,9 +97,8 @@ export function ProjectDetail() {
             </div>
           </div>
         </div>
-        <p style={{ margin: 0 }}>{project.objective}</p>
-        <div className="meta row small muted">
-          <span>Who: {project.memberUids.map((m) => hub.userName(m)).join(', ') || (project.visibility === 'OWNER_PRIVATE' ? 'Only Dalia' : 'Nobody assigned yet')}</span>
+        <div className="meta row small muted" style={{ gap: '.4rem 1.25rem' }}>
+          <span>{project.memberUids.map((m) => hub.userName(m)).join(', ') || (project.visibility === 'OWNER_PRIVATE' ? 'Only Dalia' : 'Nobody assigned yet')}</span>
           {!paused && di && <span>{di.text}</span>}
           <span>{pr.label}</span>
           <button className="link" onClick={() => setShowDetails(!showDetails)}>{showDetails ? 'Hide details' : 'Show details'}</button>
@@ -239,7 +245,7 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
   const ws = hub.projectWorkspace(uid, project.id);
 
   return (
-    <section className="card stack" aria-label={`Step ${step.sortOrder} details`}>
+    <section className="card focal stack" aria-label={`Step ${step.sortOrder} details`}>
       {responseId && <ResponseDetail responseId={responseId} />}
       <div>
         {isNext && !projPaused && <div className="eyebrow">Next step</div>}

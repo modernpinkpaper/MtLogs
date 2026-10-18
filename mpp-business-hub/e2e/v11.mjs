@@ -9,7 +9,7 @@ const as = async (name) => { await p.selectOption('select[aria-label="Switch dem
 const shot = (n, full = false) => p.screenshot({ path: D + n + '.png', fullPage: full });
 const ok = (c, m) => { if (!c) { errs.push('CHECK FAILED: ' + m); } };
 
-await go('/login'); await p.getByRole('button', { name: /Dalia/ }).first().click(); await p.waitForSelector('text=Needs your decision');
+await go('/login'); await p.getByRole('button', { name: /Dalia/ }).first().click(); await p.waitForSelector('text=Start here');
 await shot('v1-owner-home');
 const nav = await p.locator('aside.side nav > a').allInnerTexts();
 ok(nav.length === 5, 'owner has 5 primary links: ' + nav.join('|'));
@@ -83,4 +83,20 @@ await as('Dalia (owner)'); await go('/owner/ai'); await p.waitForSelector('.lrow
 ok(await p.locator('.lrow button').count() === 0, 'AI list has no repeated Open buttons');
 await go('/projects'); await p.waitForSelector('.prow');
 ok(await p.locator('.prow button:has-text("Open")').count() === 0, 'project rows have no repeated Open buttons');
+// ---- v1.3: one obvious primary action per screen ----
+const prim = async () => p.locator('main button.primary:visible').count();
+await as('Dalia (owner)'); await go('/home'); await p.waitForSelector('text=Start here');
+ok(await prim() === 1, 'owner Home has exactly one primary button (' + await prim() + ')');
+await go('/owner/ai/af-3'); await p.waitForSelector('text=Why we think so');
+ok(await prim() === 1, 'AI finding has exactly one primary button (' + await prim() + ')');
+await go('/owner/ai'); await p.waitForSelector('.lrow');
+ok(await prim() === 0, 'AI list has no primary buttons (rows are links) (' + await prim() + ')');
+await as('Erika'); await go('/home'); await p.waitForSelector('text=Do this next');
+ok(await prim() === 1, 'My Work has exactly one primary button (' + await prim() + ')');
+await go('/review'); await p.waitForSelector('text=Did this happen?');
+ok(await prim() === 1, 'Review shows one primary button, on the first card (' + await prim() + ')');
+await go('/projects/prj-012'); await p.waitForSelector('text=Next step');
+ok(await prim() === 1, 'step page has exactly one primary button (' + await prim() + ')');
+const h1 = await p.evaluate(() => { const e = document.querySelector('main h1'); const f = (x) => parseFloat(getComputedStyle(x).fontSize); const h2 = document.querySelector('main h2'); return [f(e), h2 ? f(h2) : 0]; });
+ok(h1[0] > h1[1], 'page title is larger than section headings (' + h1.join(' vs ') + ')');
 console.log(errs.length ? errs.join('\n') : 'NO ERRORS, ALL CHECKS PASSED'); await b.close();

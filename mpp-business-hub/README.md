@@ -62,3 +62,6 @@ Single-file build for sharing: `npm run build:single`.
 
 ## v1.2
 Calmer screens and clearer next steps. See `docs/ux-overhaul-v1-2.md`.
+
+## v1.3
+One focal point per screen. See `docs/attention-design-v1-3.md`.

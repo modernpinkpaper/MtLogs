@@ -28,23 +28,6 @@ $ npm test (verbose)
  ✓ src/test/evidence.test.ts > G. operational quality > live adapter is disabled and makes no call; AI outage leaves clock + requests working
  ✓ src/test/evidence.test.ts > G. operational quality > optional analysis honours the budget circuit-breaker but required review keeps working
  ✓ src/test/evidence.test.ts > G. operational quality > the intake trace connects source → event → episode → finding → card → decision → journal
- ✓ src/test/pause.test.ts > Pause and resume > Scenario 1: pause indefinitely, work leaves the active list but stays visible, resume keeps every bit of progress
- ✓ src/test/pause.test.ts > Pause and resume > P-012 keeps 2 of 4 steps done through a pause and resume
- ✓ src/test/pause.test.ts > Pause and resume > Scenario 2: automatic resume on a chosen date happens once, notifies the owner and each assigned person once, and retries do nothing
- ✓ src/test/pause.test.ts > Pause and resume > a project that was never started goes back to Not started when it resumes
- ✓ src/test/pause.test.ts > Pause and resume > Scenario 3: reminder mode asks Dalia to decide once and the project stays paused until she decides
- ✓ src/test/pause.test.ts > Pause and resume > a missed date is handled once after an outage and keeps the original schedule date
- ✓ src/test/pause.test.ts > Pause and resume > dates use the Chicago status run, so the day after daylight saving ends is still correct
- ✓ src/test/pause.test.ts > Pause and resume > validation: no invented dates, no past dates, no bad dates, no double pause
- ✓ src/test/pause.test.ts > Pause and resume > double clicks and retries are safe; two sessions cannot overwrite each other silently
- ✓ src/test/pause.test.ts > Pause and resume > who may pause: owner and delegated managers only; members can only suggest
- ✓ src/test/pause.test.ts > Pause and resume > deadlines are never moved; the page explains what happened; only an explicit change moves them
- ✓ src/test/pause.test.ts > Pause and resume > Scenario 5: activity found while paused is neutral, never resumes the project and offers human choices
- ✓ src/test/pause.test.ts > Pause and resume > Scenario 9: an update request on a paused project is answered through the normal paid review and never resumes it
- ✓ src/test/pause.test.ts > Pause and resume > paid time and review are unaffected by a pause
- ✓ src/test/pause.test.ts > Pause and resume > a step can be put on hold without pausing the project; its status is kept
- ✓ src/test/pause.test.ts > Pause and resume > finished projects are never auto-resumed; reopening is explicit and audited; a paused project cannot be closed
- ✓ src/test/pause.test.ts > Pause and resume > paused projects stay searchable and journals show both pause and resume in plain sentences
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > a scan only writes owner-private suggestions: no project, no assignment, no employee notification
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > Scenario: approve without assigning → project exists, nobody can see it, folder is created; then Dalia assigns Erika
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > assigning in the same step as approving works, and retrying approval does not create a second project
@@ -64,6 +47,31 @@ $ npm test (verbose)
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > filters and search over the inbox work and count only what exists
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > Scenario: results tracker compares plan with what was measured and says it is not proof of cause
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > goals and sources are owner-editable; the source switch is pretend only
+ ✓ src/test/pause.test.ts > Pause and resume > Scenario 1: pause indefinitely, work leaves the active list but stays visible, resume keeps every bit of progress
+ ✓ src/test/pause.test.ts > Pause and resume > P-012 keeps 2 of 4 steps done through a pause and resume
+ ✓ src/test/pause.test.ts > Pause and resume > Scenario 2: automatic resume on a chosen date happens once, notifies the owner and each assigned person once, and retries do nothing
+ ✓ src/test/pause.test.ts > Pause and resume > a project that was never started goes back to Not started when it resumes
+ ✓ src/test/pause.test.ts > Pause and resume > Scenario 3: reminder mode asks Dalia to decide once and the project stays paused until she decides
+ ✓ src/test/pause.test.ts > Pause and resume > a missed date is handled once after an outage and keeps the original schedule date
+ ✓ src/test/pause.test.ts > Pause and resume > dates use the Chicago status run, so the day after daylight saving ends is still correct
+ ✓ src/test/pause.test.ts > Pause and resume > validation: no invented dates, no past dates, no bad dates, no double pause
+ ✓ src/test/pause.test.ts > Pause and resume > double clicks and retries are safe; two sessions cannot overwrite each other silently
+ ✓ src/test/pause.test.ts > Pause and resume > who may pause: owner and delegated managers only; members can only suggest
+ ✓ src/test/pause.test.ts > Pause and resume > deadlines are never moved; the page explains what happened; only an explicit change moves them
+ ✓ src/test/pause.test.ts > Pause and resume > Scenario 5: activity found while paused is neutral, never resumes the project and offers human choices
+ ✓ src/test/pause.test.ts > Pause and resume > Scenario 9: an update request on a paused project is answered through the normal paid review and never resumes it
+ ✓ src/test/pause.test.ts > Pause and resume > paid time and review are unaffected by a pause
+ ✓ src/test/pause.test.ts > Pause and resume > a step can be put on hold without pausing the project; its status is kept
+ ✓ src/test/pause.test.ts > Pause and resume > finished projects are never auto-resumed; reopening is explicit and audited; a paused project cannot be closed
+ ✓ src/test/pause.test.ts > Pause and resume > paused projects stay searchable and journals show both pause and resume in plain sentences
+ ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia → Erika → Dalia, with real notification, journal entry, response record and state changes
+ ✓ src/test/requests.test.ts > B. owner update request round trip > double-send / network retry creates exactly one response and one notification
+ ✓ src/test/requests.test.ts > B. owner update request round trip > "Completed" is employee-reported only: never becomes VERIFIED, and the notification says so
+ ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia can acknowledge and follow up without changing the employee’s historical answer
+ ✓ src/test/requests.test.ts > B. owner update request round trip > an employee can proactively send an update to Dalia without any request
+ ✓ src/test/requests.test.ts > B. owner update request round trip > other employees cannot read, intercept or answer a request not addressed to them
+ ✓ src/test/requests.test.ts > B. owner update request round trip > recipients must be authorized for the project
+ ✓ src/test/requests.test.ts > B. owner update request round trip > a request can be answered at clock-out or after next clock-in, and the card survives skipping
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > the spec’s Shopify example: 200 × 5 ÷ 60 = 16.67 hours, $20/hour = $333.33 of freed time, NOT cash savings
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > low, base and high scenarios come from the stored inputs
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > revenue is not profit: without a margin it says so and shows no profit, no return
@@ -74,14 +82,6 @@ $ npm test (verbose)
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > two ideas that improve the same output are never added together
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > blocks money and strategy words from worker-facing text
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > old public pages are not presented as new changes; dates are kept
- ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia → Erika → Dalia, with real notification, journal entry, response record and state changes
- ✓ src/test/requests.test.ts > B. owner update request round trip > double-send / network retry creates exactly one response and one notification
- ✓ src/test/requests.test.ts > B. owner update request round trip > "Completed" is employee-reported only: never becomes VERIFIED, and the notification says so
- ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia can acknowledge and follow up without changing the employee’s historical answer
- ✓ src/test/requests.test.ts > B. owner update request round trip > an employee can proactively send an update to Dalia without any request
- ✓ src/test/requests.test.ts > B. owner update request round trip > other employees cannot read, intercept or answer a request not addressed to them
- ✓ src/test/requests.test.ts > B. owner update request round trip > recipients must be authorized for the project
- ✓ src/test/requests.test.ts > B. owner update request round trip > a request can be answered at clock-out or after next clock-in, and the card survives skipping
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > Dalia sees owner-private and all company projects
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > no employee can discover the private project: list, search, counts, notifications, journal, resources, AI retrieval, direct id
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > a guessed id and a non-existent id produce the identical generic error (no data-bearing message)
@@ -91,15 +91,6 @@ $ npm test (verbose)
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > employees cannot forge responses, self-authorize, or mark high-risk results externally verified
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > employees cannot read other employees’ cards, notifications, decisions, print stats or the roster
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > inactive users cannot act at all
- ✓ src/test/resources.test.ts > D. resources, journal, audit > one canonical resource links to many steps with different roles
- ✓ src/test/resources.test.ts > D. resources, journal, audit > provider ID overrides filenames: two similarly named SEO sheets stay distinct with different counts
- ✓ src/test/resources.test.ts > D. resources, journal, audit > local/network paths and unknown links are not invented as clickable cloud links
- ✓ src/test/resources.test.ts > D. resources, journal, audit > a new version never silently replaces an approved input: it is a suggestion until deliberately approved
- ✓ src/test/resources.test.ts > D. resources, journal, audit > resource discovery creates SUGGESTED links; employee accepts; marked not-related stays out
- ✓ src/test/resources.test.ts > D. resources, journal, audit > project journal aggregates all step events; step journal is the same stored events, filtered (no duplicates)
- ✓ src/test/resources.test.ts > D. resources, journal, audit > audit shows before/after, actor, time and reason for transitions
- ✓ src/test/resources.test.ts > D. resources, journal, audit > employee resource lists contain no unauthorized/private items
- ✓ src/test/resources.test.ts > D. resources, journal, audit > projects keep their step hierarchy; employees can add substeps only under their own steps; progress is explicit counts
  ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > Scenario 4: 19 verified + 1 unresolved upload shows 19/20, not 20/20; the 20th verification reaches the target and asks Dalia
  ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > checkbox, upload and “tried” never count as verified; employees cannot verify or go outside the list
  ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > only Dalia can approve the next batch, only after the target, and the earlier test stays in the history
@@ -113,6 +104,15 @@ $ npm test (verbose)
  ✓ src/test/print.test.ts > F. print analytics > print-only users receive no daily AI review card even when their device has activity
  ✓ src/test/print.test.ts > F. print analytics > opportunities distinguish expected capacity from realized value and approval creates a measured project
  ✓ src/test/print.test.ts > time handling (America/Chicago, DST-aware) > converts local wall time to UTC across DST and displays in CT
+ ✓ src/test/resources.test.ts > D. resources, journal, audit > one canonical resource links to many steps with different roles
+ ✓ src/test/resources.test.ts > D. resources, journal, audit > provider ID overrides filenames: two similarly named SEO sheets stay distinct with different counts
+ ✓ src/test/resources.test.ts > D. resources, journal, audit > local/network paths and unknown links are not invented as clickable cloud links
+ ✓ src/test/resources.test.ts > D. resources, journal, audit > a new version never silently replaces an approved input: it is a suggestion until deliberately approved
+ ✓ src/test/resources.test.ts > D. resources, journal, audit > resource discovery creates SUGGESTED links; employee accepts; marked not-related stays out
+ ✓ src/test/resources.test.ts > D. resources, journal, audit > project journal aggregates all step events; step journal is the same stored events, filtered (no duplicates)
+ ✓ src/test/resources.test.ts > D. resources, journal, audit > audit shows before/after, actor, time and reason for transitions
+ ✓ src/test/resources.test.ts > D. resources, journal, audit > employee resource lists contain no unauthorized/private items
+ ✓ src/test/resources.test.ts > D. resources, journal, audit > projects keep their step hierarchy; employees can add substeps only under their own steps; progress is explicit counts
  ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > AI finding text, notifications and messages read easily
  ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > error messages are short and plain
  ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > names of steps are shown in quotes in notifications
@@ -133,10 +133,10 @@ $ npm test (verbose)
 
  Test Files  13 passed (13)
       Tests  121 passed (121)
-   Start at  01:53:31
-   Duration  2.81s (transform 737ms, setup 0ms, collect 2.52s, tests 1.53s, environment 4ms, prepare 925ms)
+   Start at  02:02:35
+   Duration  2.80s (transform 842ms, setup 0ms, collect 2.68s, tests 1.53s, environment 4ms, prepare 949ms)
 
 
 $ node e2e/v11.mjs → NO ERRORS, ALL CHECKS PASSED
-  (includes v1.2 checks: one big button on My Work, answer buttons on the first screen of a review card, no duplicate Next step card, no sideways scroll on a phone, no repeated Open buttons)
+  (includes attention-design checks: exactly one primary button on Home, AI finding, My Work, Review and step page; page title larger than section headings; no repeated Open buttons; no sideways scroll on a phone; answer buttons on the first screen of a review card)
 ```

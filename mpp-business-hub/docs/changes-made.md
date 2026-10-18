@@ -45,3 +45,6 @@ Existing projects load with no pause state (they are Active). Old notification a
 
 ## v1.2 UX overhaul
 See `docs/ux-overhaul-v1-2.md` for the audit, what changed, and how to check it. Summary: one "Do this next" card for employees, a calmer project page (no repeated blocks, phone layout fixed), review cards that put the answer first, compact lists with one clear action, and quieter notifications. No features were removed. All 121 tests and the browser run pass.
+
+## v1.3 Attention design
+See `docs/attention-design-v1-3.md`: a type and spacing system, one focal point and one primary button per screen, quieter badges, and details behind open-and-close sections. Nothing removed.

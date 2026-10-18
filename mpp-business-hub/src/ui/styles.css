@@ -258,3 +258,145 @@ details.soft .count, .group-title .count { margin-left: .3rem; }
 .prow .end { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
 @media (max-width: 700px) { button.link { padding: .5rem .25rem; min-height: 40px; } }
 .chip { max-width: 100%; white-space: normal; }
+
+/* =====================================================================
+   v1.3 DESIGN SYSTEM — attention hierarchy
+   One type scale, one spacing scale, one rule: only the most important
+   thing on a screen is loud. Everything else is quiet until needed.
+   ===================================================================== */
+:root {
+  /* type scale */
+  --fs-label: .72rem;   /* LABELS: small caps, muted */
+  --fs-small: .85rem;   /* supporting text */
+  --fs-body: .95rem;    /* body */
+  --fs-lead: 1.05rem;   /* the one sentence that matters */
+  --fs-h3: 1rem;        /* sub-heading */
+  --fs-h2: 1.2rem;      /* section heading */
+  --fs-h1: 1.75rem;     /* page title */
+  /* spacing scale */
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem; --sp-5: 1.5rem; --sp-6: 2.25rem;
+  /* text colours: primary, secondary, quiet. All pass 4.5:1 on the page background. */
+  --text: #231d20; --text-2: #4a4045; --muted: #6a5f65;
+  --border: #ebe3e0;
+  --shadow: none;
+  --shadow-focal: 0 1px 2px rgba(60,30,40,.06), 0 8px 24px rgba(60,30,40,.07);
+}
+body { font-size: var(--fs-body); line-height: 1.55; color: var(--text); }
+
+/* PAGE TITLE + one-line purpose */
+.content h1 { font-size: var(--fs-h1); font-weight: 750; letter-spacing: -.02em; line-height: 1.15; margin: 0; }
+.content h1 + p, .content h1 + .muted { font-size: 1rem; color: var(--muted); margin: var(--sp-2) 0 0; max-width: 64ch; line-height: 1.5; }
+/* SECTION HEADING: bigger than anything inside it */
+.content h2 { font-size: var(--fs-h2); font-weight: 680; letter-spacing: -.01em; line-height: 1.25; margin: 0 0 var(--sp-3); }
+.content h3 { font-size: var(--fs-h3); font-weight: 650; margin: 0 0 var(--sp-2); }
+.group-title { font-size: var(--fs-h2); font-weight: 680; margin: 0 0 var(--sp-3); }
+.group-title .count, .count { font-size: var(--fs-small); font-weight: 500; color: var(--muted); background: none; padding: 0; }
+/* LABEL: tiny, uppercase, quiet. Used for "what kind of thing is this". */
+.eyebrow, .label, dt { font-size: var(--fs-label); font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.kv dt { text-transform: none; letter-spacing: 0; font-size: var(--fs-small); font-weight: 500; }
+label { font-size: var(--fs-small); font-weight: 600; color: var(--text-2); }
+.small { font-size: var(--fs-small); }
+.muted { color: var(--muted); }
+.lead { font-size: var(--fs-lead); line-height: 1.5; color: var(--text); }
+
+/* BREATHING ROOM: big gaps between sections, tight gaps inside a group */
+.content { padding: var(--sp-5) var(--sp-5) var(--sp-6); max-width: 1120px; }
+.content > .stack > * + * { margin-top: var(--sp-5); }
+.content > .stack > h1 + *, .content > .stack > div:first-child + * { margin-top: var(--sp-5); }
+.card { padding: var(--sp-4) var(--sp-5); border-radius: 14px; }
+.card .stack > * + * { margin-top: var(--sp-3); }
+
+/* CARDS: quiet by default. Only a .focal card stands out. */
+.card { box-shadow: none; border-color: var(--border); }
+.card.focal { box-shadow: var(--shadow-focal); border: 1px solid #efc3d3; border-left: 5px solid var(--pink); padding: var(--sp-5) var(--sp-5); }
+.card.quiet, details.quiet { background: transparent; border-color: transparent; box-shadow: none; padding-left: 0; padding-right: 0; }
+.card.pink { background: #fff6f9; border-color: #f4d2de; }
+.card.warn { background: #fffaf0; border-color: #f2e2b9; }
+.card.violet { background: #faf8fe; border-color: #e3dbf4; }
+.card.info { background: #f6faff; border-color: #d3e5f7; }
+.card.bad { background: #fff6f6; border-color: #f2cccf; }
+.card.ok { background: #f5fbf8; border-color: #cbe7d8; }
+
+/* BUTTONS: one loud button per screen. Everything else is calm. */
+button, .btn { font-size: var(--fs-body); font-weight: 500; color: var(--text-2); border-color: #ddd3d0; background: #fff; }
+button.primary { font-weight: 650; }
+button.quiet, button.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+button.quiet:hover, button.ghost:hover { background: var(--surface-2); }
+button.danger { background: transparent; border-color: transparent; color: var(--bad); }
+button.danger:hover { background: var(--bad-soft); }
+
+/* CHIPS: a chip means "this is unusual". Neutral facts are plain text. */
+.chip { font-size: var(--fs-label); font-weight: 600; letter-spacing: .02em; padding: .08rem .5rem; border: none; }
+.chip.gray { background: transparent; color: var(--muted); padding-left: 0; padding-right: .25rem; font-weight: 500; }
+.chip.info { background: #edf4fc; } .chip.ok { background: #e9f6ef; } .chip.warn { background: #fff3d9; }
+.chip.violet { background: #f0ecfa; } .chip.pink { background: #fde9f0; } .chip.bad { background: #fde9ea; }
+
+/* TABLES: label row quiet, rows airy, nothing shouts */
+table { font-size: var(--fs-body); }
+th { font-size: var(--fs-label); letter-spacing: .07em; font-weight: 650; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--border); }
+td { padding: var(--sp-3); border-bottom: 1px solid #f1eae7; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+
+/* TABS: calm, one underline */
+.tabs { margin: var(--sp-4) 0 var(--sp-5); gap: var(--sp-2); }
+.tabs button { font-size: var(--fs-body); color: var(--muted); padding: var(--sp-2) var(--sp-3); }
+.tabs button[aria-selected=true] { color: var(--text); }
+
+/* TILES: facts, not decoration */
+.tile { padding: var(--sp-3) var(--sp-4); border-color: var(--border); box-shadow: none; }
+.tile .n { font-size: 1.5rem; font-weight: 700; }
+.tile .t { font-size: var(--fs-small); }
+
+/* PROGRESSIVE DISCLOSURE: closed sections look like quiet lines, not cards */
+details.soft > summary { font-size: var(--fs-body); font-weight: 600; color: var(--text-2); padding: var(--sp-2) 0; }
+details.soft > summary:hover { color: var(--text); }
+details > summary { cursor: pointer; }
+
+/* sidebar + chrome stay quiet */
+.nav a { font-size: var(--fs-body); color: var(--text-2); }
+.nav a.active { color: var(--pink-strong); }
+.demo-banner { font-size: var(--fs-label); }
+.topbar { padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
+
+/* PAGE HEADER: title left, the ONE primary action right */
+.pagehead { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--sp-4); flex-wrap: wrap; }
+.pagehead > div:first-child { min-width: 0; flex: 1 1 320px; }
+
+/* the "focus" block: what to look at first */
+.focus-title { font-size: 1.35rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; margin: 0; }
+@media (max-width: 700px) {
+  :root { --fs-h1: 1.45rem; --fs-h2: 1.1rem; }
+  .content { padding: var(--sp-4) var(--sp-4) 5.5rem; }
+  .card { padding: var(--sp-4); }
+  .content > .stack > * + * { margin-top: var(--sp-4); }
+}
+.erow { padding: var(--sp-3) 0; border-top: 1px solid var(--border); font-size: var(--fs-small); }
+.erow strong { font-size: var(--fs-body); font-weight: 600; }
+.setrows { padding: 0; }
+.setrow { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-5); flex-wrap: wrap; padding: var(--sp-4) var(--sp-5); border-top: 1px solid var(--border); }
+.setrow:first-child { border-top: 0; }
+.setrow > div:first-child { flex: 1 1 360px; min-width: 0; }
+.setrow p { margin: .15rem 0 0; }
+.card.note { padding: var(--sp-3) var(--sp-5); }
+.card.note.unread { border-left: 4px solid var(--pink); background: #fff; }
+.card.note.read { background: transparent; }
+.card.note .newdot { margin-right: 0; }
+.content > .stack > .card.note + .card.note { margin-top: var(--sp-3); }
+.content h1 + p.lead { color: var(--text); font-size: var(--fs-lead); margin-top: var(--sp-3); max-width: 62ch; }
+.card.focal.stack > h1 { margin-bottom: 0; }
+.card.focal.stack > h1 + p.lead { margin-top: var(--sp-1) !important; }
+/* STEP LIST: rows, not boxes. The open step is the only one with colour. */
+.step { border: none; background: transparent; border-radius: 10px; padding: var(--sp-2) var(--sp-3); }
+.step:hover { background: var(--surface-2); }
+.step.sel { background: var(--pink-soft); box-shadow: inset 3px 0 0 var(--pink); }
+.step strong { font-weight: 600; font-size: var(--fs-body); }
+.step.sel strong { font-weight: 700; }
+.split .plan { border-color: transparent; background: transparent; padding-left: 0; padding-right: var(--sp-2); }
+.split .plan h2 { font-size: var(--fs-h3); }
+.answers .row { gap: var(--sp-3); }
+.notice { background: #fff6f9; border-color: #f4d2de; }
+.jicon { color: var(--muted); font-weight: 400; margin-right: .45rem; }
+.readfirst { background: #f6faff; border: 1px solid #d3e5f7; border-radius: 12px; padding: var(--sp-2) var(--sp-4); }
+.pill-btn { min-height: 32px; padding: .1rem .75rem; font-size: var(--fs-small); border-color: transparent; background: var(--surface-2); color: var(--text-2); }
+.pill-btn[aria-pressed=true] { background: var(--text); border-color: var(--text); color: #fff; }
+.journal-item { padding: var(--sp-2) 0 var(--sp-2) var(--sp-4); margin-bottom: var(--sp-2); }

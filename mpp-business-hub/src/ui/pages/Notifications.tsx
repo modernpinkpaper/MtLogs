@@ -56,15 +56,15 @@ export function Notifications() {
 
   function Item({ n, inGroup }: { n: Notification; inGroup?: boolean }) {
     return (
-      <div className={`card ${!n.readAt ? 'pink' : ''} ${inGroup ? 'flat' : ''}`}>
+      <div className={`card note ${!n.readAt ? 'unread' : 'read'} ${inGroup ? 'flat' : ''}`}>
         <div className="row between">
-          <div className="row"><Chip tone={n.readAt ? 'gray' : 'pink'} glyph={n.readAt ? '○' : '●'}>{n.readAt ? 'Read' : 'New'}</Chip><Chip tone="gray">{LABEL[n.type]}</Chip>{n.acknowledgedAt && <Chip tone="ok" glyph="✔">Seen</Chip>}</div>
+          <div className="row" style={{ gap: '.4rem' }}>{!n.readAt && <i className="newdot" aria-label="New" />}<span className="eyebrow">{LABEL[n.type]}</span>{n.acknowledgedAt && <Chip tone="ok" glyph="✔">Seen</Chip>}</div>
           <span className="small muted">{formatDateTime(n.createdAt)}</span>
         </div>
-        <h3 style={{ marginTop: 6 }}>{n.title}</h3>
+        <h3 style={{ marginTop: 4, fontWeight: n.readAt ? 550 : 700 }}>{n.title}</h3>
         <p className="small" style={{ margin: '0 0 .5rem' }}>{n.preview}</p>
         <div className="row">
-          <button className="primary" onClick={async () => { await act(() => hub.markRead(uid, n.id)); nav(n.deepLink); }}>{OPEN_LABEL[n.type] ?? 'Open'}</button>
+          <button onClick={async () => { await act(() => hub.markRead(uid, n.id)); nav(n.deepLink); }}>{OPEN_LABEL[n.type] ?? 'Open'}</button>
           {!n.acknowledgedAt && ACK_TYPES.includes(n.type) && <button onClick={() => act(() => hub.acknowledge(uid, n.id), 'Marked as seen')}>I saw this</button>}
           {!n.readAt && <button className="link" onClick={() => act(() => hub.markRead(uid, n.id))}>Mark as read</button>}
           <button className="link" onClick={() => act(() => hub.snoozeNotification(uid, n.id, 60), 'We will remind you in 1 hour')}>Remind me in 1 hour</button>
