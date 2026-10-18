@@ -1,6 +1,9 @@
 import type { Project, Step, User, ProjectEvent } from '../domain/types';
 import { chicagoToUtc } from '../domain/time';
 import type { HubState } from './state';
+import type { ActivityBin, PrintJob, PrinterProblemEvent, PrintStation } from '../domain/types';
+
+export interface RealLogs { printers: Record<string, string[]>; printJobs: PrintJob[]; printerProblems: PrinterProblemEvent[]; activityBins: ActivityBin[] }
 import { base, stepBase, settings } from './seed';
 
 type Row = [string, string, 'D' | 'I' | 'B' | 'N' | 'X', string | null, string | null, (string | null)?, (string | null)?];
@@ -10,7 +13,7 @@ export interface RealTracker { people: { id: string; name: string; role: User['r
 const ts = (s: string | null) => (s ? chicagoToUtc(s.slice(0, 10), s.slice(11, 16)) : null);
 
 /** Builds a state from the owner's real tracker rows. Used only by the private real-data build. */
-export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string): HubState {
+export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string, logs?: RealLogs | null): HubState {
   const now = ts(nowLocal)!;
   const users: User[] = t.people.map(p => ({ id: p.id, name: p.name, role: p.role, area: p.area, active: true, capabilities: [], primaryDeviceId: p.device, rosterNote: p.note }));
   const projects: Project[] = [];
@@ -43,7 +46,8 @@ export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string)
   return {
     ...demo, now, lastOwnerLookAt: chicagoToUtc('2026-10-16', '17:00'), users, assignments: [], projects, steps, resources: [], resourceLinks: [], projectEvents: journal,
     auditEvents: [], archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [], updateRequests: [], updateResponses: [], notifications: [], shifts: [],
-    printJobs: [], printerProblems: [], activityBins: [], stations: [], opportunities: [], settings: settings(), workLog: [], workingVersions: [],
+    printJobs: logs?.printJobs.map(j => ({ ...j, uid: t.people.find(p => p.device === j.deviceId)?.id ?? null })) ?? [], printerProblems: logs?.printerProblems ?? [], activityBins: logs?.activityBins ?? [],
+    stations: Object.entries(logs?.printers ?? {}).map(([deviceId, printers]): PrintStation => ({ deviceId, printers, defaultUid: t.people.find(p => p.device === deviceId)?.id ?? null })), opportunities: [], settings: settings(), workLog: [], workingVersions: [],
     ownerFindings: [], ownerModels: [], outcomes: [], goals: [], sources: [], workspaces: {},
   };
 }
