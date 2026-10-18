@@ -42,9 +42,10 @@ export function PauseDialog({ project, onClose }: { project: Project; onClose: (
   const [mode, setMode] = useState<ResumeMode>('MANUAL');
   const [date, setDate] = useState('');
   const [msg, setMsg] = useState('');
+  const [allowed, setAllowed] = useState('');
   const team = project.memberUids.map((m) => hub.userName(m));
   const go = async () => {
-    const r = await act(() => hub.pauseProject(uid, project.id, { reasonCode: reason || undefined, reasonNote: note, mode, resumeDateLocal: date || undefined, messageToTeam: msg, idempotencyKey: key.current }), `${project.key} is paused`);
+    const r = await act(() => hub.pauseProject(uid, project.id, { reasonCode: reason || undefined, reasonNote: note, mode, resumeDateLocal: date || undefined, messageToTeam: msg, allowedWork: allowed, idempotencyKey: key.current }), `${project.key} is paused`);
     if (r) onClose();
   };
   return (
@@ -55,6 +56,7 @@ export function PauseDialog({ project, onClose }: { project: Project; onClose: (
           <select id="pz-reason" value={reason} onChange={(e) => setReason(e.target.value)}><option value="">Choose a reason…</option>{Object.entries(PAUSE_REASONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         <div><label htmlFor="pz-note">Add a note (if you want)</label><input id="pz-note" type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: Testing 20 listings before expanding" /></div>
         <ModePicker mode={mode} setMode={setMode} date={date} setDate={setDate} nowIso={hub.now} name="pz-mode" />
+        <div><label htmlFor="pz-allowed">What can people still do while it is paused? (if anything)</label><input id="pz-allowed" type="text" value={allowed} onChange={(e) => setAllowed(e.target.value)} placeholder="Example: Nothing. Or: only fix errors in listings that are already live." /></div>
         <div><label htmlFor="pz-msg">Message to the team (if you want)</label><textarea id="pz-msg" value={msg} onChange={(e) => setMsg(e.target.value)} />
           <p className="small muted">{team.length ? `${team.join(', ')} will get a notification.` : 'No one is assigned, so no one is notified.'}</p></div>
         <div className="row"><button className="primary" type="submit" disabled={mode !== 'MANUAL' && !date}>Pause project</button><button type="button" onClick={onClose}>Cancel</button></div>
@@ -118,6 +120,8 @@ export function PauseBanner({ project, onResume, onChange, onSuggestResume }: { 
       <strong>Paused by {hub.userName(ps.pausedByUserId ?? null)} on {formatLocalDate(chicagoDate(ps.pausedAt!))} — {reasonText(ps)}</strong>
       <p style={{ margin: '.3rem 0' }}>{scheduleSentence(ps, me.role === 'OWNER')}{me.role !== 'OWNER' && ' Your work is saved. You can still answer requests from Dalia.'}</p>
       {ps.messageToTeam && <p className="small" style={{ margin: '.2rem 0' }}>Message: “{ps.messageToTeam}”</p>}
+      <p className="small" style={{ margin: '.2rem 0' }}><strong>What you can still do:</strong> {ps.allowedWork ?? 'No project work is scheduled. You can still answer Dalia’s requests. Your work, files and notes are all saved.'}</p>
+      <p className="small" style={{ margin: '.2rem 0' }}><strong>What happens next:</strong> {scheduleSentence(ps, false)}</p>
       {reminderDue && canControl && <p style={{ margin: '.3rem 0' }}><strong>It is time to decide.</strong> Resume it, set another reminder, or keep it paused.</p>}
       {di?.elapsedWhilePaused && <p className="small" style={{ margin: '.2rem 0' }}>{di.text}. {canControl ? 'Pick a new deadline when you are ready.' : 'Dalia may set a new date.'}</p>}
       {di?.pastDueBeforePause && <p className="small" style={{ margin: '.2rem 0' }}>{di.text}.</p>}

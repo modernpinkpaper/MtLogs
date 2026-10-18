@@ -37,6 +37,8 @@ export interface ProjectPauseState {
   reasonCode?: string;
   reasonNote?: string;
   messageToTeam?: string;
+  /** What people may still do while paused. Plain words. Empty means nothing is scheduled. */
+  allowedWork?: string;
   priorProjectStatus?: 'NOT_STARTED' | 'IN_PROGRESS';
   resumeMode: ResumeMode;
   resumeDateLocal?: string; // YYYY-MM-DD in America/Chicago
@@ -136,6 +138,8 @@ export interface Step {
   assignedUids: string[];
   dueAt: string | null;
   impact: 'ROUTINE' | 'HIGH';
+  /** Dalia can allow the person to sign off a routine step themselves. Off by default. */
+  employeeSignOffAllowed?: boolean;
   dependencyIds: string[];
   evidenceHints: string[];
   checklist: ChecklistItem[];
@@ -208,6 +212,12 @@ export interface Resource {
   supersededById: string | null;
   /** Explicitly marked as still being edited. Never inferred from a file name. */
   isDraft?: boolean;
+  /** The record of who approved which version, and when. An approvedVersion without a matching record is not trusted. */
+  approval?: { version: string; byUid: string; at: string } | null;
+  /** A person asked Dalia to approve this version. It is not approved until she does. */
+  pendingApproval?: { version: string; requestedByUid: string; at: string; note: string | null } | null;
+  /** Old approved versions, kept for the history. */
+  supersededVersions?: { version: string; at: string; byUid: string }[];
   /** Installed scripts live where the tool needs them. They are never moved to a project folder. */
   installPath?: string | null;
   sourceLinked?: boolean; // scripts: is source/manifest linked?
@@ -237,7 +247,7 @@ export type JournalType =
   | 'ACK' | 'PLAN_CHANGE' | 'ACCESS'
   | 'PAUSE_REQUESTED' | 'PROJECT_PAUSED' | 'PAUSE_SCHEDULE_CHANGED' | 'RESUME_REMINDER_SENT' | 'PROJECT_RESUMED' | 'PILOT';
 export type ConfidenceBand = 'LOW' | 'MEDIUM' | 'HIGH' | 'N_A';
-export type VerificationState = 'OFFICIAL' | 'AI_DETECTED' | 'EMPLOYEE_CONFIRMED' | 'INDEPENDENTLY_VERIFIED' | 'NEEDS_REVIEW' | 'UNKNOWN';
+export type VerificationState = 'OFFICIAL' | 'AI_DETECTED' | 'EMPLOYEE_CONFIRMED' | 'OWNER_APPROVED' | 'INDEPENDENTLY_VERIFIED' | 'NEEDS_REVIEW' | 'UNKNOWN';
 
 export interface ProjectEvent {
   id: string;
@@ -473,6 +483,8 @@ export interface UpdateRequest {
   purpose: string;
   importance: 'NORMAL' | 'IMPORTANT';
   dueAt: string | null;
+  /** First time a recipient opened the request. */
+  seenAt?: string | null;
   options: { notifyWhenVerified: boolean; sendNextResponse: boolean; reminderIfUnanswered: boolean };
   state: 'OPEN' | 'PARTIALLY_RESPONDED' | 'RESPONDED' | 'ACKNOWLEDGED' | 'CLOSED' | 'CANCELLED';
   parentRequestId: string | null;
@@ -502,7 +514,7 @@ export interface UpdateResponse {
 export type NotificationType =
   | 'OWNER_UPDATE_REQUEST' | 'EMPLOYEE_RESPONSE' | 'NEEDS_VERIFICATION' | 'BLOCKER' | 'MISSING_COVERAGE'
   | 'DAILY_DIGEST' | 'WEEKLY_PRINT_INSIGHT' | 'DIRECT_MENTION' | 'FOLLOW_UP'
-  | 'PROJECT_PAUSED' | 'PROJECT_RESUMED' | 'RESUME_REMINDER' | 'PAUSE_SUGGESTION' | 'PILOT_REACHED' | 'AI_FINDING' | 'PROJECT_ASSIGNED';
+  | 'PROJECT_PAUSED' | 'PROJECT_RESUMED' | 'RESUME_REMINDER' | 'PAUSE_SUGGESTION' | 'PILOT_REACHED' | 'AI_FINDING' | 'PROJECT_ASSIGNED' | 'APPROVAL_REQUEST' | 'EMPLOYEE_UPDATE';
 export type NotificationState = 'CREATED' | 'DELIVERED' | 'READ' | 'ACKNOWLEDGED' | 'DISMISSED';
 
 export interface Notification {

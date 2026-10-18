@@ -62,3 +62,10 @@ AA. **Project description.** Click the small "i" beside P-012 anywhere. Edit the
 AB. **Log something I did (Erika).** My Work → "Log something I did". As Dalia open Other work → "Logged by hand".
 AC. **Phone.** Make the window narrow and open P-012: the step comes first, files next, the full plan folds under "All steps".
 AD. **Home alert.** As Dalia, Home shows "Shopify listings — Progress needs confirmation" and "Review progress". "View technical details" shows the project, step and times.
+
+## v1.5 scenarios
+AE. **Choose vs approve.** As Erika open P-012 Step 3. Press "Use for my work" (nothing official changes). Press "Submit for approval". As Dalia, approve it from Home or the step ("Approve version for team use"). Erika cannot see that button.
+AF. **Reported is not verified.** As Erika press "I finished this step". The project says "2 of 4 verified complete · 1 reported complete (awaiting check)". Only Dalia's sign-off or a check changes the verified number.
+AG. **Confirm, do not start over.** As Erika, My Work asks you to "Confirm where … stands", with "Tracker status" and "Activity detected" shown separately and "Why this is next".
+AH. **Request tracking.** As Dalia ask for an update. Her project page shows Requested, then Seen when Erika opens it, then Answered.
+AI. **Dalia on a phone.** Make the window narrow as Dalia. Approvals, urgent problems, replies, paused projects and AI ideas are grouped, and approving asks you to confirm.

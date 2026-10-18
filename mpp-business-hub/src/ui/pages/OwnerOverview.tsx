@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAct, useMe } from '../hubContext';
-import { Chip, Modal } from '../common';
+import { Chip, Modal, useNarrow } from '../common';
 import { shortProjectName } from '../../domain/reviewKinds';
 import { RequestUpdateDialog } from '../dialogs';
 import { ProjectInfo } from '../projectRef';
@@ -19,15 +19,70 @@ export function OwnerOverview() {
   const ai = hub.inboxSummary(uid);
   const unread = hub.listNotifications(uid).filter((n) => !n.readAt).length;
   const decisions = [
-    ...(ai.approvedUnassigned ? ai.unassignedProjects.map((p) => ({ kind: 'Choose who works on it', label: `${p.key} “${p.title}” is approved but nobody is assigned`, title: `${shortProjectName(p)} — Choose who works on it`, why: 'You approved it, but nobody can see it yet.', cta: 'Choose who works on it', chip: 'Needs an assignee', link: `/projects/${p.id}?assign=1`, weight: 96, projectId: p.id, technical: [] as string[] })) : []),
-    ...(ai.urgent ? [{ kind: 'Urgent AI recommendation', label: `${ai.urgent} urgent recommendation${ai.urgent === 1 ? '' : 's'} need a look`, title: ai.urgent === 1 ? 'An urgent AI opportunity needs your decision' : `${ai.urgent} urgent AI opportunities need your decision`, why: 'The AI found something that may cost you if it waits.', cta: 'Review it', chip: 'Urgent', link: '/owner/ai', weight: 99, projectId: undefined, technical: [] as string[] }] : []),
-    ...(ai.needsDecision - ai.urgent > 0 ? [{ kind: 'AI Recommendations', label: `${ai.needsDecision - ai.urgent} recommendation${ai.needsDecision - ai.urgent === 1 ? '' : 's'} waiting for your decision`, title: ai.needsDecision - ai.urgent === 1 ? 'New AI opportunity needs your approval' : `${ai.needsDecision - ai.urgent} AI opportunities need your decision`, why: 'Nothing becomes a project until you approve it.', cta: 'Review opportunities', chip: 'Your decision', link: '/owner/ai', weight: 55, projectId: undefined, technical: [] as string[] }] : []),
+    ...(ai.approvedUnassigned ? ai.unassignedProjects.map((p) => ({ kind: 'Choose who works on it', label: `${p.key} “${p.title}” is approved but nobody is assigned`, title: `${shortProjectName(p)} — Choose who works on it`, why: 'You approved it, but nobody can see it yet.', cta: 'Choose who works on it', chip: 'Needs an assignee', link: `/projects/${p.id}?assign=1`, weight: 96, projectId: p.id, technical: [] as string[], group: 'DECISION' as const, action: undefined })) : []),
+    ...(ai.urgent ? [{ kind: 'Urgent AI recommendation', label: `${ai.urgent} urgent recommendation${ai.urgent === 1 ? '' : 's'} need a look`, title: ai.urgent === 1 ? 'An urgent AI opportunity needs your decision' : `${ai.urgent} urgent AI opportunities need your decision`, why: 'The AI found something that may cost you if it waits.', cta: 'Review it', chip: 'Urgent', link: '/owner/ai', weight: 99, projectId: undefined, technical: [] as string[], group: 'AI' as const, action: undefined }] : []),
+    ...(ai.needsDecision - ai.urgent > 0 ? [{ kind: 'AI Recommendations', label: `${ai.needsDecision - ai.urgent} recommendation${ai.needsDecision - ai.urgent === 1 ? '' : 's'} waiting for your decision`, title: ai.needsDecision - ai.urgent === 1 ? 'New AI opportunity needs your approval' : `${ai.needsDecision - ai.urgent} AI opportunities need your decision`, why: 'Nothing becomes a project until you approve it.', cta: 'Review opportunities', chip: 'Your decision', link: '/owner/ai', weight: 55, projectId: undefined, technical: [] as string[], group: 'AI' as const, action: undefined }] : []),
     ...o.queue,
   ].sort((a, b) => b.weight - a.weight);
+  const narrow = useNarrow();
+  const [details, setDetails] = useState(false);
+  const [confirmItem, setConfirmItem] = useState<(typeof decisions)[number] | null>(null);
+  if (narrow) {
+    const SECTIONS: { id: 'DECISION' | 'URGENT' | 'REPLY' | 'PAUSED' | 'AI' | 'OTHER'; title: string }[] = [
+      { id: 'DECISION', title: 'Needs your decision' }, { id: 'URGENT', title: 'Urgent problems' }, { id: 'REPLY', title: 'New replies from your team' },
+      { id: 'PAUSED', title: 'Paused projects to review' }, { id: 'AI', title: 'New AI opportunities' }, { id: 'OTHER', title: 'Other' },
+    ];
+    const pcm = o.counts;
+    return (
+      <div className="stack">
+        <div className="pagehead">
+          <div>
+            <h1>Home</h1>
+            <p>{decisions.length === 0 ? 'Nothing needs you right now.' : `${decisions.length} thing${decisions.length === 1 ? ' needs' : 's need'} you.`} <Link to="/projects">{pcm.team} team active{pcm.private ? `, ${pcm.private} private` : ''}{pcm.paused ? `, ${pcm.paused} paused` : ''}</Link></p>
+          </div>
+        </div>
+        {decisions.length === 0 && <div className="card focal"><div className="eyebrow">All clear</div><p className="focus-title">You are all caught up.</p></div>}
+        {SECTIONS.map((sec) => {
+          const items = decisions.filter((d) => (d.group ?? 'OTHER') === sec.id);
+          if (!items.length) return null;
+          return (
+            <section key={sec.id} aria-label={sec.title}>
+              <h2 className="group-title">{sec.title} <span className="count">{items.length}</span></h2>
+              <div className="card list">
+                {items.map((q, i) => (
+                  <div key={i} className="mrow">
+                    <div className="t">{q.title}{q.projectId && <ProjectInfo projectId={q.projectId} label={q.title} />}</div>
+                    <div className="small muted">{q.why}</div>
+                    <div className="row" style={{ marginTop: 6 }}>
+                      {q.action?.type === 'APPROVE_VERSION' && <button className="primary" onClick={() => setConfirmItem(q)}>{q.action.label}</button>}
+                      {q.action?.type === 'MARK_SEEN' && <button onClick={() => act(() => hub.acknowledge(uid, q.action!.type === 'MARK_SEEN' ? (q.action as { notificationId: string }).notificationId : ''), 'Marked as seen')}>{q.action.label}</button>}
+                      <Link to={q.link}><button className={q.action ? 'quiet' : ''}>{q.cta}</button></Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+        <div className="row"><button onClick={() => setReq(true)}>Ask for an update</button></div>
+        {confirmItem?.action?.type === 'APPROVE_VERSION' && (
+          <Modal title="Please confirm" onClose={() => setConfirmItem(null)}>
+            <div className="stack">
+              <p style={{ margin: 0 }}>{confirmItem.action.confirm}</p>
+              <div className="row">
+                <button className="primary" onClick={async () => { const a = confirmItem.action as { resourceId: string; version: string }; const r = await act(() => hub.approveVersion(uid, a.resourceId, a.version), 'Approved. It is recorded in the history.'); if (r) setConfirmItem(null); }}>Yes, approve</button>
+                <button className="quiet" onClick={() => setConfirmItem(null)}>Not now</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+        {req && <RequestUpdateDialog onClose={() => setReq(false)} />}
+      </div>
+    );
+  }
   const first = decisions[0];
   const others = decisions.slice(1);
   const shown = all ? others : others.slice(0, 4);
-  const [details, setDetails] = useState(false);
   const pc = o.counts;
 
   return (

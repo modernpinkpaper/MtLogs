@@ -42,6 +42,8 @@ export interface HubState {
   deviceLastSeen: Record<string, string>;
   seenInjection: boolean;
   workLog: WorkLogEntry[];
+  /** Which version each person chose to work with. A choice, never an approval. */
+  workingVersions: { uid: string; resourceId: string; version: string; at: string }[];
   // ---- v1.1 ----
   /** OWNER-ONLY collections. Only methods that call requireOwner may read them. */
   ownerFindings: OwnerFinding[];

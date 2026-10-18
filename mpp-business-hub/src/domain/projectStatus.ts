@@ -2,7 +2,6 @@ import type { Project, ProjectWorkStatus, Step } from './types';
 import { chicagoDate, formatLocalDate } from './time';
 
 const TERMINAL = ['VERIFIED_COMPLETE', 'CANCELLED', 'NOT_APPLICABLE'];
-const DONE = ['VERIFIED_COMPLETE', 'REPORTED_COMPLETE'];
 
 export const STATUS_LABEL: Record<ProjectWorkStatus, string> = {
   NOT_STARTED: 'Not started', IN_PROGRESS: 'In progress', PAUSED: 'Paused', COMPLETED: 'Completed', CANCELED: 'Canceled',
@@ -27,12 +26,18 @@ export function statusIgnoringPause(p: Project, steps: Step[]): 'NOT_STARTED' | 
   return top.length && top.every((s) => s.status === 'NOT_STARTED') ? 'NOT_STARTED' : 'IN_PROGRESS';
 }
 
-/** Top-level steps only, so a parent and its substeps are never double counted. */
+/**
+ * Progress, with reported and verified kept apart everywhere.
+ * "Verified complete" means Dalia signed it off or a real check passed. "Reported complete" is only the person's word.
+ * Top-level steps only, so a parent and its substeps are never double counted.
+ */
 export function progressCounts(steps: Step[]) {
   const top = steps.filter((s) => !s.parentStepId && s.status !== 'CANCELLED' && s.status !== 'NOT_APPLICABLE');
-  const done = top.filter((s) => DONE.includes(s.status)).length;
+  const verified = top.filter((s) => s.status === 'VERIFIED_COMPLETE').length;
+  const reported = top.filter((s) => s.status === 'REPORTED_COMPLETE').length;
   const checked = top.filter((s) => s.status === 'VERIFIED_COMPLETE' && s.verificationSource === 'INDEPENDENT').length;
-  return { done, total: top.length, checkedInSource: checked, label: `${done} of ${top.length} steps done` };
+  const label = `${verified} of ${top.length} verified complete${reported ? ` · ${reported} reported complete (awaiting check)` : ''}`;
+  return { done: verified, verified, reported, total: top.length, checkedInSource: checked, label };
 }
 
 export function isStepReady(step: Step, steps: Step[], project: Project): boolean {

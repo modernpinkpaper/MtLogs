@@ -435,3 +435,9 @@ details > summary { cursor: pointer; }
 .answerlist .choice { padding: .45rem .8rem; min-height: 40px; margin-bottom: .3rem; }
 .answerlist legend { margin-bottom: .35rem; }
 @media (max-width: 700px) { nav[aria-label=Breadcrumb] { display: none; } .topbar label.row { flex: 1 1 auto; } }
+.signals { display: flex; gap: .4rem 1.25rem; flex-wrap: wrap; margin: .45rem 0 .2rem; font-size: var(--fs-small); color: var(--muted); }
+.signals strong { color: var(--text); font-weight: 650; }
+.why { margin: .35rem 0 .5rem; color: var(--text-2); }
+.mrow { padding: .8rem 1rem; border-top: 1px solid var(--border); }
+.mrow:first-child { border-top: 0; }
+.mrow .t { font-weight: 650; }

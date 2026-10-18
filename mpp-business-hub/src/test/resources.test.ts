@@ -45,7 +45,7 @@ describe('D. resources, journal, audit', () => {
     hub.setApprovedVersion(U.dalia, 'r-seo-a', 'rev 42');
     expect(r.version).toBe('rev 42');
     expect(r.suggestedVersion).toBeNull();
-    const aud = hub.getAudit(U.dalia).filter((a) => a.entityId === 'r-seo-a' && a.action === 'SET_APPROVED_VERSION');
+    const aud = hub.getAudit(U.dalia).filter((a) => a.entityId === 'r-seo-a' && a.action === 'APPROVE_RESOURCE_VERSION');
     expect(aud).toHaveLength(2);
     expect(aud[0].before).toMatchObject({ approvedVersion: 'rev 41' });
   });

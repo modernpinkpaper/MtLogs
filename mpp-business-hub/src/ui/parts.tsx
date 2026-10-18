@@ -51,7 +51,6 @@ export function ResourceCard({ resource, links }: { resource: Resource; links: (
   const act = useAct();
   const [viewer, setViewer] = useState(false);
   const cs = resource.checklistSummary;
-  const canApprove = me.role === 'OWNER' || links.some((l) => hub.listProjects(uid).some((p) => p.id === l.projectId && p.memberUids.includes(uid)));
   return (
     <div className="card">
       <div className="row between">
@@ -72,13 +71,10 @@ export function ResourceCard({ resource, links }: { resource: Resource; links: (
       {cs && <div className="small card flat" style={{ marginTop: 6 }}><strong>{cs.yes} of {cs.total} marked “Yes”</strong>{cs.fix ? `, ${cs.fix} marked Fix` : ''}, {cs.blank} empty <span className="muted">(from: {cs.sourceNote}). A checked box does not prove the listing is live.</span></div>}
       {resource.notes && <p className="small muted">{resource.notes}</p>}
       {resource.suggestedVersion && (
-        <div className="card warn small" style={{ marginTop: 6 }}><strong>A newer version was found: {resource.suggestedVersion.version}.</strong> {resource.suggestedVersion.note}
-          {canApprove && <div className="row" style={{ marginTop: 6 }}><button onClick={() => act(() => hub.setApprovedVersion(uid, resource.id, resource.suggestedVersion!.version), 'Approved version set')}>Use {resource.suggestedVersion.version} as the approved one</button>
-            <button onClick={() => act(() => hub.keepApprovedDismissSuggestion(uid, resource.id), 'Kept current version')}>Keep the old one</button></div>}</div>
+        <div className="card warn small" style={{ marginTop: 6 }}><strong>A newer version was found: {resource.suggestedVersion.version}.</strong> {resource.suggestedVersion.note} It is not approved.
+          {me.role === 'OWNER' && <div className="row" style={{ marginTop: 6 }}><button onClick={() => act(() => hub.keepApprovedDismissSuggestion(uid, resource.id), 'Kept current version')}>Keep the old one</button></div>}</div>
       )}
-      {!resource.suggestedVersion && !resource.approvedVersion && resource.version && canApprove && links.length > 0 && resource.type !== 'SCRIPT' && (
-        <div style={{ marginTop: 6 }}><button onClick={() => act(() => hub.setApprovedVersion(uid, resource.id, resource.version!), 'Approved version set')}>Use {resource.version} as the approved one</button></div>
-      )}
+      {links.length > 0 && <div className="row" style={{ marginTop: 6 }}><VersionActions resource={resource} /></div>}
       {links.filter((l) => l.associationState === 'SUGGESTED').map((l) => (
         <div key={l.id} className="card violet small" style={{ marginTop: 6 }}><strong>The AI thinks:</strong> {l.role.replace(/_/g, ' ').toLowerCase()} for “{l.stepTitle}”. {l.explanation}
           <div className="row" style={{ marginTop: 6 }}><button className="primary" onClick={() => act(() => hub.reviewResourceLink(uid, l.id, 'CONFIRM'), 'Linked to step')}>Add to this step</button><button onClick={() => act(() => hub.reviewResourceLink(uid, l.id, 'NOT_RELATED'), 'Marked not related')}>Not related</button></div></div>
@@ -101,15 +97,68 @@ const TYPE_LABEL: Record<string, string> = {
   IMAGE_FOLDER: 'Image folder', IMAGE_ASSET: 'Images', NETWORK_SHARE: 'Shared folder', DRIVE_FOLDER: 'Folder', WINDOWS_FILE_PATH: 'File on a company computer', ARCHIVE: 'Archive',
 };
 
+/** The three different file-version actions, with plain words. Only Dalia's is official. */
+export function VersionActions({ resource, siblings = [], compact }: { resource: Resource; siblings?: Resource[]; compact?: boolean }) {
+  const { hub, uid, me } = useMe();
+  const act = useAct();
+  const [confirm, setConfirm] = useState(false);
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [replaces, setReplaces] = useState('');
+  const ap = resourceApproval(resource, hub.ownerUids());
+  const owner = me.role === 'OWNER';
+  const version = resource.suggestedVersion?.version ?? resource.version ?? 'current';
+  const canSubmit = !owner && hub.listProjects(uid).some((p) => p.memberUids.includes(uid));
+  const mineNow = hub.workingVersionFor(uid, resource.id) === (resource.version ?? 'current');
+  const isOfficial = ap?.state === 'APPROVED';
+  const pendingMine = resource.pendingApproval?.requestedByUid === uid;
+  const needsApproval = !isOfficial && !!resource.version && !['SCRIPT', 'SOURCE_REPOSITORY'].includes(resource.type) && ap?.state !== 'SUPERSEDED';
+  const unrecorded = ap?.state === 'UNRECORDED';
+  return (
+    <>
+      {!compact && ap?.state !== 'SUPERSEDED' && !!resource.version && !['SCRIPT', 'SOURCE_REPOSITORY'].includes(resource.type) && (
+        mineNow ? <span className="small muted" style={{ alignSelf: 'center' }}>✓ You are using this one</span>
+          : <button className="quiet" onClick={() => act(() => hub.selectWorkingVersion(uid, resource.id, resource.version ?? undefined), 'Saved. You are using this one. It is not an approval.')} title="Your own choice. It does not approve anything.">Use for my work</button>
+      )}
+      {needsApproval && canSubmit && !pendingMine && <button className="quiet" onClick={() => setSubmitting(true)}>Submit for approval</button>}
+      {pendingMine && <span className="small muted" style={{ alignSelf: 'center' }}>You asked Dalia to approve this</span>}
+      {owner && (needsApproval || unrecorded || resource.pendingApproval) && <button onClick={() => setConfirm(true)}>Approve version for team use</button>}
+      {owner && resource.pendingApproval && <button className="quiet" onClick={() => act(() => hub.declineApproval(uid, resource.id, null), 'Not approved. They were told.')}>Don’t approve</button>}
+      {submitting && (
+        <Modal title="Submit for approval" onClose={() => setSubmitting(false)}>
+          <div className="stack">
+            <p style={{ margin: 0 }}>This asks Dalia to approve <strong>{resource.label}</strong> ({version}) as the official version. It does not approve anything. You can keep working with it in the meantime.</p>
+            <div><label htmlFor={`sa-${resource.id}`}>Anything Dalia should know? (optional)</label><textarea id={`sa-${resource.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: I checked all 154 rows. This is the one with my edits." /></div>
+            <div className="row"><button className="primary" onClick={async () => { const r = await act(() => hub.submitForApproval(uid, resource.id, { version, note, idempotencyKey: `sa-${resource.id}-${version}-${uid}` }), 'Sent to Dalia. Nothing is approved yet.'); if (r) setSubmitting(false); }}>Send to Dalia</button><button className="quiet" onClick={() => setSubmitting(false)}>Cancel</button></div>
+          </div>
+        </Modal>
+      )}
+      {confirm && (
+        <Modal title="Approve version for team use" onClose={() => setConfirm(false)}>
+          <div className="stack">
+            <p style={{ margin: 0 }}>Make <strong>{version}</strong> of <strong>{resource.label}</strong> the official version for the whole team? The history records who approved it, when, and what it replaced.</p>
+            {resource.pendingApproval && <p className="small muted" style={{ margin: 0 }}>{hub.userName(resource.pendingApproval.requestedByUid)} asked for this{resource.pendingApproval.note ? `: “${resource.pendingApproval.note}”` : ''}.</p>}
+            {siblings.filter((x) => x.id !== resource.id).length > 0 && (
+              <div><label htmlFor={`rp-${resource.id}`}>Does this replace another copy? (optional)</label>
+                <select id={`rp-${resource.id}`} value={replaces} onChange={(e) => setReplaces(e.target.value)}><option value="">No, keep the other copies as they are</option>{siblings.filter((x) => x.id !== resource.id).map((x) => <option key={x.id} value={x.id}>Yes, replace “{x.label}”</option>)}</select></div>
+            )}
+            <div className="row"><button className="primary" onClick={async () => { const r = await act(() => hub.approveVersion(uid, resource.id, version, { supersedesResourceId: replaces || null }), 'Approved. This is now the version to use.'); if (r) setConfirm(false); }}>Approve for the team</button><button className="quiet" onClick={() => setConfirm(false)}>Cancel</button></div>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 /** One resource, with a button that really does something. No inert controls and no invented links. */
-export function StepResourceRow({ resource, role, roleLabel, suggested, groupUnapproved }: { resource: Resource; role: string; roleLabel: string; suggested?: boolean; groupUnapproved?: boolean }) {
+export function StepResourceRow({ resource, role, roleLabel, suggested, siblings }: { resource: Resource; role: string; roleLabel: string; suggested?: boolean; siblings?: Resource[] }) {
   const { hub, uid, me } = useMe();
   const act = useAct();
   const [viewer, setViewer] = useState(false);
   const [where, setWhere] = useState(false);
   const [fix, setFix] = useState(false);
   const [loc, setLoc] = useState('');
-  const ap = resourceApproval(resource);
+  const ap = resourceApproval(resource, hub.ownerUids());
   const canEdit = me.role === 'OWNER' || hub.listProjects(uid).some((p) => p.memberUids.includes(uid));
   const isScript = resource.type === 'SCRIPT';
   const isFolder = ['IMAGE_FOLDER', 'DRIVE_FOLDER', 'NETWORK_SHARE'].includes(resource.type);
@@ -118,6 +167,7 @@ export function StepResourceRow({ resource, role, roleLabel, suggested, groupUna
   const hasPath = acts.copyPath;
   const nothing = acts.unknown;
   const openLabel = OPEN_LABEL[role] ?? (isScript ? 'Open source' : isFolder ? 'Open folder' : 'Open file');
+  const unverifiedLink = !!resource.canonicalUrl && resource.linkState !== 'VERIFIED';
   return (
     <div className="frow">
       <div className="ft">
@@ -125,15 +175,15 @@ export function StepResourceRow({ resource, role, roleLabel, suggested, groupUna
         {ap && <span className={`vstate ${ap.tone}`} title={ap.hint}>{ap.label}</span>}
       </div>
       <div className="fs">{TYPE_LABEL[resource.type] ?? 'File'}{resource.purpose ? ` · ${resource.purpose}` : ''}</div>
-      <div className="fs">{roleLabel} for this step{resource.checklistSummary ? ` · ${resource.checklistSummary.yes} of ${resource.checklistSummary.total} marked “Yes”` : ''}</div>
+      <div className="fs">{roleLabel} for this step{resource.checklistSummary ? ` · ${resource.checklistSummary.yes} of ${resource.checklistSummary.total} marked “Yes”` : ''}{unverifiedLink ? ' · The link has not been checked' : ''}</div>
       <div className="fa">
-        {hasUrl && <button className={role === 'INPUT' || role === 'INSTRUCTIONS' ? '' : ''} onClick={() => setViewer(true)}>{openLabel}</button>}
+        {hasUrl && <button onClick={() => setViewer(true)}>{openLabel}</button>}
         {hasPath && <Copy text={resource.normalizedPath!} label={isFolder ? 'Copy folder path' : 'Copy path'} />}
         {hasPath && <button className="quiet" onClick={() => setWhere(!where)} aria-expanded={where}>Where to find it</button>}
         {isScript && <button className="quiet" onClick={() => setWhere(!where)} aria-expanded={where}>View installation details</button>}
         {nothing && !isScript && <span className="small" style={{ color: 'var(--warn)' }}>Location not confirmed</span>}
         {(nothing || (isScript && !hasUrl)) && canEdit && <button className="quiet" onClick={() => setFix(!fix)}>Add the location</button>}
-        {groupUnapproved && canEdit && resource.version && !resource.approvedVersion && <button onClick={() => act(() => hub.setApprovedVersion(uid, resource.id, resource.version!), 'Approved. This is now the version to use.')}>Use this version</button>}
+        <VersionActions resource={resource} siblings={siblings} />
       </div>
       {where && (
         <div className="smallnote">
@@ -150,7 +200,7 @@ export function StepResourceRow({ resource, role, roleLabel, suggested, groupUna
           <span className="small muted">We save what you type. We do not check it or make a link out of it.</span>
         </div>
       )}
-      {viewer && <Modal title={resource.label} onClose={() => setViewer(false)}><div className="card violet">This is a practice preview. In the real app this opens your Google Drive file (<code>{resource.canonicalUrl}</code>). This practice copy never connects to Google.</div></Modal>}
+      {viewer && <Modal title={resource.label} onClose={() => setViewer(false)}><div className="card violet"><strong>SIMULATED PREVIEW.</strong> This is not a real Google Drive file. In a real setup this would open <code>{resource.canonicalUrl}</code>. This practice copy never connects to Google.</div></Modal>}
       <span hidden>{role}</span>
     </div>
   );

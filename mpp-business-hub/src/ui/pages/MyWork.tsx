@@ -4,10 +4,9 @@ import { useMe } from '../hubContext';
 import { LogTaskDialog } from '../dialogs';
 import { ProjectInfo } from '../projectRef';
 import { shortProjectName } from '../../domain/reviewKinds';
-import { Chip, Empty, StepState } from '../common';
+import { Chip, Empty, StepState, statusLabel } from '../common';
 import { formatDate, formatDateTime } from '../../domain/time';
-import { notReadyReason, pauseLine } from '../../domain/projectStatus';
-import { TERMINAL } from '../../server/hub';
+import { pauseLine } from '../../domain/projectStatus';
 import type { Project, Step } from '../../domain/types';
 
 /**
@@ -24,18 +23,12 @@ export function MyWork() {
   const area = hub.areaOn(uid);
   const stepsOf = (p: Project) => hub.projectSteps(uid, p.id);
 
-  type Row = { p: Project; s: Step; why: string | null };
-  const mine: Row[] = [];
-  for (const p of projects) {
-    const steps = stepsOf(p);
-    for (const s of steps.filter((x) => !x.parentStepId && x.assignedUids.includes(uid) && !TERMINAL.includes(x.status) && x.status !== 'REPORTED_COMPLETE')) {
-      mine.push({ p, s, why: p.pause?.isPaused ? null : notReadyReason(s, steps, p) });
-    }
-  }
-  const active = mine.filter((r) => !r.p.pause?.isPaused);
-  const byDue = (a: Row, b: Row) => (a.s.dueAt ?? '9').localeCompare(b.s.dueAt ?? '9') || a.p.key.localeCompare(b.p.key);
-  const ready = active.filter((r) => !r.why).sort(byDue);
-  const waiting = active.filter((r) => r.why).sort(byDue);
+  // One place decides what is "next" and why (hub.myNextActions). Paused, blocked, waiting, awaiting-check,
+  // dependency-locked and limited-test-gated steps are held back and never shown as ordinary work.
+  const na = hub.myNextActions(uid);
+  type Row = { p: Project; s: Step; why: string | null; kind: 'CONFIRM_PROGRESS' | 'WORK'; cardId: string | null; reason: string };
+  const ready: Row[] = na.ready.map((r) => ({ p: r.project, s: r.step, why: null, kind: r.kind, cardId: r.cardId, reason: r.why }));
+  const waiting: Row[] = na.held.filter((h) => h.code !== 'PAUSED').map((h) => ({ p: h.project, s: h.step, why: h.reason, kind: 'WORK' as const, cardId: null, reason: h.reason }));
   const pausedProjects = projects.filter((p) => p.pause?.isPaused && !p.closedAt);
   const recent = projects.flatMap((p) => stepsOf(p).filter((s) => s.assignedUids.includes(uid) && ['REPORTED_COMPLETE', 'VERIFIED_COMPLETE'].includes(s.status) && !s.parentStepId).map((s) => ({ p, s })))
     .sort((a, b) => (b.s.lastConfirmedAt ?? '').localeCompare(a.s.lastConfirmedAt ?? '')).slice(0, 5);
@@ -79,14 +72,33 @@ export function MyWork() {
       {hero && (
         <section aria-labelledby="first" className="hero">
           <div className="eyebrow" id="first">Do this next</div>
-          <h2>{hero.s.title}</h2>
-          <div className="muted small">{hero.p.key} · {shortProjectName(hero.p)}<ProjectInfo projectId={hero.p.id} label={hero.p.key} />{hero.s.dueAt ? ` · Due ${formatDate(hero.s.dueAt)}` : ''}</div>
-          {hero.s.instructions && <p className="clamp">{hero.s.instructions}</p>}
-          <div className="row">
-            <Link to={`/projects/${hero.p.id}/steps/${hero.s.id}`}><button className="primary big">Open this step</button></Link>
-            <StepState status={hero.s.status} hold={!!hero.s.onHold} />
-            {hero.s.observedLevel !== 'NO_EVIDENCE' && hero.s.observedReview === 'PENDING_EMPLOYEE' && <span className="small muted">We saw computer activity. Please check it when you can.</span>}
-          </div>
+          {hero.kind === 'CONFIRM_PROGRESS' ? (
+            <>
+              <h2>Confirm where “{hero.s.title}” stands</h2>
+              <div className="muted small">{hero.p.key} · {shortProjectName(hero.p)}<ProjectInfo projectId={hero.p.id} label={hero.p.key} />{hero.s.dueAt ? ` · Due ${formatDate(hero.s.dueAt)}` : ''}</div>
+              <div className="signals" aria-label="What we know">
+                <span>Tracker status: <strong>Not started</strong></span>
+                <span>Activity detected: <strong>Needs confirmation</strong></span>
+              </div>
+              <p className="why"><strong>Why this is next:</strong> {hero.reason}</p>
+              <div className="row">
+                <Link to={hero.cardId ? `/review?card=${hero.cardId}` : `/projects/${hero.p.id}/steps/${hero.s.id}`}><button className="primary big">Confirm progress</button></Link>
+                <Link to={`/projects/${hero.p.id}/steps/${hero.s.id}`}><button className="quiet">Open the step</button></Link>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>{hero.s.title}</h2>
+              <div className="muted small">{hero.p.key} · {shortProjectName(hero.p)}<ProjectInfo projectId={hero.p.id} label={hero.p.key} />{hero.s.dueAt ? ` · Due ${formatDate(hero.s.dueAt)}` : ''}</div>
+              <div className="signals" aria-label="What we know">
+                <span>Tracker status: <strong>{statusLabel(hero.s.status)}{hero.s.onHold ? ' · on hold' : ''}</strong></span>
+                {hero.s.observedLevel !== 'NO_EVIDENCE' && hero.s.observedReview === 'PENDING_EMPLOYEE' && <span>Activity detected: <strong>Needs confirmation</strong></span>}
+              </div>
+              <p className="why"><strong>Why this is next:</strong> {hero.reason}</p>
+              {hero.s.instructions && <p className="clamp">{hero.s.instructions}</p>}
+              <div className="row"><Link to={`/projects/${hero.p.id}/steps/${hero.s.id}`}><button className="primary big">Open this step</button></Link></div>
+            </>
+          )}
         </section>
       )}
 
@@ -97,7 +109,7 @@ export function MyWork() {
             {[...groups.values()].map(({ p, rows }) => (
               <div key={p.id} className="lgroup">
                 <div className="lhead"><Link to={`/projects/${p.id}`}>{p.key} · {shortProjectName(p)}</Link><ProjectInfo projectId={p.id} label={p.key} /></div>
-                {rows.map(({ s }) => <StepLine key={s.id} p={p} s={s} />)}
+                {rows.map((r) => <StepLine key={r.s.id} p={p} s={r.s} extra={r.kind === 'CONFIRM_PROGRESS' ? 'Confirm progress' : undefined} />)}
               </div>
             ))}
           </div>

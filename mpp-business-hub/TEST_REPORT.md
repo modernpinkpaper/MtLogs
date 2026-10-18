@@ -28,8 +28,36 @@ $ npm test (verbose)
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > filters and search over the inbox work and count only what exists
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > Scenario: results tracker compares plan with what was measured and says it is not proof of cause
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > goals and sources are owner-editable; the source switch is pretend only
+ ✓ src/test/ux14.test.ts > 1. Review cards ask about the real outcome, not only whether the AI saw it > the Shopify test card asks a specific question and offers outcome answers
+ ✓ src/test/ux14.test.ts > 1. Review cards ask about the real outcome, not only whether the AI saw it > Erika reports a passed test: it is recorded as her report, the step is in progress (not done), and nothing is verified
+ ✓ src/test/ux14.test.ts > 1. Review cards ask about the real outcome, not only whether the AI saw it > a problem tells Dalia, with Erika’s own words
+ ✓ src/test/ux14.test.ts > 2. Partial progress never completes the project > “uploaded, haven’t seen the result” stays unverified and in progress, and the project cannot close
+ ✓ src/test/ux14.test.ts > 2. Partial progress never completes the project > 6. “Amazon accepted it” is only her report: no verification exists until a real check is recorded
+ ✓ src/test/ux14.test.ts > 2. Partial progress never completes the project > the answer rules are plain functions: a passed test is progress, a finished file is reported, a paused-project answer changes nothing
+ ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > wrong step: the activity moves to the right step, and the first guess stays in the history
+ ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > wrong person: the activity is kept, attribution is disputed, and Dalia is told someone else used that computer
+ ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > “I didn’t work on this” is never turned into “no work happened”
+ ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > a wrong-step fix cannot move work onto a project the person is not on
+ ✓ src/test/ux14.test.ts > 4. Two-way update requests, with “I need clarification” > Dalia asks, Erika answers “I need clarification” with a note, Dalia is notified in the app and it is in the journal
+ ✓ src/test/ux14.test.ts > 5. Bulk confirmation only says the activity is accurate > it never completes or verifies anything, and it refuses big or conflicting steps
+ ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > Step 3 shows copies of the SEO Master with no approved version, and “FINAL” in a name does not make one
+ ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > Dalia approves one copy, and it opens directly; Erika cannot, and the other copy stays unapproved
+ ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > 8. each kind of resource gets the right control: link, copy path, installation details, or “not confirmed”
+ ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > adding a location never invents a link: a path is saved as a path, a link stays “not checked yet”
+ ✓ src/test/ux14.test.ts > 11. One definition of “active projects” > Home and Projects use the same counts, and private projects are named separately
+ ✓ src/test/ux14.test.ts > 11. One definition of “active projects” > employees never see a private count, only their own team projects
+ ✓ src/test/ux14.test.ts > 2 (Home). Alerts are short, explain why, and keep technical detail behind “technical” > every alert has a title, a reason and one button; raw diagnostics are not in the title
+ ✓ src/test/ux14.test.ts > 2 (Home). Alerts are short, explain why, and keep technical detail behind “technical” > two or more employee answers become one “updates are ready” alert
+ ✓ src/test/ux14.test.ts > 12–13. Pause, timekeeping and private data survive the new cards > an answer about a paused project never resumes it
+ ✓ src/test/ux14.test.ts > 12–13. Pause, timekeeping and private data survive the new cards > clock in and out are never blocked by reviews, even when the AI is down
+ ✓ src/test/ux14.test.ts > 12–13. Pause, timekeeping and private data survive the new cards > employees cannot read the private project card or owner-only financial text in any new alert
+ ✓ src/test/ux14.test.ts > Project description card > people on the project can write what it is; people who are not on it cannot
+ ✓ src/test/ux14.test.ts > Log something I did (small tasks the computer did not see) > a small task is saved, shown to Dalia with who asked, and changes no status
+ ✓ src/test/ux14.test.ts > Log something I did (small tasks the computer did not see) > attached to a step it appears in that step’s history; double-send makes one entry
+ ✓ src/test/ux14.test.ts > Log something I did (small tasks the computer did not see) > it is paid work (clock in first), needs a name, and cannot be attached to someone else’s project
+ ✓ src/test/ux14.test.ts > 14. Print-team daily numbers and weekly owner analysis are still separate > weekly analysis is owner-only; the daily stats are the person’s own
  ✓ src/test/pause.test.ts > Pause and resume > Scenario 1: pause indefinitely, work leaves the active list but stays visible, resume keeps every bit of progress
- ✓ src/test/pause.test.ts > Pause and resume > P-012 keeps 2 of 4 steps done through a pause and resume
+ ✓ src/test/pause.test.ts > Pause and resume > P-012 keeps 2 of 4 verified complete through a pause and resume
  ✓ src/test/pause.test.ts > Pause and resume > Scenario 2: automatic resume on a chosen date happens once, notifies the owner and each assigned person once, and retries do nothing
  ✓ src/test/pause.test.ts > Pause and resume > a project that was never started goes back to Not started when it resumes
  ✓ src/test/pause.test.ts > Pause and resume > Scenario 3: reminder mode asks Dalia to decide once and the project stays paused until she decides
@@ -45,56 +73,46 @@ $ npm test (verbose)
  ✓ src/test/pause.test.ts > Pause and resume > a step can be put on hold without pausing the project; its status is kept
  ✓ src/test/pause.test.ts > Pause and resume > finished projects are never auto-resumed; reopening is explicit and audited; a paused project cannot be closed
  ✓ src/test/pause.test.ts > Pause and resume > paused projects stay searchable and journals show both pause and resume in plain sentences
- ✓ src/test/ux14.test.ts > 1. Review cards ask about the real outcome, not only whether the AI saw it > the Shopify test card asks a specific question and offers outcome answers
- ✓ src/test/ux14.test.ts > 1. Review cards ask about the real outcome, not only whether the AI saw it > Erika reports a passed test: it is recorded as her report, the step is in progress (not done), and nothing is verified
- ✓ src/test/ux14.test.ts > 1. Review cards ask about the real outcome, not only whether the AI saw it > a problem tells Dalia, with Erika’s own words
- ✓ src/test/ux14.test.ts > 2. Partial progress never completes the project > “uploaded, haven’t seen the result” stays unverified and in progress, and the project cannot close
- ✓ src/test/ux14.test.ts > 2. Partial progress never completes the project > 6. “Amazon accepted it” is only her report: no verification exists until a real check is recorded
- ✓ src/test/ux14.test.ts > 2. Partial progress never completes the project > the answer rules are plain functions: a passed test is progress, a finished file is reported, a paused-project answer changes nothing
- ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > wrong step: the activity moves to the right step, and the first guess stays in the history
- ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > wrong person: the activity is kept, attribution is disputed, and Dalia is told someone else used that computer
- ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > “I didn’t work on this” is never turned into “no work happened”
- ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > a wrong-step fix cannot move work onto a project the person is not on
- ✓ src/test/ux14.test.ts > 4. Two-way update requests, with “I need clarification” > Dalia asks, Erika answers “I need clarification” with a note, Dalia is notified in the app and it is in the journal
- ✓ src/test/ux14.test.ts > 5. Bulk confirmation only says the activity is accurate > it never completes or verifies anything, and it refuses big or conflicting steps
- ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > Step 3 shows copies of the SEO Master with no approved version, and “FINAL” in a name does not make one
- ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > Erika approves one copy, and it opens directly; the other stays unapproved
- ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > 8. each kind of resource gets the right control: link, copy path, installation details, or “not confirmed”
- ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > adding a location never invents a link: a path is saved as a path, a link stays “not checked yet”
- ✓ src/test/ux14.test.ts > 11. One definition of “active projects” > Home and Projects use the same counts, and private projects are named separately
- ✓ src/test/ux14.test.ts > 11. One definition of “active projects” > employees never see a private count, only their own team projects
- ✓ src/test/ux14.test.ts > 2 (Home). Alerts are short, explain why, and keep technical detail behind “technical” > every alert has a title, a reason and one button; raw diagnostics are not in the title
- ✓ src/test/ux14.test.ts > 2 (Home). Alerts are short, explain why, and keep technical detail behind “technical” > two or more employee answers become one “updates are ready” alert
- ✓ src/test/ux14.test.ts > 12–13. Pause, timekeeping and private data survive the new cards > an answer about a paused project never resumes it
- ✓ src/test/ux14.test.ts > 12–13. Pause, timekeeping and private data survive the new cards > clock in and out are never blocked by reviews, even when the AI is down
- ✓ src/test/ux14.test.ts > 12–13. Pause, timekeeping and private data survive the new cards > employees cannot read the private project card or owner-only financial text in any new alert
- ✓ src/test/ux14.test.ts > Project description card > people on the project can write what it is; people who are not on it cannot
- ✓ src/test/ux14.test.ts > Log something I did (small tasks the computer did not see) > a small task is saved, shown to Dalia with who asked, and changes no status
- ✓ src/test/ux14.test.ts > Log something I did (small tasks the computer did not see) > attached to a step it appears in that step’s history; double-send makes one entry
- ✓ src/test/ux14.test.ts > Log something I did (small tasks the computer did not see) > it is paid work (clock in first), needs a name, and cannot be attached to someone else’s project
- ✓ src/test/ux14.test.ts > 14. Print-team daily numbers and weekly owner analysis are still separate > weekly analysis is owner-only; the daily stats are the person’s own
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > the spec’s Shopify example: 200 × 5 ÷ 60 = 16.67 hours, $20/hour = $333.33 of freed time, NOT cash savings
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > low, base and high scenarios come from the stored inputs
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > revenue is not profit: without a margin it says so and shows no profit, no return
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > when the owner adds a margin the profit is recomputed from the stored numbers and the edit is versioned and audited
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > verified cash savings, running costs, return and payback use only real money and guard against dividing by zero
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > a missing baseline stops the number and says what is missing instead of guessing
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > confidence follows evidence quality: guesses are low, measured data is high
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > two ideas that improve the same output are never added together
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > blocks money and strategy words from worker-facing text
- ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > old public pages are not presented as new changes; dates are kept
- ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia → Erika → Dalia, with real notification, journal entry, response record and state changes
- ✓ src/test/requests.test.ts > B. owner update request round trip > double-send / network retry creates exactly one response and one notification
- ✓ src/test/requests.test.ts > B. owner update request round trip > "Completed" is employee-reported only: never becomes VERIFIED, and the notification says so
- ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia can acknowledge and follow up without changing the employee’s historical answer
- ✓ src/test/requests.test.ts > B. owner update request round trip > an employee can proactively send an update to Dalia without any request
- ✓ src/test/requests.test.ts > B. owner update request round trip > other employees cannot read, intercept or answer a request not addressed to them
- ✓ src/test/requests.test.ts > B. owner update request round trip > recipients must be authorized for the project
- ✓ src/test/requests.test.ts > B. owner update request round trip > a request can be answered at clock-out or after next clock-in, and the card survives skipping
+ ✓ src/test/workflow15.test.ts > 1. File versions: choosing, submitting and approving are three different things > Erika can choose a working draft and ask for approval, but cannot approve; Dalia can; an audit record is created
+ ✓ src/test/workflow15.test.ts > 1. File versions: choosing, submitting and approving are three different things > a new approval supersedes the old one and keeps both in the history; “FINAL” in a name never approves anything
+ ✓ src/test/workflow15.test.ts > 1. File versions: choosing, submitting and approving are three different things > Erika cannot approve through bulk actions, other entry points, or other people’s files
+ ✓ src/test/workflow15.test.ts > 1. File versions: choosing, submitting and approving are three different things > SIMULATED TEST ONLY: if someone edits the stored data directly, an approval with no record is not trusted
+ ✓ src/test/workflow15.test.ts > 2. Reported complete is not verified complete > Erika reports P-012 Step 3 finished: verified count stays 2, reported count becomes 1, until a real check passes
+ ✓ src/test/workflow15.test.ts > 2. Reported complete is not verified complete > a routine step: the person reports, Dalia signs off (or allows the person to), and the counters say which
+ ✓ src/test/workflow15.test.ts > 2. Reported complete is not verified complete > checked boxes, AI observations and uploads cannot move the verified count
+ ✓ src/test/workflow15.test.ts > 3. An Amazon upload stays unverified until it is genuinely confirmed (and the demo never contacts Amazon) > upload attempts and “Amazon accepted it” are reports only; the project cannot close; only a recorded check verifies
+ ✓ src/test/workflow15.test.ts > 3. An Amazon upload stays unverified until it is genuinely confirmed (and the demo never contacts Amazon) > the app contains no code that calls Amazon or any outside service
+ ✓ src/test/workflow15.test.ts > 4. A stale “Not started” tracker plus detected activity becomes a clear confirmation task > My Work asks Erika to confirm where it stands, and explains why; it does not tell her to start over
+ ✓ src/test/workflow15.test.ts > 11. Paused, blocked, awaiting-check, dependency-locked and limited-test-gated steps are never “Do this next” > each kind of held-back step is excluded, and the reason is given
+ ✓ src/test/workflow15.test.ts > 11. Paused, blocked, awaiting-check, dependency-locked and limited-test-gated steps are never “Do this next” > a limited test that reached its limit holds back its step until Dalia approves more
+ ✓ src/test/workflow15.test.ts > 11. Paused, blocked, awaiting-check, dependency-locked and limited-test-gated steps are never “Do this next” > ordering: Dalia’s requests first, then confirmation tasks, then due dates, then priority
+ ✓ src/test/workflow15.test.ts > 5. Pausing, scheduled resuming, reminders, date changes and capped pilots behave distinctly and keep everything > indefinite, automatic, reminder-only, edited and cancelled schedules; completed work, files, journal and notes survive
+ ✓ src/test/workflow15.test.ts > 5. Pausing, scheduled resuming, reminders, date changes and capped pilots behave distinctly and keep everything > a capped pilot is not widened by a date or an AI guess: expanding needs Dalia
+ ✓ src/test/workflow15.test.ts > 5. Pausing, scheduled resuming, reminders, date changes and capped pilots behave distinctly and keep everything > employees are told what a pause means: that it is paused, why, what is still allowed, and what happens next
+ ✓ src/test/workflow15.test.ts > 6. An owner request reaches Erika, survives navigation, and Dalia gets one reply with the right link > Requested → Seen → Responded, overdue when late, no duplicates, and it survives a reload
+ ✓ src/test/workflow15.test.ts > 6. An owner request reaches Erika, survives navigation, and Dalia gets one reply with the right link > asking the same thing twice does not create a second card or notification; a reply and an unsolicited update are told apart
+ ✓ src/test/workflow15.test.ts > 12. Repeated clicks and reloads never duplicate requests, approvals, resumes or journal events > each of them is safe to repeat, even across a reload
+ ✓ src/test/workflow15.test.ts > 7. SIMULATED TEST ONLY: the AI and review flow never blocks a clock action (no live clock-in is touched) > with the AI, the log feed, and a full review queue all down, clocking out and in still works and is recorded
+ ✓ src/test/workflow15.test.ts > 8. Resource actions are honest about what kind of location each file has > only a verified link can be opened; paths are copied; scripts show where they live; unknowns say so
+ ✓ src/test/workflow15.test.ts > 9. Private projects and financials stay out of reach for employees by every ordinary route > lists, search, filters, direct record access, journals, files, alerts and the new next-step and card methods
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > select a working version: owner yes, person on the project yes, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > submit a version for approval: owner yes, person on the project yes, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > approve a version for team use: owner yes, person on the project no, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > pause a project: owner yes, person on the project no, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > ask for an update: owner yes, person on the project no, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > report a step finished: owner yes, person on the project yes, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > mark a step verified complete: owner yes, person on the project no, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > record a check in the source system: owner yes, person on the project no, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > approve the next batch of a limited test: owner yes, person on the project no, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > edit a project description: owner yes, person on the project yes, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > allow self sign-off on a routine step: owner yes, person on the project no, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > open the owner dashboard: owner yes, person on the project no, person not on it no
+ ✓ src/test/workflow15.test.ts > Role/action matrix (also documented in docs/role-action-matrix.md) > read the private project: owner yes, person on the project no, person not on it no
+ ✓ src/test/workflow15.test.ts > 13. Existing features still work > daily reviews, print statistics, AI recommendations, checklists, notifications and history all respond
  ✓ src/test/evidence.test.ts > C. evidence vs official status > observed Shopify “Make 1 draft” raises a finding, never overwrites official Not Started or marks Done
  ✓ src/test/evidence.test.ts > C. evidence vs official status > a draft click ≠ published listing: verifier says not found → still not complete; confirmation by employee does not change status
  ✓ src/test/evidence.test.ts > C. evidence vs official status > high-impact completion needs independent verification or explicit owner approval; employees can never mark it verified
- ✓ src/test/evidence.test.ts > C. evidence vs official status > routine steps may be employee-confirmed; invalid transitions are rejected and every transition is audited
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > routine steps: the person REPORTS it finished; only Dalia (or a designated sign-off) makes it verified; transitions are audited
  ✓ src/test/evidence.test.ts > C. evidence vs official status > a blocker needs a reason and the last active state is kept as history
  ✓ src/test/evidence.test.ts > C. evidence vs official status > no logs / partial logs never conclude “did no work”
  ✓ src/test/evidence.test.ts > C. evidence vs official status > InDesign save does not close anything and surfaces as unmatched work to classify
@@ -110,6 +128,24 @@ $ npm test (verbose)
  ✓ src/test/evidence.test.ts > G. operational quality > live adapter is disabled and makes no call; AI outage leaves clock + requests working
  ✓ src/test/evidence.test.ts > G. operational quality > optional analysis honours the budget circuit-breaker but required review keeps working
  ✓ src/test/evidence.test.ts > G. operational quality > the intake trace connects source → event → episode → finding → card → decision → journal
+ ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia → Erika → Dalia, with real notification, journal entry, response record and state changes
+ ✓ src/test/requests.test.ts > B. owner update request round trip > double-send / network retry creates exactly one response and one notification
+ ✓ src/test/requests.test.ts > B. owner update request round trip > "Completed" is employee-reported only: never becomes VERIFIED, and the notification says so
+ ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia can acknowledge and follow up without changing the employee’s historical answer
+ ✓ src/test/requests.test.ts > B. owner update request round trip > an employee can proactively send an update to Dalia without any request
+ ✓ src/test/requests.test.ts > B. owner update request round trip > other employees cannot read, intercept or answer a request not addressed to them
+ ✓ src/test/requests.test.ts > B. owner update request round trip > recipients must be authorized for the project
+ ✓ src/test/requests.test.ts > B. owner update request round trip > a request can be answered at clock-out or after next clock-in, and the card survives skipping
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > the spec’s Shopify example: 200 × 5 ÷ 60 = 16.67 hours, $20/hour = $333.33 of freed time, NOT cash savings
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > low, base and high scenarios come from the stored inputs
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > revenue is not profit: without a margin it says so and shows no profit, no return
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > when the owner adds a margin the profit is recomputed from the stored numbers and the edit is versioned and audited
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > verified cash savings, running costs, return and payback use only real money and guard against dividing by zero
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > a missing baseline stops the number and says what is missing instead of guessing
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > confidence follows evidence quality: guesses are low, measured data is high
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > two ideas that improve the same output are never added together
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > blocks money and strategy words from worker-facing text
+ ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > old public pages are not presented as new changes; dates are kept
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > Dalia sees owner-private and all company projects
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > no employee can discover the private project: list, search, counts, notifications, journal, resources, AI retrieval, direct id
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > a guessed id and a non-existent id produce the identical generic error (no data-bearing message)
@@ -119,6 +155,14 @@ $ npm test (verbose)
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > employees cannot forge responses, self-authorize, or mark high-risk results externally verified
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > employees cannot read other employees’ cards, notifications, decisions, print stats or the roster
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > inactive users cannot act at all
+ ✓ src/test/print.test.ts > F. print analytics > printer problem snapshots collapse to state episodes (hundreds of snapshots ≠ hundreds of incidents)
+ ✓ src/test/print.test.ts > F. print analytics > print staff see their own daily stats; stats never block clock-out; missing data is flagged not zeroed
+ ✓ src/test/print.test.ts > F. print analytics > weekly report is owner-only and states coverage, caveats, and no cross-person ranking
+ ✓ src/test/print.test.ts > F. print analytics > four-state classification treats missing coverage separately from NEITHER_OBSERVED
+ ✓ src/test/print.test.ts > F. print analytics > Carolina’s output follows her actual assignment for the day without losing authorized access
+ ✓ src/test/print.test.ts > F. print analytics > print-only users receive no daily AI review card even when their device has activity
+ ✓ src/test/print.test.ts > F. print analytics > opportunities distinguish expected capacity from realized value and approval creates a measured project
+ ✓ src/test/print.test.ts > time handling (America/Chicago, DST-aware) > converts local wall time to UTC across DST and displays in CT
  ✓ src/test/resources.test.ts > D. resources, journal, audit > one canonical resource links to many steps with different roles
  ✓ src/test/resources.test.ts > D. resources, journal, audit > provider ID overrides filenames: two similarly named SEO sheets stay distinct with different counts
  ✓ src/test/resources.test.ts > D. resources, journal, audit > local/network paths and unknown links are not invented as clickable cloud links
@@ -128,27 +172,19 @@ $ npm test (verbose)
  ✓ src/test/resources.test.ts > D. resources, journal, audit > audit shows before/after, actor, time and reason for transitions
  ✓ src/test/resources.test.ts > D. resources, journal, audit > employee resource lists contain no unauthorized/private items
  ✓ src/test/resources.test.ts > D. resources, journal, audit > projects keep their step hierarchy; employees can add substeps only under their own steps; progress is explicit counts
- ✓ src/test/print.test.ts > F. print analytics > printer problem snapshots collapse to state episodes (hundreds of snapshots ≠ hundreds of incidents)
- ✓ src/test/print.test.ts > F. print analytics > print staff see their own daily stats; stats never block clock-out; missing data is flagged not zeroed
- ✓ src/test/print.test.ts > F. print analytics > weekly report is owner-only and states coverage, caveats, and no cross-person ranking
- ✓ src/test/print.test.ts > F. print analytics > four-state classification treats missing coverage separately from NEITHER_OBSERVED
- ✓ src/test/print.test.ts > F. print analytics > Carolina’s output follows her actual assignment for the day without losing authorized access
- ✓ src/test/print.test.ts > F. print analytics > print-only users receive no daily AI review card even when their device has activity
- ✓ src/test/print.test.ts > F. print analytics > opportunities distinguish expected capacity from realized value and approval creates a measured project
- ✓ src/test/print.test.ts > time handling (America/Chicago, DST-aware) > converts local wall time to UTC across DST and displays in CT
  ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > Scenario 4: 19 verified + 1 unresolved upload shows 19/20, not 20/20; the 20th verification reaches the target and asks Dalia
  ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > checkbox, upload and “tried” never count as verified; employees cannot verify or go outside the list
  ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > only Dalia can approve the next batch, only after the target, and the earlier test stays in the history
  ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > auto-pause happens only when Dalia chose it ahead of time, and never publishes or expands anything
  ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > setup checks its numbers and is safe to click twice
+ ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > AI finding text, notifications and messages read easily
+ ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > error messages are short and plain
+ ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > names of steps are shown in quotes in notifications
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > skipping logs nothing, keeps the item, and the owner can still see it with the reason
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > “everyday work” is saved to the person’s own list and shown to the owner, without touching any project
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > “maybe a new project” tells the owner; “add to a step” links it to the project
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > the owner can send a skipped item back; the earlier decision stays in history; only the owner can see this page
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > “not me” also stays visible to the owner
- ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > AI finding text, notifications and messages read easily
- ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > error messages are short and plain
- ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > names of steps are shown in quotes in notifications
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > clock-in commits even with pending reviews, AI outage and log outage; reviews are only offered AFTER commit
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > clock-out works immediately with pending cards, and leaves them untouched
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > clock-out is unaffected by AI outage, missing logs and missing print stats
@@ -159,14 +195,13 @@ $ npm test (verbose)
  ✓ src/test/search.test.ts > Search that explains itself > pausing does not remove anything from search
  ✓ src/test/search.test.ts > Search that explains itself > results are scoped: Arantza sees none of Erika’s projects, nobody sees private items, only the owner sees recommendations and people
 
- Test Files  14 passed (14)
-      Tests  149 passed (149)
-   Start at  04:35:46
-   Duration  2.86s (transform 775ms, setup 0ms, collect 2.71s, tests 1.79s, environment 4ms, prepare 968ms)
+ Test Files  15 passed (15)
+      Tests  185 passed (185)
+   Start at  15:43:00
+   Duration  3.50s (transform 1.39s, setup 0ms, collect 3.50s, tests 2.34s, environment 3ms, prepare 1.00s)
 
 
-$ node e2e/v11.mjs   → NO ERRORS, ALL CHECKS PASSED
-  (outcome answers, wrong-step fix panel, Amazon stays unverified, step files with real actions and approval labels, project info card, log something I did, counts agree, short Home alerts, phone order, one primary button per screen)
-$ node e2e/smoke.mjs → NO ERRORS, ALL CHECKS PASSED
-  (Dalia asks, Erika answers, Dalia is notified and the link opens the exact step, both are in the journal, 15 older screens open, private project denied)
+$ node e2e/workflow15.mjs → NO ERRORS, ALL CHECKS PASSED (fresh state; 40+ visible checks: confirmation task, desktop 1280 and 1024, choose/submit/approve, counters, phone approvals with confirmation, request survival, private denial)
+$ node e2e/v11.mjs        → NO ERRORS, ALL CHECKS PASSED
+$ node e2e/smoke.mjs      → NO ERRORS, ALL CHECKS PASSED
 ```

@@ -64,7 +64,7 @@ await p.locator('input[aria-label="Search"]').fill('FBA_TY001'); await p.waitFor
 await p.fill('input[aria-label="Search"]', '');
 await as('Erika'); await go('/home');
 await p.waitForSelector('text=Do this next');
-ok(await p.locator('button:has-text("Open this step")').count() === 1, 'My Work has exactly one big "Open this step" button');
+ok(await p.locator('.hero button.primary').count() === 1, 'My Work has exactly one big primary button');
 ok(await p.locator('.lline').count() >= 3, 'other steps are compact rows');
 await go('/review'); await p.waitForSelector('text=What happened?');
 const yes = p.getByRole('button', { name: 'Send answer' }).first();
@@ -127,10 +127,13 @@ ok(await p.locator('.frow').count() >= 4, 'files for the step are listed with ac
 ok(await p.locator('text=opens from All files').count() === 0, 'no "opens from All files" detours');
 ok(await p.locator('text=Draft — Still being edited').count() > 0 && await p.locator('text=No approved version yet').count() > 0, 'draft and unapproved copies are labelled');
 ok(await p.locator('text=none is approved yet').count() > 0, 'says plainly that no copy is approved');
-await p.locator('.frow:has-text("copy B") button:has-text("Use this version")').click(); await p.waitForTimeout(400);
-ok(await p.locator('.frow:has-text("copy B") >> text=Approved — Use this version').count() > 0, 'approved copy is marked Approved');
+ok(await p.locator('button:has-text("Approve version for team use")').count() === 0, 'Erika cannot approve a version (only choose or submit)');
+await as('Dalia (owner)'); await go('/projects/prj-012/steps/s-012-3'); await p.waitForSelector('.frow');
+await p.locator('.frow:has-text("copy B") button:has-text("Approve version for team use")').click(); await p.getByRole('button', { name: 'Approve for the team' }).click(); await p.waitForTimeout(400);
+await as('Erika'); await go('/projects/prj-012/steps/s-012-3'); await p.waitForSelector('.frow');
+ok(await p.locator('.frow:has-text("copy B") >> text=Approved — Use this version').count() > 0, 'the approved copy is marked Approved (Dalia approved it)');
 await p.locator('.frow:has-text("copy B") button:has-text("Open file")').click();
-ok(await p.locator('text=practice preview').count() > 0, 'Open file opens (a practice preview here)');
+ok(await p.locator('text=SIMULATED PREVIEW').count() > 0 && await p.locator('text=not a real Google Drive file').count() > 0, 'Open file opens a clearly simulated preview');
 await p.keyboard.press('Escape'); await p.getByRole('button', { name: 'Close' }).first().click().catch(() => {});
 ok(await p.locator('.frow:has-text("product images") button:has-text("Copy folder path")').count() === 1, 'a Windows/network folder gets Copy folder path, not a fake link');
 await p.locator('.frow:has-text("Shopify Lister") button:has-text("View installation details")').click();

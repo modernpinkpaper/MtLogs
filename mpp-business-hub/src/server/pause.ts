@@ -18,6 +18,8 @@ export interface PauseInput {
   mode?: ResumeMode;
   resumeDateLocal?: string;
   messageToTeam?: string;
+  /** What people may still do while it is paused. */
+  allowedWork?: string;
   idempotencyKey: string;
 }
 
@@ -65,7 +67,7 @@ export function pauseProject(hub: HubServer, uid: string, projectId: string, inp
       const prior = p.pause;
       const ps: ProjectPauseState = {
         isPaused: true, pausedAt: hub.state.now, pausedByUserId: uid, reasonCode: input.reasonCode, reasonNote: input.reasonNote?.trim() || undefined,
-        messageToTeam: input.messageToTeam?.trim() || undefined, priorProjectStatus: statusIgnoringPause(p, steps), resumeMode: mode, resumeDateLocal: date,
+        messageToTeam: input.messageToTeam?.trim() || undefined, allowedWork: input.allowedWork?.trim() || undefined, priorProjectStatus: statusIgnoringPause(p, steps), resumeMode: mode, resumeDateLocal: date,
         timeZone: 'America/Chicago', scheduleVersion: (prior?.scheduleVersion ?? 0) + 1, deadlineAtPause: p.deadlineAt,
       };
       const before = prior ? { isPaused: prior.isPaused } : null;

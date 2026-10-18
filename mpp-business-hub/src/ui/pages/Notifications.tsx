@@ -10,14 +10,14 @@ import type { Notification, NotificationType } from '../../domain/types';
 const LABEL: Record<NotificationType, string> = {
   OWNER_UPDATE_REQUEST: 'Request for an update', FOLLOW_UP: 'Follow-up request', EMPLOYEE_RESPONSE: 'Answer from an employee', NEEDS_VERIFICATION: 'Needs a check in the source system', BLOCKER: 'Needs help',
   MISSING_COVERAGE: 'Some activity is missing', DAILY_DIGEST: 'Daily summary', WEEKLY_PRINT_INSIGHT: 'Weekly printing', DIRECT_MENTION: 'Project note', PROJECT_PAUSED: 'Project paused', PROJECT_RESUMED: 'Project active again',
-  RESUME_REMINDER: 'Time to decide', PAUSE_SUGGESTION: 'Suggestion', PILOT_REACHED: 'Test finished', AI_FINDING: 'AI recommendation', PROJECT_ASSIGNED: 'New project',
+  RESUME_REMINDER: 'Time to decide', PAUSE_SUGGESTION: 'Suggestion', PILOT_REACHED: 'Test finished', AI_FINDING: 'AI recommendation', PROJECT_ASSIGNED: 'New project', APPROVAL_REQUEST: 'Needs your approval', EMPLOYEE_UPDATE: 'Update from your team',
 };
 const OPEN_LABEL: Partial<Record<NotificationType, string>> = {
   OWNER_UPDATE_REQUEST: 'Answer', FOLLOW_UP: 'Answer', EMPLOYEE_RESPONSE: 'Open update', BLOCKER: 'Open', RESUME_REMINDER: 'Decide', PILOT_REACHED: 'Review results', PROJECT_PAUSED: 'Open project', PROJECT_RESUMED: 'Open project',
-  AI_FINDING: 'Open recommendation', PAUSE_SUGGESTION: 'Open project', PROJECT_ASSIGNED: 'Open project', DAILY_DIGEST: 'Open', NEEDS_VERIFICATION: 'Open',
+  AI_FINDING: 'Open recommendation', PAUSE_SUGGESTION: 'Open project', PROJECT_ASSIGNED: 'Open project', DAILY_DIGEST: 'Open', NEEDS_VERIFICATION: 'Open', APPROVAL_REQUEST: 'Review it', EMPLOYEE_UPDATE: 'Open update',
 };
-const NEEDS_ACTION: NotificationType[] = ['OWNER_UPDATE_REQUEST', 'FOLLOW_UP', 'RESUME_REMINDER', 'PAUSE_SUGGESTION', 'PILOT_REACHED', 'EMPLOYEE_RESPONSE', 'AI_FINDING', 'BLOCKER', 'NEEDS_VERIFICATION'];
-const ACK_TYPES: NotificationType[] = ['EMPLOYEE_RESPONSE', 'BLOCKER', 'NEEDS_VERIFICATION', 'PAUSE_SUGGESTION'];
+const NEEDS_ACTION: NotificationType[] = ['OWNER_UPDATE_REQUEST', 'FOLLOW_UP', 'RESUME_REMINDER', 'PAUSE_SUGGESTION', 'PILOT_REACHED', 'EMPLOYEE_RESPONSE', 'AI_FINDING', 'BLOCKER', 'NEEDS_VERIFICATION', 'APPROVAL_REQUEST'];
+const ACK_TYPES: NotificationType[] = ['EMPLOYEE_RESPONSE', 'EMPLOYEE_UPDATE', 'BLOCKER', 'NEEDS_VERIFICATION', 'PAUSE_SUGGESTION', 'APPROVAL_REQUEST'];
 
 export function Notifications() {
   const { hub, uid } = useMe();

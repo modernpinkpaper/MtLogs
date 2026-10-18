@@ -169,23 +169,23 @@ describe('7–9. Step files are directly usable, with clear approval', () => {
     const hub = await newHub();
     const rs = hub.stepResources(U.erika, 's-012-3').map((x) => x.resource);
     const a = rs.find((r) => r.id === 'r-seo-a')!; const b = rs.find((r) => r.id === 'r-seo-b')!;
-    expect(resourceApproval(a)?.label).toBe('Draft — Still being edited');
-    expect(resourceApproval(b)?.label).toBe('No approved version yet');
+    expect(resourceApproval(a, hub.ownerUids())?.label).toBe('Draft — Still being edited');
+    expect(resourceApproval(b, hub.ownerUids())?.label).toBe('No approved version yet');
     expect(b.label).toMatch(/FINAL/);
     expect(b.approvedVersion).toBeNull();
   });
 
-  it('Erika approves one copy, and it opens directly; the other stays unapproved', async () => {
+  it('Dalia approves one copy, and it opens directly; Erika cannot, and the other copy stays unapproved', async () => {
     const hub = await newHub();
-    hub.setApprovedVersion(U.erika, 'r-seo-b', 'rev 12');
+    expect(() => hub.approveVersion(U.erika, 'r-seo-b', 'rev 12')).toThrow(PermissionDenied);
+    hub.approveVersion(U.dalia, 'r-seo-b', 'rev 12');
     const rs = hub.stepResources(U.erika, 's-012-3').map((x) => x.resource);
     const b = rs.find((r) => r.id === 'r-seo-b')!; const a = rs.find((r) => r.id === 'r-seo-a')!;
-    expect(resourceApproval(b)?.label).toBe('Approved — Use this version');
+    expect(resourceApproval(b, hub.ownerUids())?.label).toBe('Approved — Use this version');
     expect(resourceActions(b).open).toBe(true);
-    expect(resourceApproval(a)?.label).toBe('Draft — Still being edited');
-    expect(hub.getJournal(U.dalia, { projectId: 'prj-012', types: ['RESOURCE'] }).some((e) => /Approved version set/.test(e.title))).toBe(true);
+    expect(resourceApproval(a, hub.ownerUids())?.label).toBe('Draft — Still being edited');
+    expect(hub.getJournal(U.dalia, { projectId: 'prj-012', types: ['RESOURCE'] }).some((e) => /approved for team use/i.test(e.title))).toBe(true);
   });
-
   it('8. each kind of resource gets the right control: link, copy path, installation details, or “not confirmed”', async () => {
     const hub = await newHub();
     const get = (id: string) => hub.state.resources.find((r) => r.id === id)!;

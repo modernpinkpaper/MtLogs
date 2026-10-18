@@ -51,3 +51,6 @@ See `docs/attention-design-v1-3.md`: a type and spacing system, one focal point 
 
 ## v1.4 Targeted refinement
 See `docs/ux-refinement-v1-4.md`: outcome-aware review cards, short Home alerts with technical details behind a link, step files with real actions and approval labels, task-first phone layout, one definition of project counts, project description cards, and "Log something I did". A checkpoint tag `checkpoint-before-v1-4` was saved first.
+
+## v1.5 Final workflow pass
+See `docs/final-workflow-pass.md` and `docs/role-action-matrix.md`. Dalia alone approves file versions; employees choose or submit. Reported complete and verified complete are counted separately everywhere. Request tracking (Requested, Seen, Responded, Overdue). Next-step logic explains itself. Dalia's phone Home groups decisions. A checkpoint tag `checkpoint-before-v1-5` was saved first.

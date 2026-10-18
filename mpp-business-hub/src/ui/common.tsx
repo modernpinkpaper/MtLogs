@@ -8,7 +8,7 @@ export function Chip({ tone = 'gray', glyph, children, title }: { tone?: Tone; g
 
 const STATUS: Record<StepStatus, [string, Tone, string]> = {
   NOT_STARTED: ['Not started', 'gray', '○'], IN_PROGRESS: ['In progress', 'info', '◔'], BLOCKED: ['Blocked', 'bad', '⛔'], WAITING: ['Waiting', 'warn', '⏸'],
-  REPORTED_COMPLETE: ['Says it is done', 'warn', '◑'], VERIFIED_COMPLETE: ['Done', 'ok', '✔'], CANCELLED: ['Canceled', 'gray', '✕'], NOT_APPLICABLE: ['Not needed', 'gray', '–'], REOPENED: ['Reopened', 'warn', '↺'],
+  REPORTED_COMPLETE: ['Reported done · awaiting check', 'warn', '◑'], VERIFIED_COMPLETE: ['Verified complete', 'ok', '✔'], CANCELLED: ['Canceled', 'gray', '✕'], NOT_APPLICABLE: ['Not needed', 'gray', '–'], REOPENED: ['Reopened', 'warn', '↺'],
 };
 /** The official status of a step, in plain words. */
 export function StatusChip({ status, hold }: { status: StepStatus; hold?: boolean }) {
@@ -35,6 +35,7 @@ const VSTATE: Record<VerificationState, [string, Tone, string, string]> = {
   OFFICIAL: ['Recorded', 'gray', '◆', 'Saved in the tracker.'],
   AI_DETECTED: ['Detected in logs', 'violet', '✦', 'The system saw this in computer activity. No person has confirmed it.'],
   EMPLOYEE_CONFIRMED: ['Employee confirmed', 'info', '☑', 'A person said or confirmed this. It has not been checked in the source system.'],
+  OWNER_APPROVED: ['Owner approved', 'ok', '★', 'Dalia reviewed this and signed it off. It is a person’s decision, not a check in another system.'],
   INDEPENDENTLY_VERIFIED: ['Checked in the source system', 'ok', '✔', 'A separate system looked and it matches.'],
   NEEDS_REVIEW: ['Needs a look', 'warn', '!', 'Someone needs to look at this.'],
   UNKNOWN: ['Not known', 'gray', '?', 'We do not have enough facts.'],
@@ -114,4 +115,12 @@ export function Copy({ text, label = 'Copy path' }: { text: string; label?: stri
       {done ? 'Copied ✔' : label}
     </button>
   );
+}
+
+/** True on phone-sized screens. Employees work on desktop PCs; Dalia's phone gets a decision-focused layout. */
+export function useNarrow(max = 900) {
+  const q = `(max-width: ${max}px)`;
+  const [n, setN] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
+  useEffect(() => { const m = window.matchMedia(q); const f = () => setN(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, [q]);
+  return n;
 }

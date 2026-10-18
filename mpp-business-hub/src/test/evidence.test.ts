@@ -46,22 +46,22 @@ describe('C. evidence vs official status', () => {
     expect(s.verificationSource).toBe('INDEPENDENT');
   });
 
-  it('routine steps may be employee-confirmed; invalid transitions are rejected and every transition is audited', async () => {
+  it('routine steps: the person REPORTS it finished; only Dalia (or a designated sign-off) makes it verified; transitions are audited', async () => {
     const hub = await newHub();
     hub.transitionStep(U.erika, 's-070-4', 'IN_PROGRESS');
     hub.transitionStep(U.erika, 's-070-4', 'REPORTED_COMPLETE');
-    const done = hub.transitionStep(U.erika, 's-070-4', 'VERIFIED_COMPLETE');
-    expect(done.verificationSource).toBe('EMPLOYEE_CONFIRMED');
+    expect(() => hub.transitionStep(U.erika, 's-070-4', 'VERIFIED_COMPLETE')).toThrowError(/Only Dalia can sign this off/);
+    const done = hub.transitionStep(U.dalia, 's-070-4', 'VERIFIED_COMPLETE');
+    expect(done.verificationSource).toBe('OWNER_APPROVED');
     expect(() => hub.transitionStep(U.erika, 's-070-5', 'VERIFIED_COMPLETE')).toThrowError(/cannot go from/);
     expect(() => hub.transitionStep(U.erika, 's-070-5', 'BLOCKED')).toThrowError(/cannot go from/);
     const aud = hub.getAudit(U.dalia, 'prj-070').filter((a) => a.entityId === 's-070-4' && a.action === 'TRANSITION');
     expect(aud).toHaveLength(3);
-    expect(aud[0].after).toMatchObject({ status: 'VERIFIED_COMPLETE' });
+    expect(aud[0].after).toMatchObject({ status: 'VERIFIED_COMPLETE', verificationSource: 'OWNER_APPROVED' });
     expect(aud[0].before).toMatchObject({ status: 'REPORTED_COMPLETE' });
-    expect(aud[0].actorUid).toBe(U.erika);
+    expect(aud[0].actorUid).toBe(U.dalia);
     expect(aud[0].reason).toBeTruthy();
   });
-
   it('a blocker needs a reason and the last active state is kept as history', async () => {
     const hub = await newHub();
     expect(() => hub.transitionStep(U.erika, 's-070-2', 'BLOCKED')).toThrowError(/why it is blocked/i);

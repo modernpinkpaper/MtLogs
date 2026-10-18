@@ -11,6 +11,7 @@ import { assignEpisodes, findSequenceGaps, hashText, normalizeEvent, parseJsonl 
 import type { AnalysisContext, FindingDraft, ModelAdapter } from '../ai/adapter';
 import { describeEvent, validateFindingDraft } from '../ai/adapter';
 import { outcomeEffect, plainToolName, reviewKind, shortProjectName } from '../domain/reviewKinds';
+import { notReadyReason } from '../domain/projectStatus';
 import { ReplayAnalyzer } from '../ai/replay';
 import { cardTitle, cardTypeFor, Hub_rank } from './cards';
 import * as PS from './pause';
@@ -32,6 +33,10 @@ export interface QueueItem {
   technical?: string[];
   /** Set when the item is about one project, so the screen can show its description card. */
   projectId?: string;
+  /** Where it belongs on Dalia's phone: a decision, an urgent problem, a reply, a paused project, or an AI idea. */
+  group?: 'DECISION' | 'URGENT' | 'REPLY' | 'PAUSED' | 'AI' | 'OTHER';
+  /** A quick action she can take right on Home. Always asks her to confirm first. */
+  action?: { type: 'APPROVE_VERSION'; resourceId: string; version: string; label: string; confirm: string } | { type: 'MARK_SEEN'; notificationId: string; label: string };
 }
 export const STORAGE_KEY = 'mpp-hub-demo-state-v3';
 /** Compile-time guard: demo-only operations exist only in this prototype build. */
@@ -53,7 +58,7 @@ const TRANSITIONS: Record<StepStatus, StepStatus[]> = {
   NOT_APPLICABLE: ['REOPENED'],
   REOPENED: ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE'],
 };
-const EMPLOYEE_TARGETS: StepStatus[] = ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'VERIFIED_COMPLETE'];
+const EMPLOYEE_TARGETS: StepStatus[] = ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'];
 export const TERMINAL: StepStatus[] = ['VERIFIED_COMPLETE', 'CANCELLED', 'NOT_APPLICABLE'];
 
 export type Listener = () => void;
@@ -349,7 +354,7 @@ export class HubServer {
     const p = this.projectFor(uid, projectId);
     if (p.pause?.isPaused) throw new HubError('PAUSED', 'Resume this project before closing it.');
     const open = this.state.steps.filter((s) => s.projectId === projectId && !TERMINAL.includes(s.status));
-    if (open.length) throw new HubError('STEPS_OPEN', `${open.length} step(s) are not finished. A project never closes by itself.`);
+    if (open.length) throw new HubError('STEPS_OPEN', `${open.length} step(s) are not verified complete. A project never closes by itself.`);
     return this.commit(() => {
       p.closedAt = this.state.now;
       this.audit({ entityType: 'project', entityId: p.id, action: 'CLOSE', before: null, after: p.closedAt, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner closed project', evidenceRefs: [], projectId: p.id });
@@ -365,7 +370,11 @@ export class HubServer {
     const from = step.status;
     if (!TRANSITIONS[from].includes(to)) throw new HubError('INVALID_TRANSITION', `This step cannot go from “${from.replace(/_/g, ' ').toLowerCase()}” to “${to.replace(/_/g, ' ').toLowerCase()}”.`);
     if (u.role !== 'OWNER') {
-      if (!EMPLOYEE_TARGETS.includes(to)) throw new PermissionDenied();
+      // An employee can REPORT a step finished. Only Dalia, or a real check, can make it verified.
+      // The one exception is a routine step Dalia has chosen to let the person sign off.
+      const signOff = to === 'VERIFIED_COMPLETE' && step.impact === 'ROUTINE' && !!step.employeeSignOffAllowed && step.assignedUids.includes(uid);
+      if (to === 'VERIFIED_COMPLETE' && !signOff) throw new HubError('REQUIRES_VERIFICATION', step.impact === 'HIGH' ? 'This step needs a check in the source system, or Dalia’s approval.' : 'Only Dalia can sign this off. You can report that you finished it.');
+      if (!EMPLOYEE_TARGETS.includes(to) && !signOff) throw new PermissionDenied();
       if (!step.assignedUids.includes(uid)) throw new PermissionDenied();
     }
     if ((to === 'BLOCKED') && !(opts.reason ?? '').trim()) throw new HubError('REASON_REQUIRED', 'Please say why it is blocked.');
@@ -377,7 +386,7 @@ export class HubServer {
         if (!hasIndependent && !opts.ownerApproval) throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'Nothing has been checked in the source system yet. You must choose to approve it yourself.');
         verificationSource = hasIndependent ? 'INDEPENDENT' : 'OWNER_APPROVED';
       } else {
-        verificationSource = u.role === 'OWNER' ? 'OWNER_APPROVED' : 'EMPLOYEE_CONFIRMED';
+        verificationSource = hasIndependent ? 'INDEPENDENT' : u.role === 'OWNER' ? 'OWNER_APPROVED' : 'EMPLOYEE_CONFIRMED';
       }
     }
     return this.commit(() => this.applyTransition(step, project, to, uid, opts.reason ?? '', verificationSource));
@@ -396,7 +405,7 @@ export class HubServer {
       projectId: project.id, stepIds: [step.id], type: 'STATUS_CHANGE', actorUid,
       title: `Step status: ${before.status.replace(/_/g, ' ')} → ${to.replace(/_/g, ' ')}`,
       summary: `“${step.title}”${reason ? ` — ${reason}` : ''}. Verification: ${step.verificationSource === 'NONE' ? 'none' : step.verificationSource.replace(/_/g, ' ').toLowerCase()}.`,
-      verificationState: step.verificationSource === 'INDEPENDENT' ? 'INDEPENDENTLY_VERIFIED' : step.verificationSource === 'NONE' ? 'OFFICIAL' : 'EMPLOYEE_CONFIRMED',
+      verificationState: step.verificationSource === 'INDEPENDENT' ? 'INDEPENDENTLY_VERIFIED' : step.verificationSource === 'NONE' ? 'OFFICIAL' : step.verificationSource === 'OWNER_APPROVED' ? 'OWNER_APPROVED' : 'EMPLOYEE_CONFIRMED',
     });
     return step;
   }
@@ -499,6 +508,10 @@ export class HubServer {
       const defaultRecipients = (step?.assignedUids.length ? step.assignedUids : project.memberUids).filter(authorized);
       const recipients = (input.recipientUids?.length ? input.recipientUids : defaultRecipients);
       if (!recipients.length || !recipients.every(authorized)) throw new HubError('NO_AUTHORIZED_RECIPIENT', 'Pick a person who works on this project.');
+      // The same question to the same people on the same step, still waiting: do not make a second card or notification.
+      const same = this.state.updateRequests.find((r) => ['OPEN', 'PARTIALLY_RESPONDED'].includes(r.state) && r.requestedByUid === uid && r.projectId === project.id && (r.stepId ?? null) === (step?.id ?? null)
+        && (r.question ?? '') === (input.question?.trim() ?? '') && r.recipientUids.length === recipients.length && recipients.every((x) => r.recipientUids.includes(x)));
+      if (same) return same;
       return this.commit(() => {
         const req: UpdateRequest = {
           id: this.nid('req'), projectId: project.id, stepId: step?.id ?? null, requestedByUid: uid, recipientUids: recipients,
@@ -603,7 +616,7 @@ export class HubServer {
         });
         void ev;
         this.notify({
-          recipientUid: project.ownerUid, senderUid: uid, type: needsHelp ? 'BLOCKER' : 'EMPLOYEE_RESPONSE',
+          recipientUid: project.ownerUid, senderUid: uid, type: needsHelp ? 'BLOCKER' : req ? 'EMPLOYEE_RESPONSE' : 'EMPLOYEE_UPDATE',
           title: `${this.userName(uid)} ${req ? 'answered your request' : 'sent you an update'} — ${where}: ${label}`,
           preview: `${resp.note ?? 'No note'}${unverifiedNote}`, projectId: project.id, stepId: step?.id ?? null, sourceEntityId: resp.id,
           deepLink: `/projects/${project.id}${step ? `/steps/${step.id}` : ''}?response=${resp.id}`, key: `n:resp:${resp.id}`,
@@ -705,6 +718,10 @@ export class HubServer {
 
   startReview(uid: string, cardId: string) {
     const c = this.getCard(uid, cardId);
+    if (c.updateRequestId) { // "Seen" for Dalia: the first time the person opens the request. Recorded once.
+      const rq = this.state.updateRequests.find((r) => r.id === c.updateRequestId);
+      if (rq && !rq.seenAt) this.commit(() => { rq.seenAt = this.state.now; });
+    }
     if (c.reviewStartedAt || c.status === 'SUBMITTED') return c;
     return this.commit(() => { c.reviewStartedAt = this.state.now; if (c.status === 'PENDING' || c.status === 'DEFERRED') c.status = 'IN_REVIEW'; return c; });
   }
@@ -957,20 +974,95 @@ export class HubServer {
   }
 
   /** Newer versions only ever become *suggestions*. Approval is a deliberate act and the old version is retained in history. */
-  setApprovedVersion(uid: string, resourceId: string, version: string) {
+  // ------------------------------------------------------------------ file versions: three different things
+  //  1. SELECT a working version  = "I will use this one." Anyone who can see the file. Changes nothing official.
+  //  2. SUBMIT for approval       = "Dalia, please approve this one." People on the project. Approves nothing.
+  //  3. APPROVE for team use      = the official decision. Dalia only. Recorded with who, when, old and new.
+  private resourceAccess(uid: string, resourceId: string) {
     const u = this.user(uid);
     const res = this.visibleResources(u).find((r) => r.id === resourceId);
     if (!res) throw new PermissionDenied();
     const links = this.state.resourceLinks.filter((l) => l.resourceId === res.id);
-    if (u.role !== 'OWNER' && !links.some((l) => this.canWorkOnProject(u, this.state.projects.find((p) => p.id === l.projectId)!))) throw new PermissionDenied();
+    const onProject = u.role === 'OWNER' || links.some((l) => this.canWorkOnProject(u, this.state.projects.find((p) => p.id === l.projectId)!));
+    return { u, res, links, onProject };
+  }
+  ownerUids(): string[] { return this.state.users.filter((u) => u.role === 'OWNER').map((u) => u.id); }
+  /** What a person chose to work with. It is a personal choice. It is never an approval. */
+  workingVersionFor(uid: string, resourceId: string): string | null {
+    return this.state.workingVersions.find((w) => w.uid === uid && w.resourceId === resourceId)?.version ?? null;
+  }
+  selectWorkingVersion(uid: string, resourceId: string, version?: string) {
+    const { res } = this.resourceAccess(uid, resourceId);
+    const v = version ?? res.version ?? 'current';
     return this.commit(() => {
-      const before = { version: res.version, approvedVersion: res.approvedVersion, suggested: res.suggestedVersion };
-      if (res.suggestedVersion?.version === version) { res.version = version; res.lastModifiedAt = res.suggestedVersion.modifiedAt; res.suggestedVersion = null; }
-      res.approvedVersion = version; res.isDraft = false;
-      this.audit({ entityType: 'resource', entityId: res.id, action: 'SET_APPROVED_VERSION', before, after: { version: res.version, approvedVersion: version }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Deliberate approval of resource version', evidenceRefs: [], projectId: links[0]?.projectId ?? null });
-      for (const pid of new Set(links.map((l) => l.projectId))) this.addJournal({ projectId: pid, type: 'RESOURCE', actorUid: uid, title: 'Approved version set', summary: `${res.label}: approved ${version}.`, verificationState: 'OFFICIAL', relatedResourceIds: [res.id] });
+      const mine = this.state.workingVersions.find((w) => w.uid === uid && w.resourceId === resourceId);
+      if (mine) { mine.version = v; mine.at = this.state.now; } else this.state.workingVersions.push({ uid, resourceId, version: v, at: this.state.now });
+      this.audit({ entityType: 'resource', entityId: res.id, action: 'SELECT_WORKING_VERSION', before: null, after: { version: v }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Chose a version to work with. Not an approval.', evidenceRefs: [], projectId: null });
       return res;
     });
+  }
+  submitForApproval(uid: string, resourceId: string, input: { version?: string; note?: string | null; idempotencyKey: string }) {
+    const { res, links, onProject } = this.resourceAccess(uid, resourceId);
+    if (!onProject) throw new PermissionDenied();
+    const version = input.version ?? res.version ?? 'current';
+    return this.idem('submitappr:' + input.idempotencyKey, () => {
+      if (res.pendingApproval?.version === version && res.pendingApproval.requestedByUid === uid) return res; // already waiting: no second request, no second notification
+      return this.commit(() => {
+        res.pendingApproval = { version, requestedByUid: uid, at: this.state.now, note: input.note?.trim() || null };
+        const link = links.find((l) => l.stepId) ?? links[0];
+        const project = link ? this.state.projects.find((p) => p.id === link.projectId) : null;
+        this.audit({ entityType: 'resource', entityId: res.id, action: 'SUBMIT_FOR_APPROVAL', before: null, after: { version }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Asked the owner to approve a version', evidenceRefs: [], projectId: project?.id ?? null });
+        for (const pid of new Set(links.map((l) => l.projectId))) this.addJournal({ projectId: pid, stepIds: links.filter((l) => l.projectId === pid && l.stepId).map((l) => l.stepId!), type: 'RESOURCE', actorUid: uid, title: `${this.userName(uid)} asked for approval of a file version`, summary: `${res.label}: ${version}.${res.pendingApproval!.note ? ` Note: “${res.pendingApproval!.note}”.` : ''} Waiting for Dalia. Nothing is approved yet.`, verificationState: 'EMPLOYEE_CONFIRMED', relatedResourceIds: [res.id] });
+        for (const o of this.ownerUids()) this.notify({ recipientUid: o, senderUid: uid, type: 'APPROVAL_REQUEST', title: `${this.userName(uid)} asked you to approve a file version`, preview: `${res.label} — ${version}`, projectId: project?.id ?? null, stepId: link?.stepId ?? null, sourceEntityId: res.id, deepLink: project ? `/projects/${project.id}${link?.stepId ? `/steps/${link.stepId}` : ''}` : '/resources', key: `n:apprreq:${res.id}:${version}:${uid}` });
+        return res;
+      });
+    });
+  }
+  /** Official approval. Dalia only. Checked here, not only in the buttons. */
+  approveVersion(uid: string, resourceId: string, version: string, opts: { supersedesResourceId?: string | null } = {}) {
+    this.requireOwner(uid);
+    const { res, links } = this.resourceAccess(uid, resourceId);
+    if (res.approval?.version === version && res.approvedVersion === version && !res.pendingApproval) return res; // already approved: a repeat click changes nothing and adds nothing
+    return this.commit(() => {
+      const before = { version: res.version, approvedVersion: res.approvedVersion, approval: res.approval ?? null, pending: res.pendingApproval ?? null };
+      if (res.suggestedVersion?.version === version) { res.version = version; res.lastModifiedAt = res.suggestedVersion.modifiedAt; res.suggestedVersion = null; }
+      if (res.approvedVersion && res.approvedVersion !== version) (res.supersededVersions ??= []).push({ version: res.approvedVersion, at: this.state.now, byUid: uid });
+      const requester = res.pendingApproval?.requestedByUid ?? null;
+      res.approvedVersion = version; res.approval = { version, byUid: uid, at: this.state.now }; res.isDraft = false; res.pendingApproval = null;
+      let replaced: Resource | null = null;
+      if (opts.supersedesResourceId && opts.supersedesResourceId !== res.id) {
+        replaced = this.state.resources.find((r) => r.id === opts.supersedesResourceId) ?? null;
+        if (replaced) { replaced.supersededById = res.id; replaced.pendingApproval = null; }
+      }
+      this.audit({ entityType: 'resource', entityId: res.id, action: 'APPROVE_RESOURCE_VERSION', before, after: { version: res.version, approvedVersion: version, approvedBy: uid, supersedes: replaced?.id ?? null }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Official approval of a file version for team use', evidenceRefs: [], projectId: links[0]?.projectId ?? null });
+      for (const pid of new Set(links.map((l) => l.projectId))) this.addJournal({ projectId: pid, stepIds: links.filter((l) => l.projectId === pid && l.stepId).map((l) => l.stepId!), type: 'RESOURCE', actorUid: uid, title: 'File version approved for team use', summary: `${res.label}: ${before.approvedVersion ? `${before.approvedVersion} → ` : 'no approved version → '}${version}, approved by ${this.userName(uid)}.${replaced ? ` This replaces “${replaced.label}”.` : ''}`, verificationState: 'OWNER_APPROVED', relatedResourceIds: [res.id] });
+      if (requester && requester !== uid) this.notify({ recipientUid: requester, senderUid: uid, type: 'DIRECT_MENTION', title: `${this.userName(uid)} approved ${res.label}`, preview: `Version ${version} is now the one to use.`, projectId: links[0]?.projectId ?? null, sourceEntityId: res.id, deepLink: links[0] ? `/projects/${links[0].projectId}${links[0].stepId ? `/steps/${links[0].stepId}` : ''}` : '/resources', key: `n:apprdone:${res.id}:${version}` });
+      return res;
+    });
+  }
+  /** Backward-compatible name. It is the same owner-only approval. */
+  setApprovedVersion(uid: string, resourceId: string, version: string) { return this.approveVersion(uid, resourceId, version); }
+  declineApproval(uid: string, resourceId: string, note?: string | null) {
+    this.requireOwner(uid);
+    const { res, links } = this.resourceAccess(uid, resourceId);
+    const pend = res.pendingApproval;
+    if (!pend) return res;
+    return this.commit(() => {
+      res.pendingApproval = null;
+      this.audit({ entityType: 'resource', entityId: res.id, action: 'DECLINE_APPROVAL', before: { pending: pend }, after: { pending: null }, actorUid: uid, actorLabel: this.userName(uid), reason: note?.trim() || 'Not approved', evidenceRefs: [], projectId: links[0]?.projectId ?? null });
+      for (const pid of new Set(links.map((l) => l.projectId))) this.addJournal({ projectId: pid, type: 'RESOURCE', actorUid: uid, title: 'File version not approved', summary: `${res.label}: ${pend.version} was not approved${note ? ` — ${note}` : ''}.`, verificationState: 'OWNER_APPROVED', relatedResourceIds: [res.id] });
+      this.notify({ recipientUid: pend.requestedByUid, senderUid: uid, type: 'DIRECT_MENTION', title: `${this.userName(uid)} did not approve ${res.label}`, preview: note?.trim() || 'Please ask Dalia what to use instead.', projectId: links[0]?.projectId ?? null, sourceEntityId: res.id, deepLink: '/resources', key: `n:apprno:${res.id}:${pend.version}` });
+      return res;
+    });
+  }
+  /** True only when the approval has a matching record by an owner. A bare approvedVersion on its own is not trusted. */
+  approvalIsRecorded(res: Resource): boolean {
+    return !!res.approvedVersion && !!res.approval && res.approval.version === res.approvedVersion && this.ownerUids().includes(res.approval.byUid);
+  }
+  /** Resources that are waiting for Dalia, for her Home. */
+  pendingApprovals(uid: string) {
+    this.requireOwner(uid);
+    return this.state.resources.filter((r) => r.pendingApproval).map((r) => ({ resource: r, pending: r.pendingApproval! }));
   }
   /**
    * Fix a resource whose location is not confirmed. We never invent a link: a path is saved as a path,
@@ -995,6 +1087,7 @@ export class HubServer {
     });
   }
   keepApprovedDismissSuggestion(uid: string, resourceId: string) {
+    this.requireOwner(uid);
     const res = this.visibleResources(this.user(uid)).find((r) => r.id === resourceId);
     if (!res) throw new PermissionDenied();
     return this.commit(() => { res.suggestedVersion = null; return res; });
@@ -1322,9 +1415,11 @@ export class HubServer {
     const open = st.updateRequests.filter((r) => ['OPEN', 'PARTIALLY_RESPONDED'].includes(r.state));
     const unmatched = st.findings.filter((f) => f.findingType === 'AI_UNMATCHED_WORK' && f.status === 'PROPOSED');
     const pendingReview = st.reviewCards.filter((c) => ['PENDING', 'IN_REVIEW', 'DEFERRED'].includes(c.status) && c.cardType !== 'OWNER_REQUEST');
-    const confirmedSteps = st.projectEvents.filter((e) => e.recordedAt > since && e.type === 'STATUS_CHANGE' && /→ (REPORTED|VERIFIED) COMPLETE/.test(e.title));
+    const reportedSteps = st.projectEvents.filter((e) => e.recordedAt > since && e.type === 'STATUS_CHANGE' && /→ REPORTED COMPLETE/.test(e.title));
+    const verifiedSteps = st.projectEvents.filter((e) => e.recordedAt > since && e.type === 'STATUS_CHANGE' && /→ VERIFIED COMPLETE/.test(e.title));
     const narrative = [
-      `${confirmedSteps.length} step(s) marked finished`,
+      `${verifiedSteps.length} step(s) verified complete`,
+      `${reportedSteps.length} step(s) reported finished (awaiting a check)`,
       `${responses.length} answer(s) or updates from your team`,
       `${open.length} request(s) still waiting for an answer`,
       `${unmatched.length} piece(s) of work that is not in any project`,
@@ -1360,11 +1455,25 @@ export class HubServer {
       if (p.deadlineAt && p.deadlineAt < st.now && (p.pause!.pausedAt ?? '') <= p.deadlineAt) queue.push({ kind: 'Pick a new deadline', label: `${p.key} was paused, and its original deadline has passed`, title: `${shortProjectName(p)} — Pick a new deadline`, why: 'It was paused and its old deadline has passed. Dates never move on their own.', cta: 'Choose a deadline', chip: 'New deadline needed', link: `/projects/${p.id}`, weight: 65, technical: [`${p.key} · original deadline ${formatDate(p.deadlineAt)}`] });
     }
     const NCTA: Record<string, string> = { RESUME_REMINDER: 'Decide now', PAUSE_SUGGESTION: 'Read the suggestion', PILOT_REACHED: 'Review the limited test', AI_FINDING: 'Review it' };
-    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && !n.readAt && ['RESUME_REMINDER', 'PAUSE_SUGGESTION', 'PILOT_REACHED', 'AI_FINDING'].includes(n.type))) queue.push({ kind: 'Needs your decision', label: n.title, title: n.title, why: n.preview, cta: NCTA[n.type], chip: 'Needs your decision', link: n.deepLink, weight: 95 });
+    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && !n.readAt && ['RESUME_REMINDER', 'PAUSE_SUGGESTION', 'PILOT_REACHED', 'AI_FINDING'].includes(n.type))) queue.push({ kind: 'Needs your decision', label: n.title, title: n.title, why: n.preview, cta: NCTA[n.type], chip: 'Needs your decision', link: n.deepLink, weight: 95, group: n.type === 'RESUME_REMINDER' ? 'PAUSED' : n.type === 'AI_FINDING' ? 'AI' : 'DECISION' });
     for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['BLOCKER', 'NEEDS_VERIFICATION'].includes(n.type))) queue.push({ kind: n.type === 'BLOCKER' ? 'Blocked' : 'Needs a check in the source system', label: n.title, title: n.title, why: n.preview, cta: n.type === 'BLOCKER' ? 'See what happened' : 'Check the result', chip: n.type === 'BLOCKER' ? 'Needs help' : 'Verify result', link: n.deepLink, weight: 85 });
+    // A person asked Dalia to approve a file version. Nothing is approved until she does.
+    for (const r of st.resources.filter((x) => x.pendingApproval)) {
+      const pa = r.pendingApproval!;
+      const lk = st.resourceLinks.find((l) => l.resourceId === r.id && l.stepId) ?? st.resourceLinks.find((l) => l.resourceId === r.id);
+      const pr = lk ? st.projects.find((p) => p.id === lk.projectId) : null;
+      queue.push({ kind: 'Approve a file version', label: `${r.label} — ${pa.version}`, title: `${r.label.replace(/\s*\(.*?\)\s*/g, ' ').trim()} — Approve version?`, why: `${nm(pa.requestedByUid)} asked you to approve ${pa.version} for the team.${pa.note ? ` “${pa.note}”` : ''}`, cta: 'Review it', chip: 'Needs approval', link: lk ? `/projects/${lk.projectId}${lk.stepId ? `/steps/${lk.stepId}` : ''}` : '/resources', weight: 92, group: 'DECISION', technical: [`${r.label}`, `Version ${pa.version}`, `Asked ${formatDate(pa.at)}`], action: { type: 'APPROVE_VERSION', resourceId: r.id, version: pa.version, label: 'Approve for the team', confirm: `Approve ${pa.version} of “${r.label}” as the official version for the whole team? You can change it later, and the history keeps both.` } });
+      void pr;
+    }
+    for (const rq of st.updateRequests.filter((r) => r.requestedByUid === uid && this.requestStage(r) === 'OVERDUE')) {
+      const pr = st.projects.find((p) => p.id === rq.projectId)!;
+      queue.push({ kind: 'Overdue answer', label: `${pr.key} request is overdue`, title: `${shortProjectName(pr)} — No answer yet`, why: `${rq.recipientUids.map((x) => nm(x)).join(', ')} hasn’t answered your request, and it was due ${formatDate(rq.dueAt!)}.`, cta: 'See the request', chip: 'Overdue', link: `/projects/${pr.id}${rq.stepId ? `/steps/${rq.stepId}` : ''}`, weight: 88, group: 'URGENT', technical: [`${pr.key}`, `Asked ${formatDate(rq.createdAt)}`] });
+    }
+    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && !n.readAt && n.type === 'EMPLOYEE_UPDATE')) queue.push({ kind: 'They updated you', label: n.title, title: n.title, why: n.preview, cta: 'Read it', chip: 'Update from your team', link: n.deepLink, weight: 75, group: 'REPLY', action: { type: 'MARK_SEEN', notificationId: n.id, label: 'I saw this' } });
     for (const a of st.archives.filter((a) => a.coverageState === 'INCOMPLETE')) queue.push({ kind: 'Data problem', label: `${a.deviceId} ${a.hourWindow}:00 file is missing some events (${a.sequenceGaps.join('; ')})`, title: 'Some computer activity may be missing', why: 'Counts and AI guesses from that time may look low. It does not mean nobody worked.', cta: 'See what is missing', chip: 'Activity may be missing', link: '/owner/data-intake', weight: 50, technical: [`${a.deviceId} · file for ${a.hourWindow}:00`, ...a.sequenceGaps] });
     if (st.settings.aiOutage || st.settings.logSyncOutage) queue.push({ kind: 'Data problem', label: st.settings.aiOutage ? 'The AI helper is off (demo switch)' : 'Computer data is late (demo switch)', title: st.settings.aiOutage ? 'The AI helper is off' : 'Computer activity is arriving late', why: 'Clocking in and out, requests and your own updates keep working.', cta: 'See details', chip: 'Data problem', link: '/owner/data-intake', weight: 55, technical: [st.settings.aiOutage ? 'AI outage (demo switch)' : 'Log sync outage (demo switch)'] });
-    for (const q of queue) q.projectId = q.link.match(/^\/projects\/([^/?]+)/)?.[1];
+    const GROUP: Record<string, NonNullable<QueueItem['group']>> = { 'They answered you': 'REPLY', 'They updated you': 'REPLY', 'Needs a check in the source system': 'DECISION', 'Blocked': 'URGENT', 'Late': 'URGENT', 'Tracker and activity do not match': 'DECISION', 'Pick a new deadline': 'PAUSED', 'Data problem': 'OTHER', 'Overdue answer': 'URGENT' };
+    for (const q of queue) { q.projectId = q.link.match(/^\/projects\/([^/?]+)/)?.[1]; q.group ??= GROUP[q.kind] ?? 'OTHER'; if (q.kind === 'They answered you' && !q.action) { const n = st.notifications.find((x) => x.deepLink === q.link && x.recipientUid === uid && x.type === 'EMPLOYEE_RESPONSE' && !x.acknowledgedAt); if (n) q.action = { type: 'MARK_SEEN', notificationId: n.id, label: 'I saw this' }; } }
     queue.sort((a, b) => b.weight - a.weight);
     const workers = st.users.filter((u) => u.role === 'EMPLOYEE' && ['PROJECT', 'MIXED'].includes(this.areaOn(u.id))).concat(st.users.filter((u) => u.role === 'OWNER'));
     const workerCards = workers.map((u) => {
@@ -1491,6 +1600,35 @@ export class HubServer {
     return { projects: r.projects.map((p) => p.key), steps: r.steps.map((s) => s.title), resources: r.resources.map((x) => x.label) };
   }
 
+  // ------------------------------------------------------------------ request tracking: Requested -> Seen -> Responded, and Overdue
+  requestStage(r: UpdateRequest): 'RESPONDED' | 'OVERDUE' | 'SEEN' | 'REQUESTED' | 'CLOSED' {
+    if (['CLOSED', 'CANCELLED', 'ACKNOWLEDGED'].includes(r.state)) return 'CLOSED';
+    if (r.state === 'RESPONDED') return 'RESPONDED';
+    if (r.dueAt && r.dueAt < this.state.now) return 'OVERDUE';
+    return r.seenAt ? 'SEEN' : 'REQUESTED';
+  }
+  /** Dalia's requests with where each one stands. Replies and unsolicited updates are told apart. */
+  ownerRequests(uid: string, projectId?: string) {
+    this.requireOwner(uid);
+    return this.state.updateRequests.filter((r) => !projectId || r.projectId === projectId).map((r) => ({
+      request: r, stage: this.requestStage(r), recipients: r.recipientUids.map((x) => this.userName(x)),
+      responses: this.state.updateResponses.filter((x) => x.requestId === r.id),
+    })).reverse();
+  }
+
+  /** Dalia decides whether the person may sign off a routine step themselves. Off by default. */
+  setStepSignOff(uid: string, stepId: string, allowed: boolean) {
+    this.requireOwner(uid);
+    const { step, project } = this.stepFor(uid, stepId);
+    if (step.impact !== 'ROUTINE') throw new HubError('VALIDATION', 'Steps that need a check always need a real check or your approval.');
+    return this.commit(() => {
+      step.employeeSignOffAllowed = allowed;
+      this.audit({ entityType: 'step', entityId: step.id, action: 'SET_SIGNOFF_RULE', before: null, after: { employeeSignOffAllowed: allowed }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner chose who may sign off this step', evidenceRefs: [], projectId: project.id });
+      this.addJournal({ projectId: project.id, stepIds: [step.id], type: 'PLAN_CHANGE', actorUid: uid, title: allowed ? 'The person may sign this step off' : 'Only Dalia signs this step off', summary: `“${step.title}”. Reporting it finished never counts as verified by itself.`, verificationState: 'OWNER_APPROVED' });
+      return step;
+    });
+  }
+
   // ------------------------------------------------------------------ project counts (one definition, used everywhere)
   /**
    * Counts for the projects THIS person may see.
@@ -1573,6 +1711,47 @@ export class HubServer {
         return entry;
       });
     });
+  }
+
+  // ------------------------------------------------------------------ what to do next (and why), for one person
+  /**
+   * Splits the person's open steps into "ready to do" and "waiting", with a plain reason for each.
+   * Never offered as ordinary work: paused, blocked, on hold, waiting, reported-done-awaiting-check, dependency-locked, limited-test gated.
+   * Order: confirm stale progress first, then due date, then Dalia's priority, then step order.
+   */
+  myNextActions(uid: string) {
+    const u = this.user(uid);
+    type Row = { project: Project; step: Step; kind: 'CONFIRM_PROGRESS' | 'WORK'; why: string; cardId: string | null };
+    type Held = { project: Project; step: Step; reason: string; code: 'PAUSED' | 'BLOCKED' | 'WAITING' | 'HOLD' | 'AWAITING_CHECK' | 'DEPENDENCY' | 'PILOT_GATED' };
+    const ready: Row[] = []; const held: Held[] = [];
+    const PRI: Record<string, number> = { HIGH: 0, NORMAL: 1, LOW: 2 };
+    for (const project of this.listProjects(uid)) {
+      const steps = this.projectSteps(uid, project.id);
+      for (const step of steps.filter((x) => !x.parentStepId && x.assignedUids.includes(uid) && !TERMINAL.includes(x.status))) {
+        const hold = (code: Held['code'], reason: string) => held.push({ project, step, reason, code });
+        if (project.pause?.isPaused) { hold('PAUSED', 'This project is paused. Your work is saved.'); continue; }
+        if (step.onHold) { hold('HOLD', 'This step is on hold.'); continue; }
+        if (step.status === 'BLOCKED') { hold('BLOCKED', `You reported this as blocked${step.blockerReason ? `: ${step.blockerReason}` : ''}. Waiting for Dalia.`); continue; }
+        if (step.status === 'WAITING') { hold('WAITING', `Waiting${step.blockerReason ? `: ${step.blockerReason}` : ' for someone or something'}.`); continue; }
+        if (step.status === 'REPORTED_COMPLETE') { hold('AWAITING_CHECK', 'You reported this finished. It is waiting for a check or Dalia’s sign-off.'); continue; }
+        if (project.pilot?.enabled && project.pilot.stepId === step.id && project.pilot.status === 'TARGET_REACHED') { hold('PILOT_GATED', 'The limited test reached its limit. Waiting for Dalia to approve more.'); continue; }
+        const dep = notReadyReason(step, steps, project);
+        if (dep) { hold('DEPENDENCY', dep); continue; }
+        const stale = step.status === 'NOT_STARTED' && step.observedLevel !== 'NO_EVIDENCE' && step.observedReview === 'PENDING_EMPLOYEE';
+        const card = stale ? this.outstandingCards(uid).find((c) => c.stepId === step.id && c.cardType !== 'OWNER_REQUEST') ?? null : null;
+        if (stale) ready.push({ project, step, kind: 'CONFIRM_PROGRESS', why: 'The tracker still says “Not started”, but we saw computer activity on this step. Confirm where it really stands before you start over.', cardId: card?.id ?? null });
+        else {
+          const bits: string[] = [];
+          if (step.dueAt) bits.push(`It is due ${formatDate(step.dueAt)}.`);
+          if (project.priority === 'HIGH') bits.push('Dalia marked this project high priority.');
+          if (step.dependencyIds.length) bits.push('The step before it is finished.');
+          if (!bits.length) bits.push(`It is the next step that is ready in ${project.key}.`);
+          ready.push({ project, step, kind: 'WORK', why: bits.join(' '), cardId: null });
+        }
+      }
+    }
+    ready.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'CONFIRM_PROGRESS' ? -1 : 1) || (a.step.dueAt ?? '9').localeCompare(b.step.dueAt ?? '9') || PRI[a.project.priority] - PRI[b.project.priority] || a.project.key.localeCompare(b.project.key) || a.step.sortOrder - b.step.sortOrder);
+    return { ready, held, role: u.role };
   }
 
   // ------------------------------------------------------------------ "other work" (unmatched work outcomes)

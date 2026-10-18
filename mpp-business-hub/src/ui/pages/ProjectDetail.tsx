@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { newKey, useAct, useMe } from '../hubContext';
-import { Chip, Empty, Modal, ObservedChip, ProjectStatusChip, SourceChip, StatusChip, StepState, Tabs, VerifyBadge, statusLabel } from '../common';
+import { Chip, Empty, Modal, ObservedChip, useNarrow, ProjectStatusChip, SourceChip, StatusChip, StepState, Tabs, VerifyBadge, statusLabel } from '../common';
 import { JournalList, ResourceCard, StepResourceRow } from '../parts';
 import { JournalFilters } from './Journal';
 import { RequestUpdateDialog, SendUpdateDialog } from '../dialogs';
@@ -13,14 +13,6 @@ import { CHOICE_LABEL, TERMINAL } from '../../server/hub';
 import type { Project, ResourceRole, Step, StepStatus } from '../../domain/types';
 
 type Tab = 'overview' | 'history' | 'files' | 'more';
-
-/** True on phone-sized screens, so the step list can fold away and the step itself gets the room. */
-function useNarrow(max = 900) {
-  const q = `(max-width: ${max}px)`;
-  const [n, setN] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
-  useEffect(() => { const m = window.matchMedia(q); const f = () => setN(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, [q]);
-  return n;
-}
 
 export function ProjectDetail() {
   const { projectId = '', stepId } = useParams();
@@ -127,7 +119,8 @@ export function ProjectDetail() {
               {next && selected && next.id !== selected.id && <div className="notice"><span><strong>Next step is Step {next.sortOrder}:</strong> {next.title}</span><button className="primary" onClick={() => nav(`/projects/${project.id}/steps/${next.id}`)}>Go to it</button></div>}
               {blockers.map((b) => <div key={b.id} className="banner warn" role="status">⛔ <strong>In the way:</strong> Step {b.sortOrder} — {b.blockerReason}</div>)}
               {myReq.length > 0 && <div className="notice"><span><strong>Dalia asked for an update.</strong></span><Link to="/review"><button className="primary">Answer now</button></Link></div>}
-              {ownerOpenReq.length > 0 && <div className="small muted">{ownerOpenReq.length} update request{ownerOpenReq.length === 1 ? '' : 's'} waiting for an answer.</div>}
+              {owner && hub.ownerRequests(uid, project.id).filter((r) => r.stage !== 'CLOSED').slice(0, 4).map((r) => (
+                <div key={r.request.id} className="small muted">Your request to {r.recipients.join(', ')}{r.request.stepId ? ` about Step ${hub.getStep(uid, r.request.stepId).sortOrder}` : ''}: <strong>{{ REQUESTED: 'Requested', SEEN: 'Seen, not answered yet', RESPONDED: 'Answered', OVERDUE: 'Overdue', CLOSED: 'Closed' }[r.stage]}</strong>{r.request.dueAt ? ` · due ${formatDate(r.request.dueAt)}` : ''}</div>))}
             </div>
           )}
 
@@ -219,7 +212,7 @@ const NEXT: Partial<Record<StepStatus, StepStatus[]>> = {
   NOT_STARTED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'], IN_PROGRESS: ['BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'], BLOCKED: ['IN_PROGRESS'], WAITING: ['IN_PROGRESS'],
   REPORTED_COMPLETE: ['VERIFIED_COMPLETE', 'IN_PROGRESS', 'REOPENED'], VERIFIED_COMPLETE: ['REOPENED'], REOPENED: ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE'],
 };
-const ACTION_LABEL: Partial<Record<StepStatus, string>> = { IN_PROGRESS: 'Start / continue', BLOCKED: 'Mark as blocked', WAITING: 'Mark as waiting', REPORTED_COMPLETE: 'I finished this step', NOT_APPLICABLE: 'Not needed', VERIFIED_COMPLETE: 'Confirm it is done', REOPENED: 'Reopen' };
+const ACTION_LABEL: Partial<Record<StepStatus, string>> = { IN_PROGRESS: 'Start / continue', BLOCKED: 'Mark as blocked', WAITING: 'Mark as waiting', REPORTED_COMPLETE: 'I finished this step', NOT_APPLICABLE: 'Not needed', VERIFIED_COMPLETE: 'Sign off as verified complete', REOPENED: 'Reopen' };
 
 /** The employee’s workplace: what to do, substeps, files, latest activity, and one way to report progress. */
 function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, onTab }: { step: Step; steps: Step[]; project: Project; canWork: boolean; isNext?: boolean; paused?: boolean; onTab: (t: Tab) => void }) {
@@ -240,7 +233,8 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
   const children = steps.filter((s) => s.parentStepId === step.id).sort((a, b) => a.sortOrder - b.sortOrder);
   const assigned = step.assignedUids.includes(uid) || owner;
   const why = notReadyReason(step, steps, project);
-  const choices = (NEXT[step.status] ?? []).filter((t) => owner || (assigned && ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'VERIFIED_COMPLETE'].includes(t) && !(t === 'VERIFIED_COMPLETE' && step.impact === 'HIGH')));
+  const canSignOff = !!step.employeeSignOffAllowed && step.impact === 'ROUTINE';
+  const choices = (NEXT[step.status] ?? []).filter((t) => owner || (assigned && ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'].includes(t)) || (assigned && t === 'VERIFIED_COMPLETE' && canSignOff));
   const move = (to: StepStatus, ownerApproval = false) => act(() => hub.transitionStep(uid, step.id, to, { reason, ownerApproval }), `Saved: ${statusLabel(to)}`);
   const hasCard = hub.outstandingCards(uid).some((c) => c.stepId === step.id && c.cardType !== 'OWNER_REQUEST');
   const ws = hub.projectWorkspace(uid, project.id);
@@ -256,6 +250,7 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
           {step.impact === 'HIGH' && <Chip tone="warn" glyph="!" title="This step needs a check in the source system, or Dalia’s approval, before it counts as done.">Needs a check or Dalia’s approval</Chip>}
           {step.dueAt && <span className="small muted">Due {formatDate(step.dueAt)}</span>}</div>
         {(paused || why) && <p className="small" style={{ color: 'var(--warn)', margin: '.4rem 0 0' }}>{paused ? 'This project is paused, so this step is not scheduled right now. Your work is saved.' : `Not ready: ${why}`}</p>}
+        {step.status === 'REPORTED_COMPLETE' && <p className="smallnote" style={{ margin: '.5rem 0 0' }}>{hub.userName(step.humanReported?.byUid ?? null) === 'Someone' ? 'It was reported finished' : `${hub.userName(step.humanReported?.byUid ?? null)} reported this finished`}. It counts as <strong>verified complete</strong> once {step.impact === 'HIGH' ? 'a real check passes in the source system, or Dalia approves it' : owner ? 'you sign it off' : 'Dalia signs it off'}. Until then the project shows it as “reported complete (awaiting check)”.</p>}
         {step.onHold && <p className="small" style={{ margin: '.3rem 0 0' }}>On hold{step.onHold.reason ? `: ${step.onHold.reason}` : ''}. The rest of the project keeps going.</p>}
       </div>
 
@@ -306,18 +301,28 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
         <div className="row between"><h3>Files for this step</h3>{canWork && ws?.state === 'READY' && <button className="link" onClick={() => setDlg('sheet')}>Create a checklist sheet</button>}</div>
         {resources.length === 0 && <p className="small muted" style={{ margin: 0 }}>No files are linked to this step yet.</p>}
         {(() => {
-          // Two or more copies of the same kind of input with none approved: say so, and let the team pick one.
+          // The approved working document and every file the person needs are always shown. Only secondary files fold away.
+          const PRIMARY = ['INPUT', 'INSTRUCTIONS', 'WORKING', 'AUTOMATION_TOOL', 'SOURCE_IMAGES', 'CHECKLIST', 'APPROVED_FINAL'];
           const inputs = resources.filter((x) => x.link.role === 'INPUT');
-          const unapproved = inputs.length > 1 && inputs.every((x) => !x.resource.approvedVersion);
-          const ordered = [...resources].sort((a, b) => Number(!!b.resource.approvedVersion) - Number(!!a.resource.approvedVersion));
+          const unapproved = inputs.length > 1 && inputs.every((x) => !hub.approvalIsRecorded(x.resource));
+          const rank = (x: (typeof resources)[number]) => (hub.approvalIsRecorded(x.resource) ? 0 : x.resource.pendingApproval ? 1 : 2);
+          const ordered = [...resources].sort((a, b) => rank(a) - rank(b));
+          const main = ordered.filter((x) => PRIMARY.includes(x.link.role) || x.link.associationState === 'SUGGESTED');
+          const more = ordered.filter((x) => !main.includes(x));
+          const sib = inputs.map((x) => x.resource);
           return (
             <>
-              {unapproved && <div className="smallnote" role="status" style={{ margin: '.4rem 0' }}><strong>{inputs.length} copies of this file exist and none is approved yet.</strong> A name like “FINAL” is not an approval. Pick the one to use.</div>}
-              {ordered.slice(0, 6).map(({ link, resource }) => <StepResourceRow key={link.id} resource={resource} role={link.role} roleLabel={ROLE_LABEL[link.role]} suggested={link.associationState === 'SUGGESTED'} groupUnapproved={unapproved && link.role === 'INPUT'} />)}
+              {unapproved && <div className="smallnote" role="status" style={{ margin: '.4rem 0' }}><strong>{inputs.length} copies of this file exist and none is approved yet.</strong> A name like “FINAL” is not an approval. You can use one for your own work now. Dalia decides which one is official.</div>}
+              {main.map(({ link, resource }) => <StepResourceRow key={link.id} resource={resource} role={link.role} roleLabel={ROLE_LABEL[link.role]} suggested={link.associationState === 'SUGGESTED'} siblings={link.role === 'INPUT' ? sib : []} />)}
+              {more.length > 0 && (
+                <details className="soft"><summary>More files ({more.length})</summary>
+                  {more.map(({ link, resource }) => <StepResourceRow key={link.id} resource={resource} role={link.role} roleLabel={ROLE_LABEL[link.role]} />)}
+                </details>
+              )}
             </>
           );
         })()}
-        <button className="link" onClick={() => onTab('files')}>{resources.length > 6 ? `See ${resources.length - 6} more and the full library` : 'See the full file library'}</button>
+        <button className="link" onClick={() => onTab('files')}>See the full file library</button>
       </div>
 
       <details className="soft">
@@ -339,7 +344,8 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
             )}
             {owner && <div className="row">
               {step.onHold ? <button onClick={() => act(() => hub.releaseStep(uid, step.id), 'Step is active again')}>Take this step off hold</button> : <button onClick={() => setDlg('hold')}>Put this step on hold</button>}
-              <button onClick={() => setDlg('verify')}>Add a practice check in the source system</button></div>}
+              <button onClick={() => setDlg('verify')}>Add a practice check in the source system</button>
+              {step.impact === 'ROUTINE' && <button onClick={() => act(() => hub.setStepSignOff(uid, step.id, !step.employeeSignOffAllowed), step.employeeSignOffAllowed ? 'Only you sign this step off' : 'The person may now sign this step off')}>{step.employeeSignOffAllowed ? 'Only I sign this off' : 'Let the person sign this off'}</button>}</div>}
           </div>
         </details>
         {step.verifications.length > 0 && (
