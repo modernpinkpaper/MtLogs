@@ -46,12 +46,9 @@ export function OwnerAI() {
       {tab === 'inbox' && (
         <>
           <div className="tiles">
-            <div className="tile"><div className="n">{sum.newSinceLastLook}</div><div className="t">New since you last looked</div></div>
-            <div className="tile"><div className="n">{sum.urgent}</div><div className="t">Urgent</div></div>
-            <div className="tile"><div className="n">{sum.needsDecision}</div><div className="t">Need your decision</div></div>
-            <div className="tile"><div className="n">{sum.investigating}</div><div className="t">Being looked into</div></div>
-            <div className="tile"><div className="n">{sum.approvedUnassigned}</div><div className="t">Approved, nobody assigned</div></div>
-            <div className="tile"><div className="n">{sum.followUps}</div><div className="t">Follow-ups due</div></div>
+            {([[sum.needsDecision, 'Need your decision', true], [sum.urgent, 'Urgent', false], [sum.newSinceLastLook, 'New since you last looked', false], [sum.investigating, 'Being looked into', false], [sum.approvedUnassigned, 'Approved, nobody assigned', false], [sum.followUps, 'Follow-ups due', false]] as [number, string, boolean][])
+              .filter(([n, , always]) => always || n > 0)
+              .map(([n, t]) => <div key={t} className="tile"><div className="n">{n}</div><div className="t">{t}</div></div>)}
           </div>
           <p className="small muted" style={{ margin: 0 }}>{sum.freshness.lastScanAt ? `Last scan ${formatDateTime(sum.freshness.lastScanAt)}. ` : 'No scan has run yet. '}{sum.freshness.coverageNote} <button className="link" onClick={() => hub.markFindingsSeen(uid)}>Mark all as seen</button></p>
           {sum.unassignedProjects.length > 0 && <div className="banner warn">{sum.unassignedProjects.map((p) => <div key={p.id}><strong>{p.key} “{p.title}”</strong> is approved but nobody is assigned. <Link to={`/projects/${p.id}?assign=1`}>Choose who works on it</Link></div>)}</div>}
@@ -65,15 +62,19 @@ export function OwnerAI() {
               <select aria-label="How urgent" style={{ width: 'auto' }} value={urgency} onChange={(e) => setUrgency(e.target.value)}><option value="">How urgent: any</option><option value="URGENT">Urgent</option><option value="NORMAL">Normal</option><option value="STRATEGIC">Longer term</option></select></div></details>
           </div>
           {list.length === 0 && <Empty>Nothing here. Try “Everything”, or run a practice scan.</Empty>}
-          <div className="stack">
+          <div className="card list">
             {list.map((f) => (
-              <article key={f.id} className="card pcard" aria-label={f.title}>
-                <div className="top"><Link to={`/owner/ai/${f.id}`} className="name">{f.code} — {f.title}</Link></div>
-                <div className="row"><Chip tone={URG[f.urgency][1]}>{URG[f.urgency][0]}</Chip><Chip tone="gray">{f.kind}</Chip><Chip tone="gray">{f.area}</Chip>{!f.seenByOwner && <Chip tone="pink" glyph="●">New</Chip>}{f.status !== 'NEW' && <Chip tone="info">{STATUS_LABEL[f.status]}</Chip>}
-                  {f.projectMatch.type === 'ALREADY_COVERED' && <Chip tone="ok">Already covered by {f.projectMatch.projectKey}</Chip>}{f.projectMatch.type === 'POSSIBLE_DUPLICATE' && <Chip tone="warn" glyph="!">May overlap with {f.projectMatch.projectKey}</Chip>}</div>
-                <div className="small">{f.summary}</div>
-                <div className="act"><button className="primary" onClick={() => nav(`/owner/ai/${f.id}`)}>Open</button></div>
-              </article>
+              <Link key={f.id} to={`/owner/ai/${f.id}`} className="lrow" aria-label={f.title}>
+                <span className="t">{!f.seenByOwner && <i className="newdot" aria-label="New" />}{f.title}</span>
+                <span className="s">{f.summary}</span>
+                <span className="m">
+                  {f.urgency !== 'NORMAL' && <Chip tone={URG[f.urgency][1]}>{URG[f.urgency][0]}</Chip>}
+                  <span>{f.area} · {f.kind}</span>
+                  {f.status !== 'NEW' && <span>· {STATUS_LABEL[f.status]}</span>}
+                  {f.projectMatch.type === 'ALREADY_COVERED' && <span className="okt">· Already covered by {f.projectMatch.projectKey}</span>}
+                  {f.projectMatch.type === 'POSSIBLE_DUPLICATE' && <span className="warnt">· May overlap with {f.projectMatch.projectKey}</span>}
+                </span>
+              </Link>
             ))}
           </div>
         </>

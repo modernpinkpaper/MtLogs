@@ -15,6 +15,11 @@ export function StatusChip({ status, hold }: { status: StepStatus; hold?: boolea
   const [label, tone, glyph] = STATUS[status];
   return <Chip tone={tone} glyph={glyph} title="This is the step’s status in the tracker. People set it.">{label}{hold ? ' · on hold' : ''}</Chip>;
 }
+/** Quiet status: a coloured dot and a word. Used in lists, where a full chip on every row is noise. */
+export function StepState({ status, hold }: { status: StepStatus; hold?: boolean }) {
+  const [label, tone] = STATUS[status];
+  return <span className={`state ${tone}`}><i aria-hidden="true" />{label}{hold ? ' · on hold' : ''}</span>;
+}
 export const statusLabel = (s: StepStatus) => STATUS[s][0];
 
 import type { ProjectWorkStatus } from '../domain/types';

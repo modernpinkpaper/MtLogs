@@ -59,3 +59,6 @@ Pause/resume and limited tests, simpler screens, plain wording, step-centered pr
 See `docs/changes-made.md`, `docs/ux-audit.md`, `docs/interface-language.md`, `PROACTIVE_AI_MANAGER_IMPLEMENTATION.md`.
 Tests: `npm test` (121 tests). Browser check: `node e2e/v11.mjs` (needs `npm run build && npx vite preview --port 4173`).
 Single-file build for sharing: `npm run build:single`.
+
+## v1.2
+Calmer screens and clearer next steps. See `docs/ux-overhaul-v1-2.md`.

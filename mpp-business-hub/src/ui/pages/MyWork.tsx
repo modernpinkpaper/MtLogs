@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useMe } from '../hubContext';
-import { Chip, Empty, ObservedChip, StatusChip } from '../common';
+import { Chip, Empty, StepState } from '../common';
 import { formatDate, formatDateTime } from '../../domain/time';
-import { notReadyReason, pauseLine, projectWorkStatus } from '../../domain/projectStatus';
+import { notReadyReason, pauseLine } from '../../domain/projectStatus';
 import { TERMINAL } from '../../server/hub';
 import type { Project, Step } from '../../domain/types';
 
@@ -38,96 +38,117 @@ export function MyWork() {
   const saved = hub.myWorkLog(uid);
   const firstName = me.name.split(' ')[0];
 
+  // The one thing to do first: a request from Dalia beats a step. Otherwise the first ready step.
+  const firstReq = requests[0];
+  const hero = ready[0];
+  const rest = ready.slice(hero ? 1 : 0);
+  const groups = new Map<string, { p: Project; rows: Row[] }>();
+  for (const r of rest) { const g = groups.get(r.p.id) ?? { p: r.p, rows: [] }; g.rows.push(r); groups.set(r.p.id, g); }
+
   return (
     <div className="stack">
-      <div>
-        <h1>Hi {firstName} 👋</h1>
-        <div className="row">
-          <Chip tone={shift ? 'ok' : 'gray'} glyph={shift ? '●' : '○'}>{shift ? 'Your pay clock is running' : 'You are clocked out'}</Chip>
+      <div className="row between">
+        <h1 style={{ margin: 0 }}>Hi {firstName} 👋</h1>
+        <span className="row small">
+          <Chip tone={shift ? 'ok' : 'gray'} glyph={shift ? '●' : '○'}>{shift ? 'Pay clock is running' : 'Clocked out'}</Chip>
           {!shift && me.role === 'EMPLOYEE' && <Link to="/clock">Clock in</Link>}
-          {(area === 'PRINT' || area === 'MIXED') && <Link to="/print/my-stats">See today’s printing numbers</Link>}
-        </div>
+          {(area === 'PRINT' || area === 'MIXED') && <Link to="/print/my-stats">Today’s printing</Link>}
+        </span>
       </div>
 
-      <section aria-labelledby="needs">
-        <h2 id="needs" className="group-title">Needs a response <span className="count">{cards.length}</span></h2>
-        {cards.length === 0 ? <Empty>Nothing is waiting for you.</Empty> : (
-          <div className="card pink stack">
-            {requests.map((c) => {
-              const req = c.updateRequestId ? hub.getRequest(uid, c.updateRequestId) : null;
-              const paused = c.projectId ? hub.getProject(uid, c.projectId).pause?.isPaused : false;
-              return (
-                <div key={c.id} className="row between">
-                  <span><strong>{hub.userName(req?.requestedByUid ?? null)} asked:</strong> {c.explanatoryText}{paused && <> <Chip tone="violet" glyph="⏸">Project is paused</Chip></>}</span>
-                  <Link to={`/review?card=${c.id}`}><button className="primary">Answer</button></Link>
-                </div>
-              );
-            })}
-            {others > 0 && <div className="row between"><span>{others} item{others === 1 ? '' : 's'} to review. It takes 1 to 3 minutes and you get paid for it.</span><Link to="/review"><button>Review my work</button></Link></div>}
-            <p className="small muted" style={{ margin: 0 }}>You can clock in or out any time, even if these are not done.</p>
-          </div>
-        )}
-      </section>
-
-      <section aria-labelledby="next">
-        <h2 id="next" className="group-title">Next to work on <span className="count">{ready.length}</span></h2>
-        {area === 'UNASSIGNED' && me.role === 'EMPLOYEE' && <div className="card flat">You have no jobs set up yet. Dalia will assign them.</div>}
-        {ready.length === 0 && area !== 'UNASSIGNED' && <Empty>No steps are ready right now.</Empty>}
-        <div className="stack">
-          {ready.slice(0, 5).map(({ p, s }) => <StepRow key={s.id} p={p} s={s} primary />)}
-          {ready.length > 5 && <details><summary className="small">Show {ready.length - 5} more</summary><div className="stack" style={{ marginTop: 8 }}>{ready.slice(5).map(({ p, s }) => <StepRow key={s.id} p={p} s={s} />)}</div></details>}
+      {cards.length > 0 && (
+        <div className="notice">
+          <span>
+            {firstReq
+              ? <><strong>{hub.userName(hub.getRequest(uid, firstReq.updateRequestId!)?.requestedByUid ?? null)} asked you for an update.</strong>{requests.length > 1 ? ` (${requests.length} requests)` : ''}</>
+              : <><strong>{others} item{others === 1 ? '' : 's'} to check.</strong> About 1 to 3 minutes, and it is paid time.</>}
+          </span>
+          <Link to={firstReq ? `/review?card=${firstReq.id}` : '/review'}><button className="primary">{firstReq ? 'Answer' : 'Check my work'}</button></Link>
         </div>
-      </section>
+      )}
 
-      {waiting.length > 0 && (
-        <section aria-labelledby="wait">
-          <h2 id="wait" className="group-title">Waiting or blocked <span className="count">{waiting.length}</span></h2>
-          <div className="stack">{waiting.map(({ p, s, why }) => <StepRow key={s.id} p={p} s={s} why={why} />)}</div>
+      {area === 'UNASSIGNED' && me.role === 'EMPLOYEE' && <div className="card flat">You have no jobs set up yet. Dalia will assign them.</div>}
+      {!hero && area !== 'UNASSIGNED' && <Empty>No steps are ready right now. Nice work.</Empty>}
+
+      {hero && (
+        <section aria-labelledby="first" className="hero">
+          <div className="eyebrow" id="first">Do this next</div>
+          <h2>{hero.s.title}</h2>
+          <div className="muted small">{hero.p.key} · {hero.p.title.slice(0, 70)}{hero.s.dueAt ? ` · Due ${formatDate(hero.s.dueAt)}` : ''}</div>
+          {hero.s.instructions && <p className="clamp">{hero.s.instructions}</p>}
+          <div className="row">
+            <Link to={`/projects/${hero.p.id}/steps/${hero.s.id}`}><button className="primary big">Open this step</button></Link>
+            <StepState status={hero.s.status} hold={!!hero.s.onHold} />
+            {hero.s.observedLevel !== 'NO_EVIDENCE' && hero.s.observedReview === 'PENDING_EMPLOYEE' && <span className="small muted">We saw computer activity. Please check it when you can.</span>}
+          </div>
         </section>
       )}
 
-      <section aria-labelledby="paused">
-        <details>
-          <summary id="paused" className="group-title" style={{ cursor: 'pointer' }}>Paused projects <span className="count">{pausedProjects.length}</span></summary>
-          {pausedProjects.length === 0 ? <p className="muted small">No paused projects.</p> : (
-            <div className="stack">{pausedProjects.map((p) => (
-              <Link key={p.id} to={`/projects/${p.id}`} className="card pcard" style={{ color: 'inherit', textDecoration: 'none' }}>
-                <span className="name">{p.key} — {p.title}</span><span className="meta">{pauseLine(p, false)}</span>
-                <span className="small muted">Your work is saved. When it resumes, you pick up where you left off.</span>
-              </Link>))}</div>
-          )}
-        </details>
-      </section>
+      {groups.size > 0 && (
+        <section aria-labelledby="then">
+          <h2 id="then" className="group-title">After that <span className="count">{rest.length}</span></h2>
+          <div className="card list">
+            {[...groups.values()].map(({ p, rows }) => (
+              <div key={p.id} className="lgroup">
+                <Link className="lhead" to={`/projects/${p.id}`}>{p.key} · {p.title}</Link>
+                {rows.map(({ s }) => <StepLine key={s.id} p={p} s={s} />)}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
-      <section aria-labelledby="done">
-        <details>
-          <summary id="done" className="group-title" style={{ cursor: 'pointer' }}>Recently finished <span className="count">{recent.length}</span></summary>
-          {recent.length === 0 ? <p className="muted small">Nothing finished yet.</p> : recent.map(({ p, s }) => (
-            <div key={s.id} className="small" style={{ marginBottom: 4 }}><Link to={`/projects/${p.id}/steps/${s.id}`}>{p.key} · Step {s.sortOrder}: {s.title}</Link> <StatusChip status={s.status} /> <span className="muted">{formatDateTime(s.lastConfirmedAt)}</span></div>
-          ))}
+      {waiting.length > 0 && (
+        <details className="soft">
+          <summary>Waiting on something else <span className="count">{waiting.length}</span></summary>
+          <div className="card list" style={{ marginTop: 8 }}>
+            {waiting.map(({ p, s, why }) => <StepLine key={s.id} p={p} s={s} why={why} withProject />)}
+          </div>
         </details>
-      </section>
+      )}
+
+      {pausedProjects.length > 0 && (
+        <details className="soft">
+          <summary>Paused projects <span className="count">{pausedProjects.length}</span></summary>
+          <div className="card list" style={{ marginTop: 8 }}>
+            {pausedProjects.map((p) => (
+              <Link key={p.id} to={`/projects/${p.id}`} className="lline">
+                <span className="t">{p.key} — {p.title}<span className="small muted"> · {pauseLine(p, false)}</span></span>
+                <span className="small muted">Your work is saved.</span>
+              </Link>))}
+          </div>
+        </details>
+      )}
+
+      {recent.length > 0 && (
+        <details className="soft">
+          <summary>Recently finished <span className="count">{recent.length}</span></summary>
+          <div className="card list" style={{ marginTop: 8 }}>
+            {recent.map(({ p, s }) => <StepLine key={s.id} p={p} s={s} withProject extra={formatDateTime(s.lastConfirmedAt)} />)}
+          </div>
+        </details>
+      )}
 
       {saved.length > 0 && (
-        <section><details><summary className="group-title" style={{ cursor: 'pointer' }}>Other work you saved <span className="count">{saved.length}</span></summary>
-          <div className="stack">{saved.map((w) => (
-            <div key={w.id} className="card flat"><strong>{w.title}</strong> <Chip tone={w.kind === 'EVERYDAY' ? 'gray' : 'violet'}>{w.kind === 'EVERYDAY' ? 'Everyday work' : 'Maybe a new project'}</Chip>
-              <div className="small muted">Saved {formatDateTime(w.loggedAt)}. Not part of a project. Dalia can see it.</div></div>))}</div></details></section>
+        <details className="soft">
+          <summary>Other work you saved <span className="count">{saved.length}</span></summary>
+          <div className="card list" style={{ marginTop: 8 }}>
+            {saved.map((w) => (
+              <div key={w.id} className="lline static"><span className="t">{w.title}</span><span className="small muted">{w.kind === 'EVERYDAY' ? 'Everyday work' : 'Maybe a new project'} · {formatDateTime(w.loggedAt)}</span></div>))}
+          </div>
+        </details>
       )}
     </div>
   );
 }
 
-function StepRow({ p, s, why, primary }: { p: Project; s: Step; why?: string | null; primary?: boolean }) {
-  const status = projectWorkStatus(p, []);
-  void status;
+/** One quiet row. The whole row is the link, so there is no repeated button. */
+function StepLine({ p, s, why, withProject, extra }: { p: Project; s: Step; why?: string | null; withProject?: boolean; extra?: string }) {
   return (
-    <div className="card pcard">
-      <div className="top"><span className="name">{p.key} · Step {s.sortOrder}: {s.title}</span></div>
-      <div className="meta"><span>{p.title.slice(0, 60)}</span>{s.dueAt && <span>Due {formatDate(s.dueAt)}</span>}</div>
-      <div className="row"><StatusChip status={s.status} hold={!!s.onHold} />{s.observedLevel !== 'NO_EVIDENCE' && s.observedReview === 'PENDING_EMPLOYEE' && <ObservedChip level={s.observedLevel} review={s.observedReview} />}</div>
-      {why && <div className="small" style={{ color: 'var(--warn)' }}>Not ready: {why}</div>}
-      <div className="act"><Link to={`/projects/${p.id}/steps/${s.id}`}><button className={primary ? 'primary' : ''}>Open this step</button></Link></div>
-    </div>
+    <Link to={`/projects/${p.id}/steps/${s.id}`} className="lline">
+      <span className="t">Step {s.sortOrder}: {s.title}{withProject && <span className="small muted"> · {p.key}</span>}</span>
+      <span className="small muted when">{why ? `Waiting: ${why}` : extra ?? (s.dueAt ? `Due ${formatDate(s.dueAt)}` : '')}</span>
+      <StepState status={s.status} hold={!!s.onHold} />
+    </Link>
   );
 }

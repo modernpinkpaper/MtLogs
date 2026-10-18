@@ -43,15 +43,15 @@ export function OwnerOverview() {
         <a className="tile" href="#decide" style={{ color: 'inherit', textDecoration: 'none' }}><div className="n">{decisions.length}</div><div className="t">Waiting for you</div></a>
       </div>
 
-      <section id="decide" className="card pink" aria-labelledby="dec">
+      <section id="decide" className="card" aria-labelledby="dec" style={{ borderLeft: '5px solid var(--pink)' }}>
         <h2 id="dec">Needs your decision</h2>
         {decisions.length === 0 ? <p className="muted">Nothing needs you right now.</p> : (
-          <div className="stack">
+          <div className="list">
             {shown.map((q, i) => (
-              <div key={i} className="row between">
-                <span><Chip tone={q.kind.startsWith('They answered') || q.kind.startsWith('Urgent') || q.kind.startsWith('Needs your') ? 'pink' : q.kind === 'Blocked' ? 'bad' : q.kind === 'Data problem' ? 'warn' : 'info'}>{q.kind}</Chip> {q.label}</span>
-                <button onClick={() => nav(q.link)}>Open</button>
-              </div>
+              <Link key={i} to={q.link} className="lrow">
+                <span className="t">{q.label}</span>
+                <span className="m"><span>{q.kind}</span></span>
+              </Link>
             ))}
             {decisions.length > 5 && <button className="link" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${decisions.length}`}</button>}
           </div>

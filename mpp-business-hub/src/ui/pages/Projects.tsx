@@ -189,29 +189,27 @@ export function PCard({ r, compact, onAsk, onResume }: { r: { p: Project; steps:
   const di = deadlineInfo(p, hub.now);
   const pilot = pilotSummaryLine(p);
   const people = p.memberUids.map((m) => hub.userName(m)).join(', ') || (p.visibility === 'OWNER_PRIVATE' ? 'Only Dalia' : 'Nobody yet');
-  // One clear action for this card.
-  let action: { label: string; go: () => void; primary?: boolean };
+  // Only three situations get a button on the row. Everything else: the whole row opens the project.
+  let action: { label: string; go: () => void; primary?: boolean } | null = null;
   if (status === 'PAUSED' && owner && hub.canControlProject(uid, p.id)) action = { label: 'Resume project', go: () => onResume(p) };
   else if (owner && p.origin === 'AI_RECOMMENDATION' && !p.memberUids.length && !p.closedAt) action = { label: 'Choose who works on it', go: () => nav(`/projects/${p.id}?assign=1`), primary: true };
   else if (!owner && attention === 'Needs a response') action = { label: 'Answer Dalia', go: () => nav('/review'), primary: true };
-  else if (attention && owner) action = { label: attention.startsWith('They answered') ? 'See the answer' : 'Open', go: () => nav(`/projects/${p.id}`), primary: true };
-  else if (next && status !== 'COMPLETED' && status !== 'CANCELED') action = { label: 'Open next step', go: () => nav(`/projects/${p.id}/steps/${next.id}`) };
-  else action = { label: 'Open', go: () => nav(`/projects/${p.id}`) };
   void act; void onAsk;
+  const nextText = next && status !== 'COMPLETED' && status !== 'CANCELED' ? `${status === 'PAUSED' ? 'Next when resumed' : 'Next'}: Step ${next.sortOrder} “${next.title.length > 70 ? next.title.slice(0, 68) + '…' : next.title}”` : null;
+  const when = status === 'PAUSED' ? pauseLine(p, owner) : di ? (compact && p.deadlineAt ? `Due ${formatDate(p.deadlineAt)}` : di.text) : null;
   return (
-    <article className="card pcard" aria-label={`${p.key} ${p.title}`}>
-      <div className="top">
-        <Link to={`/projects/${p.id}`} className="name">{p.key} — {p.title}</Link>
-        {p.pinned && <span title="Pinned" aria-label="Pinned">📌</span>}
-      </div>
-      <div className="row"><ProjectStatusChip status={status} />{attention && status !== 'PAUSED' && <Chip tone="pink" glyph="!">{attention}</Chip>}{p.visibility === 'OWNER_PRIVATE' && <Chip tone="violet" glyph="🔒">Only Dalia</Chip>}</div>
-      <div className="meta">
-        <span>{people}</span>
-        {status === 'PAUSED' ? <span>{pauseLine(p, owner)}</span> : di ? <span>{di.text}</span> : null}
-      </div>
-      {!compact && next && status !== 'COMPLETED' && <div className="meta"><span>{status === 'PAUSED' ? 'Next when resumed' : 'Next'}: Step {next.sortOrder} “{next.title.length > 60 ? next.title.slice(0, 58) + '…' : next.title}”</span></div>}
-      <div className="meta"><span>{pr.label}</span>{pilot && <span>{pilot}</span>}{di && p.deadlineAt && status !== 'PAUSED' && compact ? <span>Due {formatDate(p.deadlineAt)}</span> : null}</div>
-      <div className="act"><button className={action.primary ? 'primary' : ''} onClick={action.go}>{action.label}</button></div>
+    <article className="prow" aria-label={`${p.key} ${p.title}`}>
+      <Link to={`/projects/${p.id}`} className="main">
+        <span className="t">{p.key} — {p.title}{p.pinned && <span title="Pinned" aria-label="Pinned"> 📌</span>}</span>
+        {nextText && !compact && <span className="s">{nextText}</span>}
+        <span className="m">{[people, when, pr.label, pilot].filter(Boolean).join(' · ')}</span>
+      </Link>
+      <span className="end">
+        {status !== 'IN_PROGRESS' && <ProjectStatusChip status={status} />}
+        {attention && status !== 'PAUSED' && <Chip tone="pink" glyph="!">{attention}</Chip>}
+        {p.visibility === 'OWNER_PRIVATE' && <Chip tone="violet" glyph="🔒">Only Dalia</Chip>}
+        {action && <button className={action.primary ? 'primary' : ''} onClick={action.go}>{action.label}</button>}
+      </span>
     </article>
   );
 }

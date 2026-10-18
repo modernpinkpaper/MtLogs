@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { newKey, useAct, useMe } from '../hubContext';
 import { ChoiceGroup } from '../dialogs';
-import { Chip, CoverageChip, Empty, StatusChip } from '../common';
+import { Chip, CoverageChip, Empty, statusLabel } from '../common';
 import { formatDateTime, formatTime } from '../../domain/time';
 import { WORDS } from '../lang';
 import type { Finding, ResponseChoice, ReviewCard } from '../../domain/types';
@@ -43,7 +43,7 @@ export function Review() {
     <div className="stack">
       <div>
         <h1>Review my work</h1>
-        <p className="muted" style={{ margin: 0 }}>Tell us if what the system noticed is right, and answer requests from Dalia. It usually takes 1 to 3 minutes and it is paid time. You can clock in or out any time without finishing.</p>
+        <p className="muted" style={{ margin: 0 }}>Check what the system noticed, and answer Dalia’s requests. About 1 to 3 minutes. It is paid time.</p>
       </div>
       {offClock && <div className="card warn" role="status">Reviews are paid work, so you answer them while clocked in. <Link to="/clock">Clock in</Link> first. Your items will wait for you.</div>}
       {cards.length === 0 && <Empty>Nothing to review right now. {hub.reviewReadiness(uid).message}</Empty>}
@@ -137,7 +137,7 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
             {project && <Link to={`/projects/${project.id}${step ? `/steps/${step.id}` : ''}`}>{project.key}{step ? `, Step ${step.sortOrder}` : ''}</Link>}
             <span>{formatDateTime(card.createdAt)}</span>
             {card.provisional && <Chip tone="warn" glyph="…" title="We are still reading today’s activity. This may change.">{WORDS.checkingToday}</Chip>}
-            {!isRequest && <CoverageChip state={card.sourceCoverage} />}
+            {!isRequest && card.sourceCoverage !== 'FINAL' && <CoverageChip state={card.sourceCoverage} />}
             {paused && <Chip tone="violet" glyph="⏸">Project is paused</Chip>}
             {req?.importance === 'IMPORTANT' && <Chip tone="bad" glyph="!">Important</Chip>}
           </div>
@@ -153,8 +153,7 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
         <div className="stack" style={{ marginTop: '.6rem' }}>
           <p className="q" style={{ margin: 0 }}>“{card.explanatoryText}”</p>
           {paused && <p className="small" style={{ margin: 0 }}>This project is paused{project?.pause?.reasonNote ? `: ${project.pause.reasonNote}` : ''}. Your answer does not resume it.</p>}
-          {step && <div className="row small"><StatusChip status={step.status} hold={!!step.onHold} /></div>}
-          <ChoiceGroup value={choice === 'NOT_SURE' ? null : choice} onChange={setChoice} name={`c-${card.id}`} />
+                    <ChoiceGroup value={choice === 'NOT_SURE' ? null : choice} onChange={setChoice} name={`c-${card.id}`} />
           <p className="small muted" style={{ margin: 0 }}>“Completed” means you finished it. It is {WORDS.employeeConfirmed.toLowerCase()}. It is not {WORDS.checkedInSource.toLowerCase()}.</p>
           <div><label htmlFor={`n-${card.id}`}>Add a note (optional)</label><textarea id={`n-${card.id}`} value={note} onChange={(e) => setNote(e.target.value)} /></div>
           <div><label htmlFor={`l-${card.id}`}>A link or file name that shows your work (optional)</label><input id={`l-${card.id}`} type="text" value={link} onChange={(e) => setLink(e.target.value)} /></div>
@@ -166,17 +165,7 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
         </div>
       ) : f0 && (
         <div className="stack" style={{ marginTop: '.4rem' }}>
-          <dl className="rv">
-            <dt>What the system noticed</dt>
-            <dd>{f0.headline}</dd>
-            <dt>What it suggests</dt>
-            <dd>{f0.inference}</dd>
-            {f0.uncertainties.length > 0 && (<><dt>What it does not know</dt><dd><ul style={{ margin: 0, paddingLeft: '1.1rem' }}>{f0.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></dd></>)}
-            <dt>What you need to do</dt>
-            <dd><strong>{whatToDo}</strong></dd>
-          </dl>
-          {step && <div className="row small"><StatusChip status={step.status} hold={!!step.onHold} /><span className="muted">This is the step’s status now. Your answer does not change it.</span></div>}
-          <EvidenceToggle f={f0} />
+          <p className="lead">{f0.inference}</p>
 
           {f0.findingType === 'AI_UNMATCHED_WORK' ? (
             <div className="card flat stack">
@@ -208,7 +197,6 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
           ) : (
             <>
               <div className="card flat stack">
-                <strong>Did this happen?</strong>
                 <div className="row">
                   <button className="primary" disabled={disabled} onClick={() => submit('CONFIRM', f0.whilePaused ? 'Added to the project history' : 'Thank you. Saved as accurate.')}>{f0.whilePaused ? 'Yes. Add it to the project history' : WORDS.yesAccurate}</button>
                   <button disabled={disabled} onClick={() => setFix(!fix)} aria-expanded={fix}>{WORDS.somethingIncorrect}</button>
@@ -234,6 +222,17 @@ function CardView({ card, highlight, disabled, select }: { card: ReviewCard; hig
               )}
             </>
           )}
+          <details className="soft">
+            <summary>Why we think so, and what we do not know</summary>
+            <div className="stack" style={{ marginTop: 8 }}>
+              <dl className="rv">
+                <dt>What the system noticed</dt><dd>{f0.headline}</dd>
+                {f0.uncertainties.length > 0 && (<><dt>What it does not know</dt><dd><ul style={{ margin: 0, paddingLeft: '1.1rem' }}>{f0.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></dd></>)}
+              </dl>
+              {step && <div className="small muted">The step’s status right now is “{statusLabel(step.status)}”. Your answer does not change it.</div>}
+              <EvidenceToggle f={f0} />
+            </div>
+          </details>
         </div>
       )}
       {disabled && <p className="small muted">Clock in to send this. Reviews are paid work.</p>}

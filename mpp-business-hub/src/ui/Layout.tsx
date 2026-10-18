@@ -71,7 +71,7 @@ export function Layout() {
       </aside>
       <div className="main">
         <div className="demo-banner" role="note">
-          <strong>DEMO / NO LIVE CONNECTIONS</strong> — practice copy with made-up data. Not connected to your real clock-in app, Google, MT Log, Amazon, Etsy or Shopify. Pretend time: {formatDateTime(hub.now)}.
+          <strong>Practice copy</strong> · made-up data · not connected to anything real · pretend time {formatDateTime(hub.now)}
         </div>
         <header className="topbar">
           <div className="searchbox">
@@ -94,8 +94,7 @@ export function Layout() {
             🔔{counts.unreadNotifications > 0 && <span className="badge" aria-hidden="true">{counts.unreadNotifications}</span>}
           </button>
           <label className="row" style={{ margin: 0, fontWeight: 500 }}>
-            <span className="small muted hide-sm">Demo user</span>
-            <select aria-label="Switch demo user" style={{ width: 'auto' }} value={uid} onChange={(e) => { setUid(e.target.value); nav('/home'); }}>
+                        <select aria-label="Switch demo user" style={{ width: 'auto' }} value={uid} onChange={(e) => { setUid(e.target.value); nav('/home'); }}>
               {hub.state.users.filter((u) => u.active).map((u) => <option key={u.id} value={u.id}>{u.name}{u.role === 'OWNER' ? ' (owner)' : ''}</option>)}
             </select>
           </label>

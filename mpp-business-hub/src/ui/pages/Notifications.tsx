@@ -66,9 +66,9 @@ export function Notifications() {
         <div className="row">
           <button className="primary" onClick={async () => { await act(() => hub.markRead(uid, n.id)); nav(n.deepLink); }}>{OPEN_LABEL[n.type] ?? 'Open'}</button>
           {!n.acknowledgedAt && ACK_TYPES.includes(n.type) && <button onClick={() => act(() => hub.acknowledge(uid, n.id), 'Marked as seen')}>I saw this</button>}
-          {!n.readAt && <button onClick={() => act(() => hub.markRead(uid, n.id))}>Mark as read</button>}
-          <button onClick={() => act(() => hub.snoozeNotification(uid, n.id, 60), 'We will remind you in 1 hour')}>Remind me in 1 hour</button>
-          <button className="ghost" onClick={() => act(() => hub.dismissNotification(uid, n.id))}>Dismiss</button>
+          {!n.readAt && <button className="link" onClick={() => act(() => hub.markRead(uid, n.id))}>Mark as read</button>}
+          <button className="link" onClick={() => act(() => hub.snoozeNotification(uid, n.id, 60), 'We will remind you in 1 hour')}>Remind me in 1 hour</button>
+          <button className="link" onClick={() => act(() => hub.dismissNotification(uid, n.id))}>Dismiss</button>
         </div>
       </div>
     );

@@ -27,7 +27,7 @@ await shot('v4-projects-paused');
 await as('Erika'); await go('/projects/prj-070'); await p.waitForSelector('text=Paused by Dalia'); await shot('v5-paused-erika');
 await go('/home'); await p.waitForSelector('text=Paused projects'); await shot('v6-erika-home');
 await as('Dalia (owner)'); await go('/projects/prj-070'); await p.getByRole('button', { name: 'Resume project' }).first().click(); await p.getByRole('button', { name: 'Resume project' }).last().click();
-await p.waitForSelector('text=Resumed by Dalia');
+await p.waitForTimeout(500); await p.locator('summary:has-text("Recent project activity")').click(); await p.waitForSelector('text=Resumed by Dalia >> visible=true');
 // AI recommendations
 await go('/owner/ai'); await p.waitForSelector('text=Needs a decision'); await shot('v7-ai-inbox');
 await go('/owner/ai/af-1'); await p.waitForSelector('text=The numbers'); await shot('v8-finding', true);
@@ -60,4 +60,27 @@ await go('/projects'); await shot('v18-mobile-projects');
 await p.setViewportSize({ width: 1280, height: 900 });
 // search with reasons
 await p.locator('input[aria-label="Search"]').fill('FBA_TY001'); await p.waitForSelector('.results .hit'); await shot('v19-search');
+// ---- v1.2 design checks (calm screens, one clear action) ----
+await p.fill('input[aria-label="Search"]', '');
+await as('Erika'); await go('/home');
+await p.waitForSelector('text=Do this next');
+ok(await p.locator('button:has-text("Open this step")').count() === 1, 'My Work has exactly one big "Open this step" button');
+ok(await p.locator('.lline').count() >= 3, 'other steps are compact rows');
+await go('/review'); await p.waitForSelector('text=Did this happen?');
+const yes = p.getByRole('button', { name: 'Yes, accurate' }).first();
+ok(await yes.isVisible(), 'Yes, accurate is visible without opening anything');
+const yBox = await yes.boundingBox(); ok(yBox && yBox.y < 600, 'answer buttons are on the first screen of a review card');
+ok(await p.locator('text=Why we think so, and what we do not know').first().isVisible(), 'evidence is one tidy expandable section');
+await go('/projects/prj-012'); await p.waitForSelector('text=Next step');
+ok(await p.locator('.nextstep').count() === 0, 'no duplicate "Next step" card');
+ok(await p.locator('text=Latest in this project').count() === 0, 'no duplicate latest-activity block');
+await p.setViewportSize({ width: 390, height: 820 }); await go('/projects/prj-012'); await p.waitForSelector('text=Next step');
+const sw = await p.evaluate(() => document.documentElement.scrollWidth); ok(sw <= 392, 'project page has no sideways scrolling on a phone (' + sw + ')');
+ok(await p.locator('summary:has-text("All steps")').count() === 1, 'step list folds away on a phone');
+await shot('v20-mobile-project');
+await p.setViewportSize({ width: 1280, height: 900 });
+await as('Dalia (owner)'); await go('/owner/ai'); await p.waitForSelector('.lrow');
+ok(await p.locator('.lrow button').count() === 0, 'AI list has no repeated Open buttons');
+await go('/projects'); await p.waitForSelector('.prow');
+ok(await p.locator('.prow button:has-text("Open")').count() === 0, 'project rows have no repeated Open buttons');
 console.log(errs.length ? errs.join('\n') : 'NO ERRORS, ALL CHECKS PASSED'); await b.close();

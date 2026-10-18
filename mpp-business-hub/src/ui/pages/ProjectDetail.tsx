@@ -1,17 +1,25 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { newKey, useAct, useMe } from '../hubContext';
-import { Chip, Empty, Modal, ObservedChip, ProjectStatusChip, SourceChip, StatusChip, Tabs, VerifyBadge, statusLabel } from '../common';
+import { Chip, Empty, Modal, ObservedChip, ProjectStatusChip, SourceChip, StatusChip, StepState, Tabs, VerifyBadge, statusLabel } from '../common';
 import { JournalList, ResourceCard } from '../parts';
 import { JournalFilters } from './Journal';
 import { RequestUpdateDialog, SendUpdateDialog } from '../dialogs';
 import { ChangeScheduleDialog, PauseBanner, PauseDialog, PilotPanel, PilotSetupDialog, ResumeDialog, SuggestDialog } from '../pauseUi';
 import { deadlineInfo, nextStep, notReadyReason, pauseLine, progressCounts, projectWorkStatus } from '../../domain/projectStatus';
-import { formatDateTime } from '../../domain/time';
+import { formatDate, formatDateTime } from '../../domain/time';
 import { CHOICE_LABEL, TERMINAL } from '../../server/hub';
 import type { Project, ResourceRole, Step, StepStatus } from '../../domain/types';
 
 type Tab = 'overview' | 'history' | 'files' | 'more';
+
+/** True on phone-sized screens, so the step list can fold away and the step itself gets the room. */
+function useNarrow(max = 900) {
+  const q = `(max-width: ${max}px)`;
+  const [n, setN] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
+  useEffect(() => { const m = window.matchMedia(q); const f = () => setN(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, [q]);
+  return n;
+}
 
 export function ProjectDetail() {
   const { projectId = '', stepId } = useParams();
@@ -43,6 +51,9 @@ export function ProjectDetail() {
   const di = deadlineInfo(project, hub.now);
   const unassigned = owner && project.origin === 'AI_RECOMMENDATION' && !project.memberUids.length && !project.closedAt;
   const [showDetails, setShowDetails] = useState(false);
+  const narrow = useNarrow();
+  const recentEvents = hub.getJournal(uid, { projectId }).slice(0, 3);
+  const latestEvent = recentEvents[0];
 
   const tabs: { id: Tab; label: string }[] = [{ id: 'overview', label: 'Overview' }, { id: 'history', label: 'History' }, { id: 'files', label: 'All files' }, ...(owner ? [{ id: 'more' as Tab, label: 'More' }] : [])];
 
@@ -104,35 +115,39 @@ export function ProjectDetail() {
 
       {tab === 'overview' && (
         <>
-          <section className="nextstep" aria-labelledby="ns">
-            <div className="label" id="ns">{paused ? 'Next step when this resumes' : 'Next step'}</div>
-            {next ? (
-              <div className="row between">
-                <div style={{ minWidth: 0 }}>
-                  <div className="q">Step {next.sortOrder}: {next.title}</div>
-                  <div className="small muted">{next.instructions.split('\n')[0].slice(0, 160)}{next.instructions.length > 160 ? '…' : ''}</div>
-                  {notReadyReason(next, steps, project) && !paused && <div className="small" style={{ color: 'var(--warn)' }}>{notReadyReason(next, steps, project)}</div>}
-                </div>
-                <button className="primary" onClick={() => nav(`/projects/${project.id}/steps/${next.id}`)}>Open this step</button>
-              </div>
-            ) : <p style={{ margin: 0 }}>All steps are done.</p>}
-            {blockers.map((b) => <div key={b.id} className="small" style={{ color: 'var(--bad)', marginTop: 4 }}>⛔ In the way: Step {b.sortOrder} — {b.blockerReason}</div>)}
-            {myReq.length > 0 && <div style={{ marginTop: 6 }}><Chip tone="pink" glyph="!">Dalia asked for an update</Chip> <Link to="/review">Answer now</Link></div>}
-            {ownerOpenReq.length > 0 && <div style={{ marginTop: 6 }}><Chip tone="info">{ownerOpenReq.length} request{ownerOpenReq.length === 1 ? '' : 's'} waiting for an answer</Chip></div>}
-          </section>
+          {(blockers.length > 0 || myReq.length > 0 || ownerOpenReq.length > 0 || (next && selected && next.id !== selected.id)) && (
+            <div className="stack">
+              {next && selected && next.id !== selected.id && <div className="notice"><span><strong>Next step is Step {next.sortOrder}:</strong> {next.title}</span><button className="primary" onClick={() => nav(`/projects/${project.id}/steps/${next.id}`)}>Go to it</button></div>}
+              {blockers.map((b) => <div key={b.id} className="banner warn" role="status">⛔ <strong>In the way:</strong> Step {b.sortOrder} — {b.blockerReason}</div>)}
+              {myReq.length > 0 && <div className="notice"><span><strong>Dalia asked for an update.</strong></span><Link to="/review"><button className="primary">Answer now</button></Link></div>}
+              {ownerOpenReq.length > 0 && <div className="small muted">{ownerOpenReq.length} update request{ownerOpenReq.length === 1 ? '' : 's'} waiting for an answer.</div>}
+            </div>
+          )}
 
-          <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.35fr)', alignItems: 'start' }}>
-            <section className="card" aria-labelledby="plan">
-              <h2 id="plan">Step plan</h2>
-              <StepList steps={steps} selectedId={selected?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} />
-              {canWork && owner && <AddStep projectId={project.id} />}
+          <div className="split">
+            <section className="card plan" aria-labelledby="plan">
+              {narrow ? (
+                <details>
+                  <summary id="plan" className="group-title" style={{ margin: 0, cursor: 'pointer' }}>All steps · {pr.label}{selected ? ` · you are on Step ${selected.sortOrder}` : ''}</summary>
+                  <div style={{ marginTop: 10 }}><StepList steps={steps} selectedId={selected?.id} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} />{canWork && owner && <AddStep projectId={project.id} />}</div>
+                </details>
+              ) : (
+                <>
+                  <h2 id="plan">Steps <span className="small muted" style={{ fontWeight: 400 }}>· {pr.label}</span></h2>
+                  <StepList steps={steps} selectedId={selected?.id} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} />
+                  {canWork && owner && <AddStep projectId={project.id} />}
+                </>
+              )}
             </section>
-            {selected && <StepPanel key={selected.id} step={selected} steps={steps} project={project} canWork={canWork} onTab={setTab} />}
+            {selected && <StepPanel key={selected.id} step={selected} steps={steps} project={project} canWork={canWork} isNext={next?.id === selected.id} paused={paused} onTab={setTab} />}
           </div>
-          <section className="card" aria-labelledby="latest">
-            <div className="row between"><h2 id="latest">Latest in this project</h2><button className="link" onClick={() => setTab('history')}>Show the full history</button></div>
-            <JournalList events={hub.getJournal(uid, { projectId }).slice(0, 3)} />
-          </section>
+          <details className="soft">
+            <summary>Recent project activity{latestEvent ? <span className="muted small" style={{ fontWeight: 400 }}> · Latest: {latestEvent.title}</span> : null}</summary>
+            <div className="card" style={{ marginTop: 8 }}>
+              <JournalList events={recentEvents} />
+              <button className="link" onClick={() => setTab('history')}>Show the full history</button>
+            </div>
+          </details>
         </>
       )}
 
@@ -161,15 +176,16 @@ export function ProjectDetail() {
   );
 }
 
-function StepList({ steps, selectedId, onPick, project }: { steps: Step[]; selectedId?: string; onPick: (id: string) => void; project: Project }) {
+function StepList({ steps, selectedId, nextId, onPick, project }: { steps: Step[]; selectedId?: string; nextId?: string; onPick: (id: string) => void; project: Project }) {
   const kids = (id: string | null) => steps.filter((s) => s.parentStepId === id).sort((a, b) => a.sortOrder - b.sortOrder);
   const render = (s: Step, depth: number): React.ReactNode => (
     <div key={s.id} className={depth ? 'sub' : ''}>
       <button className={`step ${selectedId === s.id ? 'sel' : ''}`} onClick={() => onPick(s.id)} aria-current={selectedId === s.id ? 'step' : undefined}>
-        <div className="row"><span className="num">{depth ? '↳' : `Step ${s.sortOrder}`}</span><strong style={{ flex: 1, minWidth: 0 }}>{s.title}</strong></div>
-        <div className="row" style={{ marginTop: 4 }}>
-          <StatusChip status={s.status} hold={!!s.onHold} />
-          {s.newActivityAt && s.observedReview === 'PENDING_EMPLOYEE' && !project.pause?.isPaused && <Chip tone="violet" glyph="✦" title="Computer activity was found for this step. A person still needs to confirm it.">Activity found</Chip>}
+        <div className="row"><span className="num">{depth ? '↳' : s.sortOrder}</span><strong style={{ flex: 1, minWidth: 0 }}>{s.title}</strong></div>
+        <div className="row" style={{ marginTop: 2, marginLeft: depth ? 0 : 26 }}>
+          <StepState status={s.status} hold={!!s.onHold} />
+          {nextId === s.id && !project.pause?.isPaused && <span className="tag-next">Next</span>}
+          {s.newActivityAt && s.observedReview === 'PENDING_EMPLOYEE' && !project.pause?.isPaused && <span className="small" style={{ color: 'var(--violet)' }} title="Computer activity was found for this step. A person still needs to confirm it.">✦ activity to check</span>}
         </div>
       </button>
       {kids(s.id).map((k) => render(k, depth + 1))}
@@ -199,7 +215,7 @@ const NEXT: Partial<Record<StepStatus, StepStatus[]>> = {
 const ACTION_LABEL: Partial<Record<StepStatus, string>> = { IN_PROGRESS: 'Start / continue', BLOCKED: 'Mark as blocked', WAITING: 'Mark as waiting', REPORTED_COMPLETE: 'I finished this step', NOT_APPLICABLE: 'Not needed', VERIFIED_COMPLETE: 'Confirm it is done', REOPENED: 'Reopen' };
 
 /** The employee’s workplace: what to do, substeps, files, latest activity, and one way to report progress. */
-function StepPanel({ step, steps, project, canWork, onTab }: { step: Step; steps: Step[]; project: Project; canWork: boolean; onTab: (t: Tab) => void }) {
+function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, onTab }: { step: Step; steps: Step[]; project: Project; canWork: boolean; isNext?: boolean; paused?: boolean; onTab: (t: Tab) => void }) {
   const { hub, uid, me } = useMe();
   const act = useAct();
   const [sp] = useSearchParams();
@@ -226,18 +242,27 @@ function StepPanel({ step, steps, project, canWork, onTab }: { step: Step; steps
     <section className="card stack" aria-label={`Step ${step.sortOrder} details`}>
       {responseId && <ResponseDetail responseId={responseId} />}
       <div>
+        {isNext && !projPaused && <div className="eyebrow">Next step</div>}
         <h2 style={{ marginBottom: 4 }}>Step {step.sortOrder}: {step.title}</h2>
-        <div className="row"><StatusChip status={step.status} hold={!!step.onHold} /><SourceChip source={step.verificationSource} />{step.impact === 'HIGH' && <Chip tone="warn" glyph="!" title="This is a big step. It needs a check in the source system or Dalia’s approval.">Big step</Chip>}</div>
+        <div className="row"><StepState status={step.status} hold={!!step.onHold} />
+          {['REPORTED_COMPLETE', 'VERIFIED_COMPLETE'].includes(step.status) && <SourceChip source={step.verificationSource} />}
+          {step.impact === 'HIGH' && <Chip tone="warn" glyph="!" title="This is a big step. It needs a check in the source system or Dalia’s approval.">Big step</Chip>}
+          {step.dueAt && <span className="small muted">Due {formatDate(step.dueAt)}</span>}</div>
         {(paused || why) && <p className="small" style={{ color: 'var(--warn)', margin: '.4rem 0 0' }}>{paused ? 'This project is paused, so this step is not scheduled right now. Your work is saved.' : `Not ready: ${why}`}</p>}
         {step.onHold && <p className="small" style={{ margin: '.3rem 0 0' }}>On hold{step.onHold.reason ? `: ${step.onHold.reason}` : ''}. The rest of the project keeps going.</p>}
       </div>
 
+      <div className="row actions">
+        {canWork && !owner && assigned && ['NOT_STARTED', 'IN_PROGRESS', 'REOPENED'].includes(step.status) && <button className="primary" onClick={() => move('REPORTED_COMPLETE')}>I finished this step</button>}
+        {!owner && canWork && <button onClick={() => setDlg('update')}>Update progress</button>}
+        {!owner && canWork && <button onClick={() => setDlg('help')}>Ask for help</button>}
+        {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setDlg('request')}>Ask for an update</button>}
+      </div>
+
       {step.observedLevel !== 'NO_EVIDENCE' && (
         <div className="card violet small">
-          <strong>{paused ? 'Activity found while the project was paused' : 'We found computer activity for this step'}</strong> <ObservedChip level={step.observedLevel} review={step.observedReview} />
-          <div>{step.observedNote}</div>
-          <div className="muted">The step’s status did not change. Only a person, or a check in the source system, can change it.</div>
-          {hasCard && <Link to="/review">Review what we found</Link>}
+          <div className="row between"><span><strong>{paused ? 'Activity found while paused' : 'We saw computer activity here'}</strong> <ObservedChip level={step.observedLevel} review={step.observedReview} /></span>{hasCard && <Link to="/review"><button>Check it</button></Link>}</div>
+          <details><summary>What this means</summary><div>{step.observedNote}</div><div className="muted">The step’s status did not change. Only a person, or a check in the source system, can change it.</div></details>
         </div>
       )}
       {step.humanReported && <div className="small"><Chip tone="info" glyph="☑">Employee confirmed</Chip> {hub.userName(step.humanReported.byUid)}: {CHOICE_LABEL[step.humanReported.choice]} · {formatDateTime(step.humanReported.at)}{step.humanReported.note ? ` — “${step.humanReported.note}”` : ''}</div>}
@@ -248,18 +273,18 @@ function StepPanel({ step, steps, project, canWork, onTab }: { step: Step; steps
         {editing ? <div className="stack"><textarea aria-label="Instructions" value={text} onChange={(e) => setText(e.target.value)} style={{ minHeight: 140 }} /><div><button className="primary" onClick={async () => { const r = await act(() => hub.updateInstructions(uid, step.id, text), 'Saved'); if (r) setEditing(false); }}>Save</button></div></div>
           : <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{step.instructions || <span className="muted">No instructions yet. Use Edit to add some.</span>}</p>}
         {step.whyForGoal && <p className="small muted" style={{ margin: '.4rem 0 0' }}><strong>Why:</strong> {step.whyForGoal}</p>}
-        {(step.objective || step.acceptance) && <p className="small muted" style={{ margin: '.2rem 0 0' }}>{step.objective && <><strong>You make:</strong> {step.objective}. </>}{step.acceptance && <><strong>Done when:</strong> {step.acceptance}</>}</p>}
+        {(step.objective || step.acceptance) && <p className="small muted" style={{ margin: '.2rem 0 0' }}>{step.acceptance && <><strong>Done when:</strong> {step.acceptance}</>}</p>}
         {step.dependencyIds.length > 0 && <p className="small muted" style={{ margin: '.2rem 0 0' }}>Comes after: {step.dependencyIds.map((d) => { const s = steps.find((x) => x.id === d); return s ? `Step ${s.sortOrder}` : ''; }).join(', ')}</p>}
       </div>
 
       <div>
-        <h3>Substeps and checklist</h3>
+        <h3>Checklist</h3>
         {children.length === 0 && step.checklist.length === 0 && <p className="small muted" style={{ margin: 0 }}>None yet.</p>}
         {step.checklist.map((c) => (
           <label key={c.id} style={{ fontWeight: 500, display: 'flex', gap: 8, alignItems: 'flex-start' }}><input type="checkbox" checked={c.done} disabled={!canWork} onChange={() => act(() => hub.toggleChecklist(uid, step.id, c.id))} /> {c.text}</label>))}
         {children.map((c) => (
           <div key={c.id} className="row between" style={{ margin: '.25rem 0' }}>
-            <span>↳ {c.title} <StatusChip status={c.status} /></span>
+            <span>↳ {c.title} <StepState status={c.status} /></span>
             {canWork && c.assignedUids.includes(uid) && (c.status === 'NOT_STARTED' || c.status === 'IN_PROGRESS') && <button className="pill-btn" onClick={() => act(() => hub.transitionStep(uid, c.id, c.status === 'NOT_STARTED' ? 'IN_PROGRESS' : 'REPORTED_COMPLETE', {}), c.status === 'NOT_STARTED' ? 'Started' : 'Marked as finished')}>{c.status === 'NOT_STARTED' ? 'Start' : 'I finished this'}</button>}
           </div>))}
         {canWork && (
@@ -285,20 +310,14 @@ function StepPanel({ step, steps, project, canWork, onTab }: { step: Step; steps
         <button className="link" onClick={() => onTab('files')}>See all project files{resources.length > 5 ? ` (${resources.length - 5} more for this step)` : ''}</button>
       </div>
 
-      <div>
-        <div className="row between"><h3>Latest activity</h3><button className="link" onClick={() => nav(`/projects/${project.id}/steps/${step.id}?tab=history`)}>Show the full history for this step</button></div>
-        <JournalList events={journal} />
-      </div>
+      <details className="soft">
+        <summary>Recent activity on this step{journal.length ? ` (${journal.length})` : ''}</summary>
+        <div style={{ marginTop: 8 }}><JournalList events={journal} /><button className="link" onClick={() => nav(`/projects/${project.id}/steps/${step.id}?tab=history`)}>Show the full history for this step</button></div>
+      </details>
 
       <div className="stack">
-        <div className="row">
-          {!owner && canWork && <button className="primary" onClick={() => setDlg('update')}>Update progress</button>}
-          {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setDlg('request')}>Ask for an update</button>}
-          {canWork && !owner && assigned && ['NOT_STARTED', 'IN_PROGRESS', 'REOPENED'].includes(step.status) && <button onClick={() => move('REPORTED_COMPLETE')}>I finished this step</button>}
-          {!owner && canWork && <button onClick={() => setDlg('help')}>Ask for help</button>}
-        </div>
         <details>
-          <summary className="small">More for this step</summary>
+          <summary className="small">More options for this step</summary>
           <div className="stack" style={{ marginTop: 8 }}>
             {step.impact === 'HIGH' && step.status === 'REPORTED_COMPLETE' && !owner && <p className="small muted">This is a big step. Only a check in the source system, or Dalia, can confirm it is done.</p>}
             {choices.length === 0 ? <span className="muted small">No status changes are available to you right now.</span> : (

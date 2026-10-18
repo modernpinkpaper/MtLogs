@@ -42,3 +42,6 @@ Existing projects load with no pause state (they are Active). Old notification a
 
 ## How to run and test
 `npm install && npm run dev`, sign in as Dalia, then follow *Login → Try this* or `DEMO_SCENARIOS.md` (scenarios K–V cover v1.1).
+
+## v1.2 UX overhaul
+See `docs/ux-overhaul-v1-2.md` for the audit, what changed, and how to check it. Summary: one "Do this next" card for employees, a calmer project page (no repeated blocks, phone layout fixed), review cards that put the answer first, compact lists with one clear action, and quieter notifications. No features were removed. All 121 tests and the browser run pass.
