@@ -54,3 +54,11 @@ Before-results were produced by running a throwaway test against the checkpoint 
 2. **Dependencies:** a step whose earlier step is only *reported* complete (not verified) is treated as ready. Should it wait for verification instead?
 3. **Approvers:** only you approve file versions. Should anyone else ever be able to?
 4. **Seed data:** the four steps that used to be "done by Erika" are now shown as signed off by you. Tell me if that is wrong for your real projects.
+
+## Update after Dalia's answers (v1.6)
+Dalia clarified that she does not want to verify or approve routine work. Changed:
+- **Done means done.** When someone says a step is done, it counts as done ("3 of 4 steps done"). The app still never claims the result was checked in Amazon, Shopify or anywhere else; it says who reported it. Dalia gets no checking chore. She can choose to check one particular step ("I want to check this one myself"), and only then does it wait for her.
+- **File versions are chosen by the person doing the work** (or Dalia): "Use this version for the project". It is recorded (who, when, old and new). Every file shows its name, version and last-modified date and time.
+- **Dependencies:** a step whose earlier step is reported done is ready.
+- The four seed steps are shown as done by Erika again, not signed off by Dalia.
+- Tests rewritten for these rules: 183 pass.

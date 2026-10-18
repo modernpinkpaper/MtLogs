@@ -11,7 +11,7 @@ import { assignEpisodes, findSequenceGaps, hashText, normalizeEvent, parseJsonl 
 import type { AnalysisContext, FindingDraft, ModelAdapter } from '../ai/adapter';
 import { describeEvent, validateFindingDraft } from '../ai/adapter';
 import { outcomeEffect, plainToolName, reviewKind, shortProjectName } from '../domain/reviewKinds';
-import { notReadyReason } from '../domain/projectStatus';
+import { isStepDone, notReadyReason } from '../domain/projectStatus';
 import { ReplayAnalyzer } from '../ai/replay';
 import { cardTitle, cardTypeFor, Hub_rank } from './cards';
 import * as PS from './pause';
@@ -353,8 +353,8 @@ export class HubServer {
     this.requireOwner(uid);
     const p = this.projectFor(uid, projectId);
     if (p.pause?.isPaused) throw new HubError('PAUSED', 'Resume this project before closing it.');
-    const open = this.state.steps.filter((s) => s.projectId === projectId && !TERMINAL.includes(s.status));
-    if (open.length) throw new HubError('STEPS_OPEN', `${open.length} step(s) are not verified complete. A project never closes by itself.`);
+    const open = this.state.steps.filter((s) => s.projectId === projectId && !TERMINAL.includes(s.status) && !isStepDone(s));
+    if (open.length) throw new HubError('STEPS_OPEN', `${open.length} step(s) are not finished. A project never closes by itself.`);
     return this.commit(() => {
       p.closedAt = this.state.now;
       this.audit({ entityType: 'project', entityId: p.id, action: 'CLOSE', before: null, after: p.closedAt, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner closed project', evidenceRefs: [], projectId: p.id });
@@ -986,6 +986,8 @@ export class HubServer {
     const onProject = u.role === 'OWNER' || links.some((l) => this.canWorkOnProject(u, this.state.projects.find((p) => p.id === l.projectId)!));
     return { u, res, links, onProject };
   }
+  /** Can this person choose the version to use? Dalia, or someone on a project that uses this file. */
+  canChooseVersion(uid: string, resourceId: string): boolean { try { return this.resourceAccess(uid, resourceId).onProject; } catch { return false; } }
   ownerUids(): string[] { return this.state.users.filter((u) => u.role === 'OWNER').map((u) => u.id); }
   /** What a person chose to work with. It is a personal choice. It is never an approval. */
   workingVersionFor(uid: string, resourceId: string): string | null {
@@ -1020,8 +1022,8 @@ export class HubServer {
   }
   /** Official approval. Dalia only. Checked here, not only in the buttons. */
   approveVersion(uid: string, resourceId: string, version: string, opts: { supersedesResourceId?: string | null } = {}) {
-    this.requireOwner(uid);
-    const { res, links } = this.resourceAccess(uid, resourceId);
+    const { res, links, onProject } = this.resourceAccess(uid, resourceId);
+    if (!onProject) throw new PermissionDenied(); // Dalia, or a person on the project that uses this file
     if (res.approval?.version === version && res.approvedVersion === version && !res.pendingApproval) return res; // already approved: a repeat click changes nothing and adds nothing
     return this.commit(() => {
       const before = { version: res.version, approvedVersion: res.approvedVersion, approval: res.approval ?? null, pending: res.pendingApproval ?? null };
@@ -1034,8 +1036,8 @@ export class HubServer {
         replaced = this.state.resources.find((r) => r.id === opts.supersedesResourceId) ?? null;
         if (replaced) { replaced.supersededById = res.id; replaced.pendingApproval = null; }
       }
-      this.audit({ entityType: 'resource', entityId: res.id, action: 'APPROVE_RESOURCE_VERSION', before, after: { version: res.version, approvedVersion: version, approvedBy: uid, supersedes: replaced?.id ?? null }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Official approval of a file version for team use', evidenceRefs: [], projectId: links[0]?.projectId ?? null });
-      for (const pid of new Set(links.map((l) => l.projectId))) this.addJournal({ projectId: pid, stepIds: links.filter((l) => l.projectId === pid && l.stepId).map((l) => l.stepId!), type: 'RESOURCE', actorUid: uid, title: 'File version approved for team use', summary: `${res.label}: ${before.approvedVersion ? `${before.approvedVersion} → ` : 'no approved version → '}${version}, approved by ${this.userName(uid)}.${replaced ? ` This replaces “${replaced.label}”.` : ''}`, verificationState: 'OWNER_APPROVED', relatedResourceIds: [res.id] });
+      this.audit({ entityType: 'resource', entityId: res.id, action: 'APPROVE_RESOURCE_VERSION', before, after: { version: res.version, approvedVersion: version, approvedBy: uid, supersedes: replaced?.id ?? null }, actorUid: uid, actorLabel: this.userName(uid), reason: 'A file version was chosen for the project', evidenceRefs: [], projectId: links[0]?.projectId ?? null });
+      for (const pid of new Set(links.map((l) => l.projectId))) this.addJournal({ projectId: pid, stepIds: links.filter((l) => l.projectId === pid && l.stepId).map((l) => l.stepId!), type: 'RESOURCE', actorUid: uid, title: 'Version chosen for the project', summary: `${res.label}: ${before.approvedVersion ? `${before.approvedVersion} → ` : 'no version chosen → '}${version}, chosen by ${this.userName(uid)}.${replaced ? ` This replaces “${replaced.label}”.` : ''}`, verificationState: 'OWNER_APPROVED', relatedResourceIds: [res.id] });
       if (requester && requester !== uid) this.notify({ recipientUid: requester, senderUid: uid, type: 'DIRECT_MENTION', title: `${this.userName(uid)} approved ${res.label}`, preview: `Version ${version} is now the one to use.`, projectId: links[0]?.projectId ?? null, sourceEntityId: res.id, deepLink: links[0] ? `/projects/${links[0].projectId}${links[0].stepId ? `/steps/${links[0].stepId}` : ''}` : '/resources', key: `n:apprdone:${res.id}:${version}` });
       return res;
     });
@@ -1055,9 +1057,15 @@ export class HubServer {
       return res;
     });
   }
-  /** True only when the approval has a matching record by an owner. A bare approvedVersion on its own is not trusted. */
+  /** Dalia, and the people on a project that uses this file, may choose its version. */
+  approverUids(res: Resource): string[] {
+    const pids = new Set(this.state.resourceLinks.filter((l) => l.resourceId === res.id).map((l) => l.projectId));
+    const members = this.state.projects.filter((p) => pids.has(p.id)).flatMap((p) => p.memberUids);
+    return [...new Set([...this.ownerUids(), ...members])];
+  }
+  /** True only when the choice has a matching record by someone allowed to make it. A bare approvedVersion on its own is not trusted. */
   approvalIsRecorded(res: Resource): boolean {
-    return !!res.approvedVersion && !!res.approval && res.approval.version === res.approvedVersion && this.ownerUids().includes(res.approval.byUid);
+    return !!res.approvedVersion && !!res.approval && res.approval.version === res.approvedVersion && this.approverUids(res).includes(res.approval.byUid);
   }
   /** Resources that are waiting for Dalia, for her Home. */
   pendingApprovals(uid: string) {
@@ -1438,7 +1446,7 @@ export class HubServer {
       const paused = !!p.pause?.isPaused;
       const stepLink = `/projects/${p.id}/steps/${s.id}`;
       const tech = [`${p.key} · Step ${s.sortOrder}: ${s.title}`];
-      if (s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Needs a check in the source system', label: `${p.key} — ${s.title} (says it is done, but it has not been checked in the source system)`, title: `${short} — Verify result`, why: `${who} says the work is done, but nobody has checked it in the source system yet.`, cta: 'Check the result', chip: 'Verify result', link: stepLink, weight: 80, technical: tech });
+      if (s.status === 'REPORTED_COMPLETE' && s.requiresCheck && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Needs a check in the source system', label: `${p.key} — ${s.title} (says it is done, but it has not been checked in the source system)`, title: `${short} — Verify result`, why: `${who} says it is done. You asked to check this one.`, cta: 'Check the result', chip: 'Verify result', link: stepLink, weight: 80, technical: tech });
       if (s.status === 'BLOCKED' && !paused) queue.push({ kind: 'Blocked', label: `${p.key} — ${s.title}: ${s.blockerReason ?? ''}`, title: `${who} needs help with ${short.toLowerCase()}`, why: s.blockerReason ?? 'This step is blocked.', cta: 'See what is blocking it', chip: 'Needs help', link: stepLink, weight: 90, technical: tech });
       // Ordinary nags are quiet while a project is paused.
       if (!paused && s.dueAt && s.dueAt < st.now && !TERMINAL.includes(s.status)) queue.push({ kind: 'Late', label: `${p.key} — ${s.title}`, title: `${short} — A step is late`, why: `“${s.title}” was due ${formatDate(s.dueAt)}.`, cta: 'Open the step', chip: 'Late', link: stepLink, weight: 70, technical: tech });
@@ -1457,14 +1465,6 @@ export class HubServer {
     const NCTA: Record<string, string> = { RESUME_REMINDER: 'Decide now', PAUSE_SUGGESTION: 'Read the suggestion', PILOT_REACHED: 'Review the limited test', AI_FINDING: 'Review it' };
     for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && !n.readAt && ['RESUME_REMINDER', 'PAUSE_SUGGESTION', 'PILOT_REACHED', 'AI_FINDING'].includes(n.type))) queue.push({ kind: 'Needs your decision', label: n.title, title: n.title, why: n.preview, cta: NCTA[n.type], chip: 'Needs your decision', link: n.deepLink, weight: 95, group: n.type === 'RESUME_REMINDER' ? 'PAUSED' : n.type === 'AI_FINDING' ? 'AI' : 'DECISION' });
     for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['BLOCKER', 'NEEDS_VERIFICATION'].includes(n.type))) queue.push({ kind: n.type === 'BLOCKER' ? 'Blocked' : 'Needs a check in the source system', label: n.title, title: n.title, why: n.preview, cta: n.type === 'BLOCKER' ? 'See what happened' : 'Check the result', chip: n.type === 'BLOCKER' ? 'Needs help' : 'Verify result', link: n.deepLink, weight: 85 });
-    // A person asked Dalia to approve a file version. Nothing is approved until she does.
-    for (const r of st.resources.filter((x) => x.pendingApproval)) {
-      const pa = r.pendingApproval!;
-      const lk = st.resourceLinks.find((l) => l.resourceId === r.id && l.stepId) ?? st.resourceLinks.find((l) => l.resourceId === r.id);
-      const pr = lk ? st.projects.find((p) => p.id === lk.projectId) : null;
-      queue.push({ kind: 'Approve a file version', label: `${r.label} — ${pa.version}`, title: `${r.label.replace(/\s*\(.*?\)\s*/g, ' ').trim()} — Approve version?`, why: `${nm(pa.requestedByUid)} asked you to approve ${pa.version} for the team.${pa.note ? ` “${pa.note}”` : ''}`, cta: 'Review it', chip: 'Needs approval', link: lk ? `/projects/${lk.projectId}${lk.stepId ? `/steps/${lk.stepId}` : ''}` : '/resources', weight: 92, group: 'DECISION', technical: [`${r.label}`, `Version ${pa.version}`, `Asked ${formatDate(pa.at)}`], action: { type: 'APPROVE_VERSION', resourceId: r.id, version: pa.version, label: 'Approve for the team', confirm: `Approve ${pa.version} of “${r.label}” as the official version for the whole team? You can change it later, and the history keeps both.` } });
-      void pr;
-    }
     for (const rq of st.updateRequests.filter((r) => r.requestedByUid === uid && this.requestStage(r) === 'OVERDUE')) {
       const pr = st.projects.find((p) => p.id === rq.projectId)!;
       queue.push({ kind: 'Overdue answer', label: `${pr.key} request is overdue`, title: `${shortProjectName(pr)} — No answer yet`, why: `${rq.recipientUids.map((x) => nm(x)).join(', ')} hasn’t answered your request, and it was due ${formatDate(rq.dueAt!)}.`, cta: 'See the request', chip: 'Overdue', link: `/projects/${pr.id}${rq.stepId ? `/steps/${rq.stepId}` : ''}`, weight: 88, group: 'URGENT', technical: [`${pr.key}`, `Asked ${formatDate(rq.createdAt)}`] });
@@ -1616,15 +1616,14 @@ export class HubServer {
     })).reverse();
   }
 
-  /** Dalia decides whether the person may sign off a routine step themselves. Off by default. */
-  setStepSignOff(uid: string, stepId: string, allowed: boolean) {
+  /** Dalia can choose to check one particular step herself. Off by default: when someone says it is done, it is done. */
+  setStepRequiresCheck(uid: string, stepId: string, on: boolean) {
     this.requireOwner(uid);
     const { step, project } = this.stepFor(uid, stepId);
-    if (step.impact !== 'ROUTINE') throw new HubError('VALIDATION', 'Steps that need a check always need a real check or your approval.');
     return this.commit(() => {
-      step.employeeSignOffAllowed = allowed;
-      this.audit({ entityType: 'step', entityId: step.id, action: 'SET_SIGNOFF_RULE', before: null, after: { employeeSignOffAllowed: allowed }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner chose who may sign off this step', evidenceRefs: [], projectId: project.id });
-      this.addJournal({ projectId: project.id, stepIds: [step.id], type: 'PLAN_CHANGE', actorUid: uid, title: allowed ? 'The person may sign this step off' : 'Only Dalia signs this step off', summary: `“${step.title}”. Reporting it finished never counts as verified by itself.`, verificationState: 'OWNER_APPROVED' });
+      step.requiresCheck = on;
+      this.audit({ entityType: 'step', entityId: step.id, action: 'SET_REQUIRES_CHECK', before: null, after: { requiresCheck: on }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Owner chose whether she checks this step', evidenceRefs: [], projectId: project.id });
+      this.addJournal({ projectId: project.id, stepIds: [step.id], type: 'PLAN_CHANGE', actorUid: uid, title: on ? 'Dalia will check this step' : 'Dalia no longer checks this step', summary: `“${step.title}”.`, verificationState: 'OWNER_APPROVED' });
       return step;
     });
   }
@@ -1733,7 +1732,7 @@ export class HubServer {
         if (step.onHold) { hold('HOLD', 'This step is on hold.'); continue; }
         if (step.status === 'BLOCKED') { hold('BLOCKED', `You reported this as blocked${step.blockerReason ? `: ${step.blockerReason}` : ''}. Waiting for Dalia.`); continue; }
         if (step.status === 'WAITING') { hold('WAITING', `Waiting${step.blockerReason ? `: ${step.blockerReason}` : ' for someone or something'}.`); continue; }
-        if (step.status === 'REPORTED_COMPLETE') { hold('AWAITING_CHECK', 'You reported this finished. It is waiting for a check or Dalia’s sign-off.'); continue; }
+        if (step.status === 'REPORTED_COMPLETE') { if (step.requiresCheck) hold('AWAITING_CHECK', 'You reported this finished. Dalia asked to check this one.'); continue; } // otherwise it is simply done
         if (project.pilot?.enabled && project.pilot.stepId === step.id && project.pilot.status === 'TARGET_REACHED') { hold('PILOT_GATED', 'The limited test reached its limit. Waiting for Dalia to approve more.'); continue; }
         const dep = notReadyReason(step, steps, project);
         if (dep) { hold('DEPENDENCY', dep); continue; }

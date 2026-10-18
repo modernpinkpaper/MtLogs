@@ -157,6 +157,8 @@ describe('FBA_TY001 regression (primary failure scenario)', () => {
     expect(n.preview).toMatch(/Employee confirmed/);
     expect(hub.getStep(U.dalia, 's-081-3').verifications).toHaveLength(0);
     expect(hub.getStep(U.dalia, 's-081-3').status).toBe('NOT_STARTED');
+    expect(hub.ownerOverview(U.dalia).queue.some((q) => q.kind === 'Needs a check in the source system')).toBe(false); // Dalia is not asked to check unless she chose to
+    hub.setStepRequiresCheck(U.dalia, 's-081-2', true);
     expect(hub.ownerOverview(U.dalia).queue.some((q) => q.kind === 'Needs a check in the source system')).toBe(true);
     hub.recordVerification(U.dalia, 's-081-3', { verifier: 'Amazon family lookup', entity: 'FBA_TY001 → PC107', result: 'CONFIRMED', detail: 'Child of PC107; not under PC078' });
     expect(hub.getStep(U.dalia, 's-081-3').verifications[0].result).toBe('CONFIRMED');

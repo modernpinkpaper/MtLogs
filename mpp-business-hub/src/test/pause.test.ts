@@ -41,14 +41,14 @@ describe('Pause and resume', () => {
     expect(titles).toEqual(expect.arrayContaining(['PROJECT_PAUSED', 'PROJECT_RESUMED']));
   });
 
-  it('P-012 keeps 2 of 4 verified complete through a pause and resume', async () => {
+  it('P-012 keeps 2 of 4 steps done through a pause and resume', async () => {
     const hub = await newHub();
     const steps = () => hub.state.steps.filter((s) => s.projectId === 'prj-012');
-    expect(progressCounts(steps()).label).toBe('2 of 4 verified complete');
+    expect(progressCounts(steps()).label).toBe('2 of 4 steps done');
     hub.pauseProject(U.dalia, 'prj-012', { idempotencyKey: key() });
-    expect(progressCounts(steps()).label).toBe('2 of 4 verified complete');
+    expect(progressCounts(steps()).label).toBe('2 of 4 steps done');
     hub.resumeProject(U.dalia, 'prj-012', { idempotencyKey: key() });
-    expect(progressCounts(steps()).label).toBe('2 of 4 verified complete');
+    expect(progressCounts(steps()).label).toBe('2 of 4 steps done');
   });
 
   it('Scenario 2: automatic resume on a chosen date happens once, notifies the owner and each assigned person once, and retries do nothing', async () => {

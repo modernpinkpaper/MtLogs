@@ -36,46 +36,38 @@ for (const w of [1280, 1024]) {
 }
 await p.setViewportSize({ width: 1280, height: 900 });
 
-console.log('\n[1] Choosing, submitting and approving a file version');
+console.log('\n[1] Choosing the version of a file');
 await go('/projects/prj-012/steps/s-012-3'); await p.waitForSelector('.frow');
 const rowA = p.locator('.frow:has(strong:has-text("(copy A)"))');
-ok(await rowA.locator('button:has-text("Use for my work")').count() === 1, 'Erika can “Use for my work”');
-ok(await rowA.locator('button:has-text("Submit for approval")').count() === 1, 'Erika can “Submit for approval”');
-ok(await p.locator('button:has-text("Approve version for team use")').count() === 0, 'Erika is not offered “Approve version for team use”');
-ok(await p.locator('button:has-text("Use this version")').count() === 0, 'the old ambiguous “Use this version” button is gone');
-await rowA.locator('button:has-text("Use for my work")').click(); await p.waitForTimeout(300);
-ok(await hub((h) => h.state.resources.find((r) => r.id === 'r-seo-a').approvedVersion) === null, 'choosing a version approved nothing');
-ok(await rowA.locator('text=You are using this one').count() === 1, 'it shows “You are using this one”');
-await rowA.locator('button:has-text("Submit for approval")').click(); await p.fill('textarea', 'All 154 rows checked.');
-await p.getByRole('button', { name: 'Send to Dalia' }).click(); await p.waitForTimeout(400);
-ok(await p.locator('.frow:has(strong:has-text("(copy A)")) >> text=Pending approval — Waiting for Dalia').count() === 1, 'submitting shows “Pending approval — Waiting for Dalia”');
-ok(await hub((h) => h.state.resources.find((r) => r.id === 'r-seo-a').approvedVersion) === null, 'submitting approved nothing');
+const rowB = p.locator('.frow:has(strong:has-text("(copy B"))');
+ok(await rowA.locator('text=/Last modified .*(Oct|Sep)/').count() === 1, 'copy A shows its last-modified date and time');
+ok(await rowB.locator('text=/Last modified .*(Oct|Sep)/').count() === 1, 'copy B shows its own last-modified date and time (so the copies cannot be mixed up)');
+ok(await rowA.locator('text=/Version rev 41/').count() === 1, 'the version is shown next to the file name');
+ok(await rowA.locator('button:has-text("Use this version for the project")').count() === 1, 'Erika can choose a version for the project herself');
+ok(await p.locator('button:has-text("Submit for approval")').count() === 0 && await p.locator('button:has-text("Approve version for team use")').count() === 0, 'there is no approval step to wait for');
+await rowA.locator('button:has-text("Use this version for the project")').click(); await p.getByRole('button', { name: 'Yes, use this one' }).click(); await p.waitForTimeout(400);
+ok(await rowA.locator('text=Chosen version — Use this one').count() === 1, 'it is marked as the chosen version');
+ok(await rowA.locator('text=/Chosen by Erika/').count() === 1, 'it shows who chose it and when');
+ok(await hub((h) => h.state.resources.find((r) => r.id === 'r-seo-a').approval.byUid) === 'u-erika', 'the choice is recorded as Erika’s');
+ok(await rowB.locator('text=No version chosen yet').count() === 1, 'the other copy (named FINAL) is still unchosen');
 await shot('w2-erika-files');
 
-console.log('\n[2] Reported complete is not verified complete');
+console.log('\n[2] A step Erika says is done is done');
 await p.getByRole('button', { name: 'I finished this step' }).first().click(); await p.waitForTimeout(400);
 await go('/projects/prj-012');
-ok(await p.locator('text=2 of 4 verified complete · 1 reported complete (awaiting check)').count() > 0, 'the project page says “2 of 4 verified complete · 1 reported complete (awaiting check)”');
+ok(await p.locator('text=3 of 4 steps done').count() > 0, 'the project page says “3 of 4 steps done”');
 await go('/projects'); await p.waitForSelector('.prow');
-ok(await p.locator('.prow:has-text("P-012") >> text=2 of 4 verified complete · 1 reported complete (awaiting check)').count() > 0, 'the project list uses the same wording');
-ok(await hub((h) => h.state.steps.filter((s) => s.projectId === 'prj-012' && s.status === 'VERIFIED_COMPLETE').length) === 2, 'the verified count is still 2');
+ok(await p.locator('.prow:has-text("P-012") >> text=3 of 4 steps done').count() > 0, 'the project list says the same');
+ok(await hub((h) => h.state.steps.find((s) => s.id === 's-012-3').verifications.length) === 0, 'the app does not claim any outside check');
 
 console.log('\n[7 owner mobile] Dalia on a phone');
-await as('Dalia (owner)'); await p.setViewportSize({ width: 390, height: 820 }); await go('/home'); await p.waitForSelector('text=Needs your decision');
+await as('Dalia (owner)'); await p.setViewportSize({ width: 390, height: 820 }); await go('/home'); await p.waitForSelector('text=New AI opportunities');
 const mob = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, heads: [...document.querySelectorAll('h2.group-title')].map((e) => e.textContent.replace(/\d+$/, '').trim()) }));
 ok(mob.sw <= 392, 'no sideways scrolling on the phone');
-ok(['Needs your decision'].every((t) => mob.heads.includes(t)), 'sections: ' + mob.heads.join(' · '));
-ok(await p.locator('button:has-text("Approve for the team")').isVisible(), 'the file approval request is on the first screen with its button (nothing hidden)');
-ok(await p.locator('text=asked you to approve').count() > 0, 'it says who asked and what for');
+ok(mob.heads.includes('New AI opportunities'), 'phone sections: ' + mob.heads.join(' · '));
+ok(await p.locator('text=Verify result').count() === 0, 'Dalia is not given a checking chore for Erika’s finished step');
+ok(await p.locator('button:has-text("Review opportunities")').isVisible(), 'the AI decision on the first screen has its button (nothing hidden)');
 await shot('w3-owner-mobile');
-await p.locator('button:has-text("Approve for the team")').first().click();
-ok(await p.locator('text=Please confirm').count() === 1, 'approving asks for a deliberate confirmation');
-await p.getByRole('button', { name: 'Not now' }).click(); await p.waitForTimeout(200);
-ok(await hub((h) => h.state.resources.find((r) => r.id === 'r-seo-a').approvedVersion) === null, 'cancelling the confirmation approved nothing');
-await p.locator('button:has-text("Approve for the team")').first().click(); await p.getByRole('button', { name: 'Yes, approve' }).click(); await p.waitForTimeout(500);
-ok(await hub((h) => h.state.resources.find((r) => r.id === 'r-seo-a').approval && h.state.resources.find((r) => r.id === 'r-seo-a').approval.byUid) === 'u-dalia', 'after she confirms, the approval is recorded as Dalia’s');
-ok(await hub((h) => h.getJournal('u-dalia', { projectId: 'prj-012', types: ['RESOURCE'] }).some((e) => /approved for team use/i.test(e.title))) === true, 'the journal has an entry');
-ok(await p.locator('text=Approve version?').count() === 0, 'the approval request left her list');
 await p.setViewportSize({ width: 1280, height: 900 });
 
 console.log('\n[6] A request survives navigation and reaches Dalia once');

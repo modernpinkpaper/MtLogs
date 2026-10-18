@@ -212,7 +212,7 @@ const NEXT: Partial<Record<StepStatus, StepStatus[]>> = {
   NOT_STARTED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'], IN_PROGRESS: ['BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'], BLOCKED: ['IN_PROGRESS'], WAITING: ['IN_PROGRESS'],
   REPORTED_COMPLETE: ['VERIFIED_COMPLETE', 'IN_PROGRESS', 'REOPENED'], VERIFIED_COMPLETE: ['REOPENED'], REOPENED: ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE'],
 };
-const ACTION_LABEL: Partial<Record<StepStatus, string>> = { IN_PROGRESS: 'Start / continue', BLOCKED: 'Mark as blocked', WAITING: 'Mark as waiting', REPORTED_COMPLETE: 'I finished this step', NOT_APPLICABLE: 'Not needed', VERIFIED_COMPLETE: 'Sign off as verified complete', REOPENED: 'Reopen' };
+const ACTION_LABEL: Partial<Record<StepStatus, string>> = { IN_PROGRESS: 'Start / continue', BLOCKED: 'Mark as blocked', WAITING: 'Mark as waiting', REPORTED_COMPLETE: 'I finished this step', NOT_APPLICABLE: 'Not needed', VERIFIED_COMPLETE: 'Mark as checked', REOPENED: 'Reopen' };
 
 /** The employee’s workplace: what to do, substeps, files, latest activity, and one way to report progress. */
 function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, onTab }: { step: Step; steps: Step[]; project: Project; canWork: boolean; isNext?: boolean; paused?: boolean; onTab: (t: Tab) => void }) {
@@ -247,10 +247,10 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
         <h2 style={{ marginBottom: 4 }}>Step {step.sortOrder}: {step.title}</h2>
         <div className="row"><StepState status={step.status} hold={!!step.onHold} />
           {['REPORTED_COMPLETE', 'VERIFIED_COMPLETE'].includes(step.status) && <SourceChip source={step.verificationSource} />}
-          {step.impact === 'HIGH' && <Chip tone="warn" glyph="!" title="This step needs a check in the source system, or Dalia’s approval, before it counts as done.">Needs a check or Dalia’s approval</Chip>}
+          {step.requiresCheck && <Chip tone="warn" glyph="!" title="Dalia chose to check this one herself.">Dalia will check this one</Chip>}
           {step.dueAt && <span className="small muted">Due {formatDate(step.dueAt)}</span>}</div>
         {(paused || why) && <p className="small" style={{ color: 'var(--warn)', margin: '.4rem 0 0' }}>{paused ? 'This project is paused, so this step is not scheduled right now. Your work is saved.' : `Not ready: ${why}`}</p>}
-        {step.status === 'REPORTED_COMPLETE' && <p className="smallnote" style={{ margin: '.5rem 0 0' }}>{hub.userName(step.humanReported?.byUid ?? null) === 'Someone' ? 'It was reported finished' : `${hub.userName(step.humanReported?.byUid ?? null)} reported this finished`}. It counts as <strong>verified complete</strong> once {step.impact === 'HIGH' ? 'a real check passes in the source system, or Dalia approves it' : owner ? 'you sign it off' : 'Dalia signs it off'}. Until then the project shows it as “reported complete (awaiting check)”.</p>}
+        {step.status === 'REPORTED_COMPLETE' && (step.requiresCheck || step.impact === 'HIGH') && <p className="smallnote" style={{ margin: '.5rem 0 0' }}>{step.humanReported ? `${hub.userName(step.humanReported.byUid)} reported this done.` : 'Reported done.'} {step.requiresCheck ? 'Dalia chose to check this one, so it is waiting for her.' : 'It counts as done. The result has not been checked in Amazon or any other outside system.'}</p>}
         {step.onHold && <p className="small" style={{ margin: '.3rem 0 0' }}>On hold{step.onHold.reason ? `: ${step.onHold.reason}` : ''}. The rest of the project keeps going.</p>}
       </div>
 
@@ -312,7 +312,7 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
           const sib = inputs.map((x) => x.resource);
           return (
             <>
-              {unapproved && <div className="smallnote" role="status" style={{ margin: '.4rem 0' }}><strong>{inputs.length} copies of this file exist and none is approved yet.</strong> A name like “FINAL” is not an approval. You can use one for your own work now. Dalia decides which one is official.</div>}
+              {unapproved && <div className="smallnote" role="status" style={{ margin: '.4rem 0' }}><strong>{inputs.length} copies of this file exist and none is chosen yet.</strong> A name like “FINAL” does not decide it. Pick the one to use below. It is saved with who chose it and when.</div>}
               {main.map(({ link, resource }) => <StepResourceRow key={link.id} resource={resource} role={link.role} roleLabel={ROLE_LABEL[link.role]} suggested={link.associationState === 'SUGGESTED'} siblings={link.role === 'INPUT' ? sib : []} />)}
               {more.length > 0 && (
                 <details className="soft"><summary>More files ({more.length})</summary>
@@ -334,18 +334,17 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
         <details>
           <summary className="small">More options for this step</summary>
           <div className="stack" style={{ marginTop: 8 }}>
-            {step.impact === 'HIGH' && step.status === 'REPORTED_COMPLETE' && !owner && <p className="small muted">This step needs a check in the source system, or Dalia’s approval, before it counts as done.</p>}
-            {choices.length === 0 ? <span className="muted small">No status changes are available to you right now.</span> : (
+                        {choices.length === 0 ? <span className="muted small">No status changes are available to you right now.</span> : (
               <>
                 <input type="text" aria-label="Reason or note" placeholder="Why? (needed if blocked)" value={reason} onChange={(e) => setReason(e.target.value)} />
                 <div className="row">{choices.map((t) => <button key={t} onClick={() => move(t)}>{ACTION_LABEL[t] ?? statusLabel(t)}</button>)}
-                  {owner && step.status === 'REPORTED_COMPLETE' && step.impact === 'HIGH' && !step.verifications.some((v) => v.result === 'CONFIRMED') && <button className="danger" onClick={() => move('VERIFIED_COMPLETE', true)}>Approve it myself, without a check</button>}</div>
+                  {owner && step.status === 'REPORTED_COMPLETE' && step.requiresCheck && !step.verifications.some((v) => v.result === 'CONFIRMED') && <button className="danger" onClick={() => move('VERIFIED_COMPLETE', true)}>Mark it checked myself</button>}</div>
               </>
             )}
             {owner && <div className="row">
               {step.onHold ? <button onClick={() => act(() => hub.releaseStep(uid, step.id), 'Step is active again')}>Take this step off hold</button> : <button onClick={() => setDlg('hold')}>Put this step on hold</button>}
               <button onClick={() => setDlg('verify')}>Add a practice check in the source system</button>
-              {step.impact === 'ROUTINE' && <button onClick={() => act(() => hub.setStepSignOff(uid, step.id, !step.employeeSignOffAllowed), step.employeeSignOffAllowed ? 'Only you sign this step off' : 'The person may now sign this step off')}>{step.employeeSignOffAllowed ? 'Only I sign this off' : 'Let the person sign this off'}</button>}</div>}
+              <button onClick={() => act(() => hub.setStepRequiresCheck(uid, step.id, !step.requiresCheck), step.requiresCheck ? 'You will not be asked to check this one' : 'You will be asked to check this one')}>{step.requiresCheck ? 'Stop asking me to check this one' : 'I want to check this one myself'}</button></div>}
           </div>
         </details>
         {step.verifications.length > 0 && (

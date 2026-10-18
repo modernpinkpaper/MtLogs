@@ -62,7 +62,7 @@ export function ResourceCard({ resource, links }: { resource: Resource; links: (
       <dl className="kv">
         <dt>Who uses it</dt><dd>{resource.usedBy}</dd>
         {resource.sourceId && <><dt>File ID</dt><dd><code>{resource.sourceId}</code></dd></>}
-        {resource.version && <><dt>Version</dt><dd>{resource.version}{resource.approvedVersion ? <> · approved: <strong>{resource.approvedVersion}</strong></> : <> · <em>no approved version yet</em></>}</dd></>}
+        {resource.version && <><dt>Version</dt><dd>{resource.version}{resource.approvedVersion ? <> · chosen: <strong>{resource.approvedVersion}</strong></> : <> · <em>no version chosen yet</em></>}</dd></>}
         {resource.lastModifiedAt && <><dt>Last changed</dt><dd>{formatDateTime(resource.lastModifiedAt)}</dd></>}
         {resource.normalizedPath && <><dt>Where it is</dt><dd><code style={{ wordBreak: 'break-all' }}>{resource.normalizedPath}</code></dd></>}
         {resource.type === 'SCRIPT' && <><dt>Code</dt><dd>{resource.sourceLinked ? 'Code is linked' : 'We saw this tool, but its code is not linked yet'}</dd></>}
@@ -97,52 +97,32 @@ const TYPE_LABEL: Record<string, string> = {
   IMAGE_FOLDER: 'Image folder', IMAGE_ASSET: 'Images', NETWORK_SHARE: 'Shared folder', DRIVE_FOLDER: 'Folder', WINDOWS_FILE_PATH: 'File on a company computer', ARCHIVE: 'Archive',
 };
 
-/** The three different file-version actions, with plain words. Only Dalia's is official. */
-export function VersionActions({ resource, siblings = [], compact }: { resource: Resource; siblings?: Resource[]; compact?: boolean }) {
-  const { hub, uid, me } = useMe();
+/**
+ * Choosing which version to use. Dalia or anyone on the project can do it. It is recorded (who, when, old and new),
+ * and the file name, version and last-modified time stay visible so nobody mixes up copies.
+ */
+export function VersionActions({ resource, siblings = [] }: { resource: Resource; siblings?: Resource[] }) {
+  const { hub, uid } = useMe();
   const act = useAct();
   const [confirm, setConfirm] = useState(false);
-  const [note, setNote] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [replaces, setReplaces] = useState('');
-  const ap = resourceApproval(resource, hub.ownerUids());
-  const owner = me.role === 'OWNER';
+  const ap = resourceApproval(resource, hub.approverUids(resource));
   const version = resource.suggestedVersion?.version ?? resource.version ?? 'current';
-  const canSubmit = !owner && hub.listProjects(uid).some((p) => p.memberUids.includes(uid));
-  const mineNow = hub.workingVersionFor(uid, resource.id) === (resource.version ?? 'current');
-  const isOfficial = ap?.state === 'APPROVED';
-  const pendingMine = resource.pendingApproval?.requestedByUid === uid;
-  const needsApproval = !isOfficial && !!resource.version && !['SCRIPT', 'SOURCE_REPOSITORY'].includes(resource.type) && ap?.state !== 'SUPERSEDED';
-  const unrecorded = ap?.state === 'UNRECORDED';
+  const can = hub.canChooseVersion(uid, resource.id);
+  const eligible = !!resource.version && !['SCRIPT', 'SOURCE_REPOSITORY'].includes(resource.type) && ap?.state !== 'APPROVED' && ap?.state !== 'SUPERSEDED';
+  if (!can || !eligible) return null;
   return (
     <>
-      {!compact && ap?.state !== 'SUPERSEDED' && !!resource.version && !['SCRIPT', 'SOURCE_REPOSITORY'].includes(resource.type) && (
-        mineNow ? <span className="small muted" style={{ alignSelf: 'center' }}>✓ You are using this one</span>
-          : <button className="quiet" onClick={() => act(() => hub.selectWorkingVersion(uid, resource.id, resource.version ?? undefined), 'Saved. You are using this one. It is not an approval.')} title="Your own choice. It does not approve anything.">Use for my work</button>
-      )}
-      {needsApproval && canSubmit && !pendingMine && <button className="quiet" onClick={() => setSubmitting(true)}>Submit for approval</button>}
-      {pendingMine && <span className="small muted" style={{ alignSelf: 'center' }}>You asked Dalia to approve this</span>}
-      {owner && (needsApproval || unrecorded || resource.pendingApproval) && <button onClick={() => setConfirm(true)}>Approve version for team use</button>}
-      {owner && resource.pendingApproval && <button className="quiet" onClick={() => act(() => hub.declineApproval(uid, resource.id, null), 'Not approved. They were told.')}>Don’t approve</button>}
-      {submitting && (
-        <Modal title="Submit for approval" onClose={() => setSubmitting(false)}>
-          <div className="stack">
-            <p style={{ margin: 0 }}>This asks Dalia to approve <strong>{resource.label}</strong> ({version}) as the official version. It does not approve anything. You can keep working with it in the meantime.</p>
-            <div><label htmlFor={`sa-${resource.id}`}>Anything Dalia should know? (optional)</label><textarea id={`sa-${resource.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: I checked all 154 rows. This is the one with my edits." /></div>
-            <div className="row"><button className="primary" onClick={async () => { const r = await act(() => hub.submitForApproval(uid, resource.id, { version, note, idempotencyKey: `sa-${resource.id}-${version}-${uid}` }), 'Sent to Dalia. Nothing is approved yet.'); if (r) setSubmitting(false); }}>Send to Dalia</button><button className="quiet" onClick={() => setSubmitting(false)}>Cancel</button></div>
-          </div>
-        </Modal>
-      )}
+      <button onClick={() => setConfirm(true)}>Use this version for the project</button>
       {confirm && (
-        <Modal title="Approve version for team use" onClose={() => setConfirm(false)}>
+        <Modal title="Use this version for the project?" onClose={() => setConfirm(false)}>
           <div className="stack">
-            <p style={{ margin: 0 }}>Make <strong>{version}</strong> of <strong>{resource.label}</strong> the official version for the whole team? The history records who approved it, when, and what it replaced.</p>
-            {resource.pendingApproval && <p className="small muted" style={{ margin: 0 }}>{hub.userName(resource.pendingApproval.requestedByUid)} asked for this{resource.pendingApproval.note ? `: “${resource.pendingApproval.note}”` : ''}.</p>}
+            <p style={{ margin: 0 }}>Make <strong>{version}</strong> of <strong>{resource.label}</strong> the version everyone on the project should use.{resource.lastModifiedAt ? ` It was last changed ${formatDateTime(resource.lastModifiedAt)}.` : ''} The history records who chose it and when.</p>
             {siblings.filter((x) => x.id !== resource.id).length > 0 && (
               <div><label htmlFor={`rp-${resource.id}`}>Does this replace another copy? (optional)</label>
                 <select id={`rp-${resource.id}`} value={replaces} onChange={(e) => setReplaces(e.target.value)}><option value="">No, keep the other copies as they are</option>{siblings.filter((x) => x.id !== resource.id).map((x) => <option key={x.id} value={x.id}>Yes, replace “{x.label}”</option>)}</select></div>
             )}
-            <div className="row"><button className="primary" onClick={async () => { const r = await act(() => hub.approveVersion(uid, resource.id, version, { supersedesResourceId: replaces || null }), 'Approved. This is now the version to use.'); if (r) setConfirm(false); }}>Approve for the team</button><button className="quiet" onClick={() => setConfirm(false)}>Cancel</button></div>
+            <div className="row"><button className="primary" onClick={async () => { const r = await act(() => hub.approveVersion(uid, resource.id, version, { supersedesResourceId: replaces || null }), 'Saved. This is now the version to use.'); if (r) setConfirm(false); }}>Yes, use this one</button><button className="quiet" onClick={() => setConfirm(false)}>Cancel</button></div>
           </div>
         </Modal>
       )}
@@ -158,7 +138,7 @@ export function StepResourceRow({ resource, role, roleLabel, suggested, siblings
   const [where, setWhere] = useState(false);
   const [fix, setFix] = useState(false);
   const [loc, setLoc] = useState('');
-  const ap = resourceApproval(resource, hub.ownerUids());
+  const ap = resourceApproval(resource, hub.approverUids(resource));
   const canEdit = me.role === 'OWNER' || hub.listProjects(uid).some((p) => p.memberUids.includes(uid));
   const isScript = resource.type === 'SCRIPT';
   const isFolder = ['IMAGE_FOLDER', 'DRIVE_FOLDER', 'NETWORK_SHARE'].includes(resource.type);
@@ -175,6 +155,7 @@ export function StepResourceRow({ resource, role, roleLabel, suggested, siblings
         {ap && <span className={`vstate ${ap.tone}`} title={ap.hint}>{ap.label}</span>}
       </div>
       <div className="fs">{TYPE_LABEL[resource.type] ?? 'File'}{resource.purpose ? ` · ${resource.purpose}` : ''}</div>
+      <div className="fs"><strong style={{ color: 'var(--text-2)', fontWeight: 600 }}>{resource.version ? `Version ${resource.version}` : 'Version not known'}</strong> · Last modified {resource.lastModifiedAt ? formatDateTime(resource.lastModifiedAt) : 'date not known'}{ap?.state === 'APPROVED' && resource.approval ? ` · Chosen by ${hub.userName(resource.approval.byUid)}, ${formatDateTime(resource.approval.at)}` : ''}</div>
       <div className="fs">{roleLabel} for this step{resource.checklistSummary ? ` · ${resource.checklistSummary.yes} of ${resource.checklistSummary.total} marked “Yes”` : ''}{unverifiedLink ? ' · The link has not been checked' : ''}</div>
       <div className="fa">
         {hasUrl && <button onClick={() => setViewer(true)}>{openLabel}</button>}

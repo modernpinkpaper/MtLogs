@@ -26,18 +26,25 @@ export function statusIgnoringPause(p: Project, steps: Step[]): 'NOT_STARTED' | 
   return top.length && top.every((s) => s.status === 'NOT_STARTED') ? 'NOT_STARTED' : 'IN_PROGRESS';
 }
 
+/** A step is done when the person says so, unless Dalia chose to check that one herself. */
+export function isStepDone(s: Pick<Step, 'status' | 'requiresCheck'>): boolean {
+  return s.status === 'VERIFIED_COMPLETE' || (s.status === 'REPORTED_COMPLETE' && !s.requiresCheck);
+}
+
 /**
- * Progress, with reported and verified kept apart everywhere.
- * "Verified complete" means Dalia signed it off or a real check passed. "Reported complete" is only the person's word.
+ * Progress. A finished step counts as done when the person reports it. The app never claims the result was checked
+ * in another system. If Dalia asked to check a step herself, it waits for her and is counted separately.
  * Top-level steps only, so a parent and its substeps are never double counted.
  */
 export function progressCounts(steps: Step[]) {
   const top = steps.filter((s) => !s.parentStepId && s.status !== 'CANCELLED' && s.status !== 'NOT_APPLICABLE');
-  const verified = top.filter((s) => s.status === 'VERIFIED_COMPLETE').length;
+  const done = top.filter(isStepDone).length;
+  const awaiting = top.filter((s) => s.status === 'REPORTED_COMPLETE' && s.requiresCheck).length;
   const reported = top.filter((s) => s.status === 'REPORTED_COMPLETE').length;
+  const verified = top.filter((s) => s.status === 'VERIFIED_COMPLETE').length;
   const checked = top.filter((s) => s.status === 'VERIFIED_COMPLETE' && s.verificationSource === 'INDEPENDENT').length;
-  const label = `${verified} of ${top.length} verified complete${reported ? ` · ${reported} reported complete (awaiting check)` : ''}`;
-  return { done: verified, verified, reported, total: top.length, checkedInSource: checked, label };
+  const label = `${done} of ${top.length} steps done${awaiting ? ` · ${awaiting} waiting for your check` : ''}`;
+  return { done, verified, reported, awaiting, total: top.length, checkedInSource: checked, label };
 }
 
 export function isStepReady(step: Step, steps: Step[], project: Project): boolean {

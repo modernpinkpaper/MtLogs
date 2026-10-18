@@ -7,140 +7,106 @@ import { progressCounts } from '../domain/projectStatus';
 
 type H = Awaited<ReturnType<typeof newHub>>;
 const counts = (hub: H, pid: string) => progressCounts(hub.state.steps.filter((s) => s.projectId === pid));
-const dalia = (hub: H, r: string) => resourceApproval(hub.state.resources.find((x) => x.id === r)!, hub.ownerUids())!;
+const dalia = (hub: H, r: string) => { const res = hub.state.resources.find((x) => x.id === r)!; return resourceApproval(res, hub.approverUids(res))!; };
 /** Rebuilds the app from its saved state, like closing and reopening the page. */
 const reload = (hub: H): H => new (HubServer as unknown as new (s: unknown, p: boolean) => H)(JSON.parse(JSON.stringify(hub.state)), false);
 const skus = Array.from({ length: 20 }, (_, i) => `MA${String(41 + i).padStart(3, '0')}`);
 
 // ===================================================================== 1
-describe('1. File versions: choosing, submitting and approving are three different things', () => {
-  it('Erika can choose a working draft and ask for approval, but cannot approve; Dalia can; an audit record is created', async () => {
+describe('1. File versions: the person doing the work chooses which version to use, and it is recorded', () => {
+  it('Erika can choose a version for the project; it shows who chose it and when; people outside the project cannot', async () => {
     const hub = await newHub();
-    const before = JSON.stringify(hub.state.resources.find((r) => r.id === 'r-seo-a'));
-    hub.selectWorkingVersion(U.erika, 'r-seo-a', 'rev 41');
-    expect(hub.workingVersionFor(U.erika, 'r-seo-a')).toBe('rev 41');
-    expect(JSON.stringify(hub.state.resources.find((r) => r.id === 'r-seo-a'))).toBe(before); // choosing changes nothing official
+    const r0 = hub.state.resources.find((r) => r.id === 'r-seo-a')!;
+    expect(r0.lastModifiedAt).toBeTruthy(); // the screen shows the file name, version and last-modified date and time
     expect(dalia(hub, 'r-seo-a').state).toBe('DRAFT');
-    expect(hub.workingVersionFor(U.arantza, 'r-seo-a')).toBeNull(); // personal choice
+    hub.selectWorkingVersion(U.erika, 'r-seo-a', 'rev 41'); // a personal choice changes nothing for the project
+    expect(dalia(hub, 'r-seo-a').state).toBe('DRAFT');
 
-    // every way Erika might try to approve is refused inside the server layer
-    expect(() => hub.approveVersion(U.erika, 'r-seo-a', 'rev 41')).toThrow(PermissionDenied);
-    expect(() => hub.setApprovedVersion(U.erika, 'r-seo-a', 'rev 41')).toThrow(PermissionDenied);
-    expect(() => hub.declineApproval(U.erika, 'r-seo-a')).toThrow(PermissionDenied);
-    expect(() => hub.keepApprovedDismissSuggestion(U.erika, 'r-amazon-flat')).toThrow(PermissionDenied);
-    expect(() => hub.pendingApprovals(U.erika)).toThrow(PermissionDenied);
-    expect(hub.state.resources.find((r) => r.id === 'r-seo-a')!.approvedVersion).toBeNull();
+    expect(() => hub.approveVersion(U.arantza, 'r-seo-a', 'rev 41')).toThrow(PermissionDenied); // not on this project
+    expect(hub.canChooseVersion(U.arantza, 'r-seo-a')).toBe(false);
+    expect(hub.canChooseVersion(U.erika, 'r-seo-a')).toBe(true);
 
-    // she can submit for approval: pending, Dalia is told once, nothing is approved
-    hub.submitForApproval(U.erika, 'r-seo-a', { version: 'rev 41', note: 'All 154 rows checked.', idempotencyKey: key() });
-    hub.submitForApproval(U.erika, 'r-seo-a', { version: 'rev 41', note: 'All 154 rows checked.', idempotencyKey: key() }); // second click
-    expect(dalia(hub, 'r-seo-a').state).toBe('PENDING');
-    expect(hub.state.resources.find((r) => r.id === 'r-seo-a')!.approvedVersion).toBeNull();
-    expect(hub.listNotifications(U.dalia).filter((n) => n.type === 'APPROVAL_REQUEST')).toHaveLength(1);
-
-    // Dalia approves: recorded with approver, time, old and new version, in the journal and the audit trail
-    hub.approveVersion(U.dalia, 'r-seo-a', 'rev 41');
-    expect(dalia(hub, 'r-seo-a')).toMatchObject({ state: 'APPROVED', label: 'Approved — Use this version' });
+    hub.approveVersion(U.erika, 'r-seo-a', 'rev 41');
+    expect(dalia(hub, 'r-seo-a')).toMatchObject({ state: 'APPROVED', label: 'Chosen version — Use this one' });
     const r = hub.state.resources.find((x) => x.id === 'r-seo-a')!;
-    expect(r.approval).toMatchObject({ version: 'rev 41', byUid: U.dalia });
-    expect(r.pendingApproval).toBeNull();
+    expect(r.approval).toMatchObject({ version: 'rev 41', byUid: U.erika });
     const aud = hub.getAudit(U.dalia).filter((a) => a.entityId === 'r-seo-a' && a.action === 'APPROVE_RESOURCE_VERSION');
     expect(aud).toHaveLength(1);
-    expect(aud[0]).toMatchObject({ actorUid: U.dalia });
+    expect(aud[0]).toMatchObject({ actorUid: U.erika });
     expect(aud[0].before).toMatchObject({ approvedVersion: null });
-    expect(aud[0].after).toMatchObject({ approvedVersion: 'rev 41', approvedBy: U.dalia });
-    const j = hub.getJournal(U.dalia, { projectId: 'prj-012', types: ['RESOURCE'] }).find((e) => /approved for team use/i.test(e.title))!;
-    expect(j.verificationState).toBe('OWNER_APPROVED');
-    expect(j.summary).toMatch(/no approved version → rev 41, approved by Dalia/);
-    // Erika is told it was approved
-    expect(hub.listNotifications(U.erika).some((n) => /approved SEO Master/.test(n.title))).toBe(true);
-    // the journal is append-only: a second approval of the same version adds nothing
-    hub.approveVersion(U.dalia, 'r-seo-a', 'rev 41');
+    expect(aud[0].after).toMatchObject({ approvedVersion: 'rev 41', approvedBy: U.erika });
+    const j = hub.getJournal(U.dalia, { projectId: 'prj-012', types: ['RESOURCE'] }).find((e) => /chosen for the project/i.test(e.title))!;
+    expect(j.summary).toMatch(/no version chosen → rev 41, chosen by Erika/);
+    // pressing it again adds nothing
+    hub.approveVersion(U.erika, 'r-seo-a', 'rev 41');
     expect(hub.getAudit(U.dalia).filter((a) => a.entityId === 'r-seo-a' && a.action === 'APPROVE_RESOURCE_VERSION')).toHaveLength(1);
-  });
-
-  it('a new approval supersedes the old one and keeps both in the history; “FINAL” in a name never approves anything', async () => {
-    const hub = await newHub();
-    hub.approveVersion(U.dalia, 'r-seo-a', 'rev 41');
+    // Dalia can change it too, and the old choice is kept in the history
     hub.approveVersion(U.dalia, 'r-seo-b', 'rev 12', { supersedesResourceId: 'r-seo-a' });
     expect(dalia(hub, 'r-seo-b').state).toBe('APPROVED');
     expect(dalia(hub, 'r-seo-a').state).toBe('SUPERSEDED');
-    const fresh = await newHub();
-    expect(fresh.state.resources.find((r) => r.id === 'r-seo-b')!.label).toMatch(/FINAL/);
-    expect(dalia(fresh, 'r-seo-b').state).toBe('NONE');
   });
 
-  it('Erika cannot approve through bulk actions, other entry points, or other people’s files', async () => {
+  it('“FINAL” in a name never chooses anything, and bulk review never touches file choices', async () => {
     const hub = await newHub();
+    expect(hub.state.resources.find((r) => r.id === 'r-seo-b')!.label).toMatch(/FINAL/);
+    expect(dalia(hub, 'r-seo-b').state).toBe('NONE');
     await hub.demoReleaseFbaHour();
-    const ids = hub.outstandingCards(U.erika).filter((c) => c.cardType !== 'OWNER_REQUEST').map((c) => c.id);
-    const snapshot = JSON.stringify(hub.state.resources.map((r) => [r.id, r.approvedVersion ?? null, r.approval ?? null]));
-    hub.bulkConfirm(U.erika, ids, key());                                  // bulk review
-    hub.demoDiscoverSheet(U.dalia);
-    hub.reviewResourceLink(U.erika, 'l-sug-1', 'CONFIRM');                  // confirming a link is not approving a file
-    expect(JSON.stringify(hub.state.resources.filter((r) => JSON.parse(snapshot).some((x: string[]) => x[0] === r.id)).map((r) => [r.id, r.approvedVersion ?? null, r.approval ?? null]))).toBe(snapshot);
-    expect(() => hub.approveVersion(U.arantza, 'r-seo-a', 'rev 41')).toThrow(PermissionDenied); // not her project
-    expect(() => hub.submitForApproval(U.arantza, 'r-seo-a', { idempotencyKey: key() })).toThrow(PermissionDenied);
+    const snap = JSON.stringify(hub.state.resources.map((r) => [r.id, r.approvedVersion ?? null, r.approval ?? null]));
+    hub.bulkConfirm(U.erika, hub.outstandingCards(U.erika).filter((c) => c.cardType !== 'OWNER_REQUEST').map((c) => c.id), key());
+    expect(JSON.stringify(hub.state.resources.map((r) => [r.id, r.approvedVersion ?? null, r.approval ?? null]))).toBe(snap);
   });
 
-  it('SIMULATED TEST ONLY: if someone edits the stored data directly, an approval with no record is not trusted', async () => {
+  it('SIMULATED TEST ONLY: if someone edits the stored data directly, a choice with no record is not trusted', async () => {
     const hub = await newHub();
-    hub.state.resources.find((r) => r.id === 'r-seo-a')!.approvedVersion = 'rev 41'; // tampering, as a browser console could
-    expect(dalia(hub, 'r-seo-a')).toMatchObject({ state: 'UNRECORDED', label: 'Approval not recorded — Do not rely on it' });
-    expect(hub.approvalIsRecorded(hub.state.resources.find((r) => r.id === 'r-seo-a')!)).toBe(false);
-    hub.state.resources.find((r) => r.id === 'r-seo-a')!.approval = { version: 'rev 41', byUid: U.erika, at: hub.now }; // forged by a non-owner
+    hub.state.resources.find((r) => r.id === 'r-seo-a')!.approvedVersion = 'rev 41';
+    expect(dalia(hub, 'r-seo-a')).toMatchObject({ state: 'UNRECORDED', label: 'Choice not recorded — Do not rely on it' });
+    hub.state.resources.find((r) => r.id === 'r-seo-a')!.approval = { version: 'rev 41', byUid: U.arantza, at: hub.now }; // recorded by someone not on the project
     expect(dalia(hub, 'r-seo-a').state).toBe('UNRECORDED');
     // NOTE: a real backend must enforce this on the server. The browser demo can only detect it.
   });
 });
 
 // ===================================================================== 2 & 3
-describe('2. Reported complete is not verified complete', () => {
-  it('Erika reports P-012 Step 3 finished: verified count stays 2, reported count becomes 1, until a real check passes', async () => {
+describe('2. When someone says a step is done, it is done. The app never claims it was checked somewhere else', () => {
+  it('Erika reports P-012 Step 3 done: the project shows 3 of 4 done; nothing is claimed as checked; Dalia has nothing to do', async () => {
     const hub = await newHub();
-    expect(counts(hub, 'prj-012')).toMatchObject({ verified: 2, reported: 0, total: 4, label: '2 of 4 verified complete' });
+    expect(counts(hub, 'prj-012')).toMatchObject({ done: 2, total: 4, label: '2 of 4 steps done' });
     hub.sendProactiveUpdate(U.erika, { projectId: 'prj-012', stepId: 's-012-3', choice: 'COMPLETED', note: 'All listed.', idempotencyKey: key() });
-    expect(hub.getStep(U.dalia, 's-012-3').status).toBe('REPORTED_COMPLETE');
-    expect(counts(hub, 'prj-012')).toMatchObject({ verified: 2, reported: 1, label: '2 of 4 verified complete · 1 reported complete (awaiting check)' });
-    expect(() => hub.transitionStep(U.erika, 's-012-3', 'VERIFIED_COMPLETE')).toThrowError(/source system/);
-    expect(() => hub.transitionStep(U.dalia, 's-012-3', 'VERIFIED_COMPLETE')).toThrowError(/choose to approve it yourself/);
-    expect(counts(hub, 'prj-012').verified).toBe(2);
-    // Dalia hears about it, with the right words
+    const st = hub.getStep(U.dalia, 's-012-3');
+    expect(st.status).toBe('REPORTED_COMPLETE');
+    expect(counts(hub, 'prj-012')).toMatchObject({ done: 3, label: '3 of 4 steps done' });
+    expect(st.verifications).toHaveLength(0);                 // no outside check is claimed
+    expect(st.verificationSource).not.toBe('INDEPENDENT');
+    expect(st.humanReported).toMatchObject({ choice: 'COMPLETED', note: 'All listed.', byUid: U.erika }); // who said it is kept
+    expect(hub.ownerOverview(U.dalia).queue.some((q) => q.kind === 'Needs a check in the source system')).toBe(false); // no checking chore for Dalia
+    expect(() => hub.transitionStep(U.erika, 's-012-3', 'VERIFIED_COMPLETE')).toThrowError(/source system/); // an employee still cannot claim an outside check
+  });
+
+  it('if Dalia chooses to check one step herself, it waits for her and is counted separately', async () => {
+    const hub = await newHub();
+    expect(() => hub.setStepRequiresCheck(U.erika, 's-012-3', true)).toThrow(PermissionDenied);
+    hub.setStepRequiresCheck(U.dalia, 's-012-3', true);
+    hub.sendProactiveUpdate(U.erika, { projectId: 'prj-012', stepId: 's-012-3', choice: 'COMPLETED', note: 'All listed.', idempotencyKey: key() });
+    expect(counts(hub, 'prj-012')).toMatchObject({ done: 2, awaiting: 1, label: '2 of 4 steps done · 1 waiting for your check' });
     expect(hub.ownerOverview(U.dalia).queue.some((q) => q.kind === 'Needs a check in the source system' && /Verify result/.test(q.title))).toBe(true);
-    // a (simulated) check passes: now it counts, and Erika's report is still on the record
+    expect(() => hub.transitionStep(U.dalia, 's-012-3', 'VERIFIED_COMPLETE')).toThrowError(/choose to approve it yourself/);
     hub.recordVerification(U.dalia, 's-012-3', { verifier: 'Shopify product lookup (practice)', entity: '154 SKUs', result: 'CONFIRMED', detail: 'Practice check, not a real Shopify call' });
     hub.transitionStep(U.dalia, 's-012-3', 'VERIFIED_COMPLETE');
-    const st = hub.getStep(U.dalia, 's-012-3');
-    expect(st.verificationSource).toBe('INDEPENDENT');
-    expect(st.humanReported).toMatchObject({ choice: 'COMPLETED', note: 'All listed.', byUid: U.erika }); // the report is not erased
-    expect(counts(hub, 'prj-012')).toMatchObject({ verified: 3, reported: 0, label: '3 of 4 verified complete' });
+    expect(counts(hub, 'prj-012')).toMatchObject({ done: 3, awaiting: 0, label: '3 of 4 steps done' });
+    expect(hub.getStep(U.dalia, 's-012-3').humanReported).toMatchObject({ byUid: U.erika, note: 'All listed.' }); // the report is not erased
   });
 
-  it('a routine step: the person reports, Dalia signs off (or allows the person to), and the counters say which', async () => {
+  it('checked boxes, AI observations and uploads cannot make a step done', async () => {
     const hub = await newHub();
-    hub.transitionStep(U.erika, 's-070-4', 'IN_PROGRESS');
-    hub.transitionStep(U.erika, 's-070-4', 'REPORTED_COMPLETE');
-    expect(counts(hub, 'prj-070').reported).toBe(1);
-    expect(() => hub.transitionStep(U.erika, 's-070-4', 'VERIFIED_COMPLETE')).toThrowError(/Only Dalia/);
-    expect(() => hub.setStepSignOff(U.erika, 's-070-4', true)).toThrow(PermissionDenied);
-    hub.setStepSignOff(U.dalia, 's-070-4', true); // Dalia designates a human sign-off for this routine step
-    const s = hub.transitionStep(U.erika, 's-070-4', 'VERIFIED_COMPLETE');
-    expect(s.verificationSource).toBe('EMPLOYEE_CONFIRMED');
-    expect(() => hub.setStepSignOff(U.dalia, 's-081-2', true)).toThrowError(/real check/); // big steps can never be self-signed
-    expect(hub.getJournal(U.dalia, { stepId: 's-070-4', types: ['PLAN_CHANGE'] }).some((e) => /may sign this step off/.test(e.title))).toBe(true);
-  });
-
-  it('checked boxes, AI observations and uploads cannot move the verified count', async () => {
-    const hub = await newHub();
-    const v0 = counts(hub, 'prj-012').verified;
+    const v0 = counts(hub, 'prj-012').done;
     hub.toggleChecklist(U.erika, 's-012-3', 'c1'); hub.toggleChecklist(U.erika, 's-012-3', 'c2'); hub.toggleChecklist(U.erika, 's-012-3', 'c3');
-    expect(counts(hub, 'prj-012').verified).toBe(v0);
+    expect(counts(hub, 'prj-012').done).toBe(v0);
     expect(hub.getStep(U.dalia, 's-012-3').status).toBe('NOT_STARTED');
   });
 });
 
-describe('3. An Amazon upload stays unverified until it is genuinely confirmed (and the demo never contacts Amazon)', () => {
-  it('upload attempts and “Amazon accepted it” are reports only; the project cannot close; only a recorded check verifies', async () => {
+describe('3. An Amazon upload attempt never claims Amazon accepted it (and the demo never contacts Amazon)', () => {
+  it('“Amazon accepted it” is Erika’s word, saved as hers; no outside check is invented; the project cannot close', async () => {
     const hub = await newHub();
     await hub.demoReleaseFbaHour();
     const card = hub.outstandingCards(U.erika).find((c) => c.stepId === 's-081-2' && c.cardType !== 'OWNER_REQUEST')!;
@@ -148,13 +114,13 @@ describe('3. An Amazon upload stays unverified until it is genuinely confirmed (
     const st = hub.getStep(U.dalia, 's-081-2');
     expect(st.status).toBe('REPORTED_COMPLETE');
     expect(st.verifications).toHaveLength(0);
-    expect(counts(hub, 'prj-081').label).toBe('1 of 3 verified complete · 1 reported complete (awaiting check)');
-    expect(() => hub.closeProject(U.dalia, 'prj-081')).toThrowError(/never closes by itself/);
+    expect(st.humanReported?.outcomeText).toMatch(/has not been checked in Seller Central/);
+    expect(counts(hub, 'prj-081').label).toBe('2 of 3 steps done');
+    expect(() => hub.closeProject(U.dalia, 'prj-081')).toThrowError(/never closes by itself/); // step 3 is still open
     expect(() => hub.transitionStep(U.dalia, 's-081-2', 'VERIFIED_COMPLETE')).toThrowError(/choose to approve it yourself/);
-    // a mismatching check does not verify it either
     hub.recordVerification(U.dalia, 's-081-3', { verifier: 'Amazon family lookup (practice)', entity: 'FBA_TY001', result: 'MISMATCH', detail: 'Still under PC078' });
     expect(hub.getStep(U.dalia, 's-081-3').verifications.every((v) => v.result !== 'CONFIRMED')).toBe(true);
-    expect(counts(hub, 'prj-081').verified).toBe(1);
+    expect(counts(hub, 'prj-081').checkedInSource).toBe(0);
   });
 
   it('the app contains no code that calls Amazon or any outside service', () => {
@@ -183,7 +149,7 @@ describe('4. A stale “Not started” tracker plus detected activity becomes a 
   });
 });
 
-describe('11. Paused, blocked, awaiting-check, dependency-locked and limited-test-gated steps are never “Do this next”', () => {
+describe('11. Paused, blocked, done, waiting-for-Dalia-to-check, dependency-locked and limited-test-gated steps are never “Do this next”', () => {
   const readyIds = (hub: H, uid = U.erika) => hub.myNextActions(uid).ready.map((r) => r.step.id);
   const heldFor = (hub: H, stepId: string) => hub.myNextActions(U.erika).held.find((h) => h.step.id === stepId);
 
@@ -198,9 +164,11 @@ describe('11. Paused, blocked, awaiting-check, dependency-locked and limited-tes
     expect(readyIds(hub)).not.toContain('s-070-2');
     expect(heldFor(hub, 's-070-2')).toMatchObject({ code: 'BLOCKED' });
     expect(heldFor(hub, 's-070-2')!.reason).toMatch(/Waiting for Dalia/);
-    // reported complete, awaiting a check
+    // reported done: it is simply done, so it is not offered again; and if Dalia chose to check it, it waits for her
     hub.transitionStep(U.erika, 's-081-2', 'REPORTED_COMPLETE');
     expect(readyIds(hub)).not.toContain('s-081-2');
+    expect(heldFor(hub, 's-081-2')).toBeUndefined();
+    hub.setStepRequiresCheck(U.dalia, 's-081-2', true);
     expect(heldFor(hub, 's-081-2')?.code).toBe('AWAITING_CHECK');
     // paused
     hub.pauseProject(U.dalia, 'prj-012', { idempotencyKey: key() });
@@ -356,8 +324,7 @@ describe('12. Repeated clicks and reloads never duplicate requests, approvals, r
     const inputs = { req: key('r'), appr: key('a'), pause: key('p') };
     const doAll = () => {
       hub.createUpdateRequest(U.dalia, { projectId: 'prj-070', stepId: 's-070-2', question: 'Status?', idempotencyKey: inputs.req });
-      hub.submitForApproval(U.erika, 'r-seo-a', { version: 'rev 41', idempotencyKey: inputs.appr });
-      hub.approveVersion(U.dalia, 'r-seo-a', 'rev 41');
+      hub.approveVersion(U.erika, 'r-seo-a', 'rev 41');
       if (!hub.getProject(U.dalia, 'prj-044').pause?.isPaused) hub.pauseProject(U.dalia, 'prj-044', { mode: 'AUTOMATIC_ON_DATE', resumeDateLocal: '2026-10-20', idempotencyKey: inputs.pause });
       hub.demoAdvanceToDate('2026-10-20'); hub.processSchedules();
     };
@@ -367,7 +334,7 @@ describe('12. Repeated clicks and reloads never duplicate requests, approvals, r
     expect(hub.state.updateRequests.filter((r) => r.projectId === 'prj-070')).toHaveLength(1);
     expect(hub.outstandingCards(U.erika).filter((c) => c.cardType === 'OWNER_REQUEST' && c.projectId === 'prj-070')).toHaveLength(1);
     expect(hub.getAudit(U.dalia).filter((a) => a.action === 'APPROVE_RESOURCE_VERSION' && a.entityId === 'r-seo-a')).toHaveLength(1);
-    expect(hub.getJournal(U.dalia, { projectId: 'prj-012', types: ['RESOURCE'] }).filter((e) => /approved for team use/i.test(e.title))).toHaveLength(1);
+    expect(hub.getJournal(U.dalia, { projectId: 'prj-012', types: ['RESOURCE'] }).filter((e) => /chosen for the project/i.test(e.title))).toHaveLength(1);
     expect(hub.getJournal(U.dalia, { projectId: 'prj-044', types: ['PROJECT_RESUMED'] })).toHaveLength(1);
     expect(hub.listNotifications(U.arantza).filter((n) => n.type === 'PROJECT_RESUMED' && n.projectId === 'prj-044')).toHaveLength(1);
   });
@@ -446,16 +413,15 @@ describe('Role/action matrix (also documented in docs/role-action-matrix.md)', (
   const allowed = (fn: () => unknown) => { try { fn(); return true; } catch { return false; } };
   const cases: [string, (hub: H, uid: string) => unknown, Record<Who, boolean>][] = [
     ['select a working version', (h, u) => h.selectWorkingVersion(u, 'r-seo-a', 'rev 41'), { owner: true, member: true, outsider: false }],
-    ['submit a version for approval', (h, u) => h.submitForApproval(u, 'r-seo-a', { version: 'rev 41', idempotencyKey: key() }), { owner: true, member: true, outsider: false }],
-    ['approve a version for team use', (h, u) => h.approveVersion(u, 'r-seo-a', 'rev 41'), { owner: true, member: false, outsider: false }],
+    ['choose the version of a file for the project', (h, u) => h.approveVersion(u, 'r-seo-a', 'rev 41'), { owner: true, member: true, outsider: false }],
     ['pause a project', (h, u) => h.pauseProject(u, 'prj-012', { idempotencyKey: key() }), { owner: true, member: false, outsider: false }],
     ['ask for an update', (h, u) => h.createUpdateRequest(u, { projectId: 'prj-012', idempotencyKey: key() }), { owner: true, member: false, outsider: false }],
     ['report a step finished', (h, u) => h.transitionStep(u, 's-012-3', 'REPORTED_COMPLETE'), { owner: true, member: true, outsider: false }],
-    ['mark a step verified complete', (h, u) => { h.transitionStep(U.erika, 's-070-4', 'IN_PROGRESS'); h.transitionStep(U.erika, 's-070-4', 'REPORTED_COMPLETE'); return h.transitionStep(u, 's-070-4', 'VERIFIED_COMPLETE'); }, { owner: true, member: false, outsider: false }],
+    ['mark a step as checked (outside check)', (h, u) => { h.transitionStep(U.erika, 's-070-4', 'IN_PROGRESS'); h.transitionStep(U.erika, 's-070-4', 'REPORTED_COMPLETE'); return h.transitionStep(u, 's-070-4', 'VERIFIED_COMPLETE'); }, { owner: true, member: false, outsider: false }],
     ['record a check in the source system', (h, u) => h.recordVerification(u, 's-012-3', { verifier: 'x', entity: 'y', result: 'CONFIRMED', detail: 'z' }), { owner: true, member: false, outsider: false }],
     ['approve the next batch of a limited test', (h, u) => { h.configurePilot(U.dalia, 'prj-012', { stepId: 's-012-3', metricType: 'VERIFIED_LISTINGS', metricLabel: 'x', targetCount: 20, scopeLabel: 'x', skus, idempotencyKey: key() } as never); h.verifyPilotRows(U.dalia, 'prj-012', skus, 'x'); return h.approveNextBatch(u, 'prj-012', { targetCount: 40, skus, idempotencyKey: key() }); }, { owner: true, member: false, outsider: false }],
     ['edit a project description', (h, u) => h.setProjectDescription(u, 'prj-012', 'x'), { owner: true, member: true, outsider: false }],
-    ['allow self sign-off on a routine step', (h, u) => h.setStepSignOff(u, 's-070-4', true), { owner: true, member: false, outsider: false }],
+    ['choose to check a step herself', (h, u) => h.setStepRequiresCheck(u, 's-070-4', true), { owner: true, member: false, outsider: false }],
     ['open the owner dashboard', (h, u) => h.ownerOverview(u), { owner: true, member: false, outsider: false }],
     ['read the private project', (h, u) => h.getProject(u, 'prj-priv'), { owner: true, member: false, outsider: false }],
   ];

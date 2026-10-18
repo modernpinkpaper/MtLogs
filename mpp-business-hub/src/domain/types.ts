@@ -138,7 +138,9 @@ export interface Step {
   assignedUids: string[];
   dueAt: string | null;
   impact: 'ROUTINE' | 'HIGH';
-  /** Dalia can allow the person to sign off a routine step themselves. Off by default. */
+  /** Dalia can choose to check a specific step herself. Off by default: when someone says it is done, it is done. */
+  requiresCheck?: boolean;
+  /** Kept for older saved data. Not used any more. */
   employeeSignOffAllowed?: boolean;
   dependencyIds: string[];
   evidenceHints: string[];
