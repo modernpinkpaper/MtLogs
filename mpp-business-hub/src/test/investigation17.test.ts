@@ -211,4 +211,30 @@ describe('v1.7 investigation priorities and data sources', () => {
     expect(od.projectMatch).toMatchObject({ type: 'ALREADY_COVERED', projectKey: 'P-012' });
     expect(od.overlap?.join(' ')).toMatch(/P-012/);
   });
+
+  it('the sales check uses real arithmetic, shows its math and scenarios, leaves out the partial last day, and says it is revenue not profit', async () => {
+    const hub = await newHub();
+    const days: { d: string; amount: number; orders: number; units: number }[] = [];
+    for (let i = 0; i < 100; i++) { const d = new Date(Date.UTC(2026, 5, 1 + i)).toISOString().slice(0, 10); days.push({ d, amount: i < 85 ? 1000 : 600, orders: i < 85 ? 20 : 10, units: i < 85 ? 20 : 10 }); }
+    days[99] = { d: days[99].d, amount: 5, orders: 0, units: 0 }; // partial last day must be ignored
+    hub.state.salesDaily = days;
+    Object.assign(src(hub, 'src-B2'), { dataKind: 'SYNTHETIC' });
+    hub.setSourceApproval(U.dalia, 'src-B2', true); hub.updateGoal(U.dalia, 'ig-B2a', { enabled: true });
+    hub.runInvestigations(U.dalia);
+    const f = hub.state.ownerFindings.find((x) => x.dedupeKey === 'sales-trend:7d')!;
+    expect(f).toBeTruthy();
+    // last 7 full days are 600 each = 4200. Of the 12 weeks before, 11 are 7000 and one is 4200, so the average is 6767 and the gap is 2567 per week.
+    expect(f.impact?.kind).toBe('revenue');
+    expect(f.impact?.text).toMatch(/Revenue only, not profit/);
+    expect(f.impact?.math).toMatch(/\$6,767.*\$4,200.*\$2,567/);
+    expect(f.impact?.scenarios).toHaveLength(3);
+    expect(f.alternatives?.join(' ')).toMatch(/Seasonal/);
+    expect(f.isSample).toBe(true);
+    // with no sales data connected the same goal says what is missing and creates nothing
+    const hub2 = await newHub(); hub2.updateGoal(U.dalia, 'ig-B2a', { enabled: true }); hub2.runInvestigations(U.dalia);
+    expect(hub2.state.ownerFindings.some((x) => x.dedupeKey.startsWith('sales-trend'))).toBe(false);
+    // employees cannot read it
+    expect(() => hub.runInvestigations(U.erika)).toThrow(PermissionDenied);
+    expect(JSON.stringify([hub.listProjects(U.erika), hub.search(U.erika, 'sales'), hub.counts(U.erika)])).not.toMatch(/Revenue only|sales-trend|2,567/);
+  });
 });

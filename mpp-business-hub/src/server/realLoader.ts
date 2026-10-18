@@ -2,4 +2,5 @@
 export const REAL_TRACKER: unknown = null;
 export const REAL_LOGS: unknown = null;
 export const REAL_FINDINGS: unknown = null;
+export const REAL_SALES: unknown = null;
 export const REAL_MODE = false;

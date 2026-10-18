@@ -113,7 +113,7 @@ interface Cand {
   key: string; title: string; kind: OwnerFinding['kind']; area: string; urgency: OwnerFinding['urgency']; fact: OwnerFinding['factLabel']; summary: string; scope: string;
   evidence: Omit<FindingEvidence, 'id' | 'observedAt'>[]; alternatives: string[]; uncertainties: string[]; action: string; validation: string; related: string[];
   project: { title: string; objective: string; deliverables: string[]; steps: { title: string; instructions: string }[] }; sig: string; bucket: InvestigationBucket; bucketWhy: string;
-  impactKind?: NonNullable<OwnerFinding['impact']>['kind'];
+  impactKind?: NonNullable<OwnerFinding['impact']>['kind']; impact?: OwnerFinding['impact'];
 }
 type Ctx = { hub: HubServer; goal: BusinessGoal; srcs: IntelligenceSource[]; p: (k: string, d: number) => number };
 const activeProjects = (hub: HubServer) => hub.state.projects.filter((p) => !p.closedAt && !p.canceledAt && p.visibility !== 'OWNER_PRIVATE');
@@ -266,6 +266,34 @@ const CHECKS: Record<string, (c: Ctx) => Cand[]> = {
       project: { title: 'Reword an unclear review question', objective: 'Make the question clear so it is answered correctly the first time.', deliverables: ['New wording', 'A check of corrections afterward'], steps: [{ title: 'Read the corrected cards', instructions: 'Find what people misunderstood.' }, { title: 'Write clearer wording', instructions: 'Use plain words and one question at a time.' }] },
       sig: `${k}:${n}`, bucket: 'Worth testing' as const, bucketWhy: 'A wording change is cheap to try.', impactKind: 'capacity' as const }));
   },
+  'sales-trend': (c) => {
+    const all = c.hub.state.salesDaily ?? [];
+    // The last day in a snapshot is usually only part of a day, so it is left out. Only full days are compared.
+    const full = all.slice(0, -1);
+    const weeks = c.p('baselineWeeks', 12); const minDrop = c.p('minDropPct', 15);
+    if (full.length < 7 * 4) return [];
+    const sum = (rows: typeof full) => rows.reduce((a, r) => ({ amount: a.amount + r.amount, orders: a.orders + r.orders, units: a.units + r.units }), { amount: 0, orders: 0, units: 0 });
+    const last = full.slice(-7); const prior: ReturnType<typeof sum>[] = [];
+    for (let i = 1; i <= weeks; i++) { const w = full.slice(full.length - 7 * (i + 1), full.length - 7 * i); if (w.length === 7) prior.push(sum(w)); }
+    if (prior.length < 3) return [];
+    const L = sum(last); const base = { amount: prior.reduce((a, r) => a + r.amount, 0) / prior.length, orders: prior.reduce((a, r) => a + r.orders, 0) / prior.length };
+    const dropPct = (1 - L.amount / base.amount) * 100;
+    if (dropPct < minDrop) return [];
+    const gap = base.amount - L.amount; const aovNow = L.amount / Math.max(1, L.orders); const aovBase = base.amount / Math.max(1, base.orders);
+    const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+    const from = last[0].d; const to = last[6].d;
+    return [{ key: 'sales-trend:7d', title: `Sales for the last 7 days are ${Math.round(dropPct)}% below the recent average`, kind: 'Revenue opportunity', area: 'Sales', urgency: 'NORMAL', fact: 'CONFIRMED_SOURCE_FACT',
+      summary: `Store sales from ${from} to ${to} were ${money(L.amount)} from ${L.orders} orders. The average of the ${prior.length} weeks before was ${money(base.amount)} from about ${Math.round(base.orders)} orders. Orders fell more (${Math.round((1 - L.orders / base.orders) * 100)}%) than dollars, so the average order is larger (${money(aovNow)} now, ${money(aovBase)} before). This file has store totals only, so it cannot say which products or why.`,
+      scope: `Store totals, ${from} to ${to}. No product, traffic or conversion data.`,
+      evidence: [ev(c, 'B2', `${from} to ${to}: ${money(L.amount)}, ${L.orders} orders, ${L.units} units`, 'SHEET'), ev(c, 'B2', `Average of the ${prior.length} weeks before: ${money(base.amount)}, about ${Math.round(base.orders)} orders`, 'SHEET')],
+      alternatives: ['Seasonal swing. There is no last-year data here to compare, so a normal fall dip cannot be ruled out.', 'Fewer visitors, a stock problem, a price change, an ad change or a listing change. None of these are in this file.', 'A one-off slow week. Look at the next 7 days before acting.', 'Late orders or days still being counted.'],
+      uncertainties: ['This is dollars of sales, not profit. No costs are connected.', 'The file does not say which sales channel it covers.'],
+      action: 'Look at the same 7 days by product, traffic and stock in the sales report before changing anything. Check whether any listing, price or ad changed in the last two weeks.', validation: 'The next 7 days are compared with this one, and a cause is found in the product-level report.', related: [],
+      project: { title: 'Find out why sales slowed', objective: 'Explain the drop using product, traffic, stock and change history.', deliverables: ['A one-page cause list', 'A decision on what to test'], steps: [{ title: 'Compare the last 14 days by product', instructions: 'Use the sales report by product. Note which products fell most.' }, { title: 'List what changed in the last two weeks', instructions: 'Listings, prices, ads, stock, photos.' }, { title: 'Pick one thing to test', instructions: 'Choose the likeliest cause and write how you will check it.' }] },
+      sig: `${to}:${Math.round(L.amount)}`, bucket: 'Needs decision', bucketWhy: 'A large change in sales is worth a look soon, but the cause is not known.', impactKind: 'revenue',
+      impact: { kind: 'revenue', text: `Revenue only, not profit. This week is ${money(gap)} below the recent weekly average.`, math: `Gap = average of ${prior.length} prior weeks (${money(base.amount)}) minus the last 7 days (${money(L.amount)}) = ${money(gap)} per week`,
+        scenarios: [{ label: 'Back to normal next week', value: `${money(0)} more lost` }, { label: 'Stays this low for 4 more weeks', value: `about ${money(gap * 4)} less revenue` }, { label: 'Stays this low until Dec 31 (11 weeks)', value: `about ${money(gap * 11)} less revenue` }] } }];
+  },
   'unverified-outcomes': (c) => {
     const out: Cand[] = [];
     for (const s of c.srcs) {
@@ -359,7 +387,7 @@ function upsert(hub: HubServer, g: BusinessGoal, cand: Cand, srcs: IntelligenceS
     sourcesUsed: srcs.map((s) => ({ sourceId: s.id, name: s.name, coverage: s.coverage ?? '', dataKind: s.dataKind ?? 'NONE' })), isSample: sample, bucket: cand.bucket, bucketWhy: cand.bucketWhy,
     scope: cand.scope, alternatives: cand.alternatives, validation: cand.validation, overlap: ov.text,
     employeeBrief: `Goal: ${cand.project.objective} Steps: ${cand.project.steps.map((s, i) => `${i + 1}. ${s.title}`).join(' ')}`,
-    impact: { kind: 'unknown', text: NO_ESTIMATE, math: null, scenarios: null }, score: scoreOf(cand, g, ov.text.length, sample), evidenceSig: cand.sig,
+    impact: cand.impact ?? { kind: 'unknown', text: NO_ESTIMATE, math: null, scenarios: null }, score: scoreOf(cand, g, ov.text.length, sample), evidenceSig: cand.sig,
   };
   st.ownerFindings.push(f); out.created.push(f.code);
   if (f.urgency === 'URGENT') hub.notify({ recipientUid: st.users.find((u) => u.role === 'OWNER')!.id, senderUid: null, type: 'AI_FINDING', title: `Urgent: ${f.title}`, preview: f.summary, projectId: null, sourceEntityId: f.id, deepLink: `/owner/ai/${f.id}`, key: `n:finding:${f.dedupeKey}` });

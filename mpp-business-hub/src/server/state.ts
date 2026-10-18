@@ -53,6 +53,8 @@ export interface HubState {
   sources: IntelligenceSource[];
   workspaces: Record<string, ProjectWorkspace>;
   drive: DriveSim;
+  /** OWNER-ONLY. Daily store totals (dollars, orders, units) when a sales source is connected. Never read by employee-side methods. */
+  salesDaily?: { d: string; amount: number; orders: number; units: number }[];
   lastFindingsLookAt: string;
   lastScanAt: string | null;
   scanCount: number;
