@@ -441,3 +441,7 @@ details > summary { cursor: pointer; }
 .mrow { padding: .8rem 1rem; border-top: 1px solid var(--border); }
 .mrow:first-child { border-top: 0; }
 .mrow .t { font-weight: 650; }
+
+/* v1.7 investigation priorities and sources */
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3, 12px); }
+@media (max-width: 760px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }

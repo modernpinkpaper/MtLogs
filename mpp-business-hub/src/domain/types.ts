@@ -712,6 +712,13 @@ export interface OwnerFinding {
   ownerNotes: string; // owner investigation notes: never shared
   seenByOwner: boolean;
   goalIds: string[];
+  /** v1.7: structured evidence fields. All optional so older findings keep working. */
+  goalId?: string; sourcesUsed?: { sourceId: string; name: string; coverage: string; dataKind: 'SYNTHETIC' | 'REAL_SNAPSHOT' | 'NONE' }[];
+  isSample?: boolean; bucket?: InvestigationBucket; bucketWhy?: string;
+  scope?: string; alternatives?: string[]; validation?: string; overlap?: string[]; employeeBrief?: string;
+  impact?: { kind: 'revenue' | 'contribution profit' | 'cost savings' | 'capacity' | 'risk reduction' | 'unknown'; text: string; math: string | null; scenarios: { label: string; value: string }[] | null };
+  score?: { urgency: number; value: number; evidence: number; feasibility: number; risk: number; ownerPriority: number; overlap: number };
+  evidenceSig?: string;
 }
 
 export interface ModelVar {
@@ -738,10 +745,38 @@ export interface OpportunityModel {
   history: { version: number; at: string; changed: string }[];
 }
 
-export interface BusinessGoal { id: string; title: string; description: string; priority: 'HIGH' | 'NORMAL' | 'LOW'; enabled: boolean; area: string; createdAt: string }
+export type InvestigationBucket = 'Urgent' | 'Needs decision' | 'Follow up' | 'Worth testing' | 'Background idea';
+export interface BusinessGoal {
+  id: string; title: string; description: string; priority: 'HIGH' | 'NORMAL' | 'LOW'; enabled: boolean; area: string; createdAt: string;
+  /** v1.7: investigation priorities. All optional so older goals keep working. */
+  catalogId?: string; custom?: boolean; tier?: 'A' | 'B' | 'C';
+  /** The business question in plain English. Editable. */
+  question?: string;
+  /** Sources this goal may use. The goal cannot run unless every one is approved and has data. */
+  sourceIds?: string[];
+  /** Checks to run (from the check library). A goal with no checks is saved as a brief and does not invent findings. */
+  checks?: string[];
+  /** Editable numbers for the checks, for example how many days count as stale. */
+  params?: Record<string, number>;
+  evidenceNeeded?: string; projectExamples?: string[]; safety?: string;
+  lastRunAt?: string | null; lastRunNote?: string | null;
+}
+export type SourceStatus = 'NOT_CONNECTED' | 'DEMO_ONLY' | 'PENDING_PERMISSION' | 'CONNECTED' | 'STALE' | 'ERROR' | 'DISABLED';
 export interface IntelligenceSource {
   id: string; name: string; type: string; allowed: string; sensitivity: 'OWNER_ONLY' | 'TEAM' | 'PUBLIC';
   demoEnabled: boolean; health: 'OK' | 'LATE' | 'GAP' | 'NOT_CONNECTED'; lastCheckedAt: string | null; note: string; cadence: string;
+  /** v1.7: source registry fields. All optional so older sources keep working. */
+  catalogId?: string; tier?: 'A' | 'B' | 'C'; custom?: boolean;
+  status?: SourceStatus;
+  /** Did the owner approve the AI reading this source? Nothing is approved automatically. */
+  approved?: boolean;
+  /** What data exists behind this source in THIS build. NONE = nothing to read. SYNTHETIC = made-up sample. REAL_SNAPSHOT = a one-time copy of real data. */
+  dataKind?: 'NONE' | 'SYNTHETIC' | 'REAL_SNAPSHOT';
+  purpose?: string; scope?: string; excluded?: string; retention?: string; visibility?: 'OWNER_ONLY' | 'WORKER_SAFE';
+  coverage?: string; lag?: string; costNote?: string; missing?: string; safety?: string;
+  exampleQuestions?: string[]; suggestedPriority?: 'HIGH' | 'NORMAL' | 'LOW';
+  /** Small made-up fixture rows for demo investigations (never present in a real-data build). */
+  sampleRows?: { id: string; label: string; detail: string; verified: boolean; at: string }[];
 }
 export interface OutcomeMeasurement {
   id: string; findingId: string; projectId: string; period: string; actualHours: number | null; actualOrders: number | null; limitations: string; recordedAt: string;

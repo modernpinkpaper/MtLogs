@@ -3,11 +3,12 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { newKey, useAct, useMe } from '../hubContext';
 import { Chip, Empty, Modal, Tabs, type Tone } from '../common';
 import { RequestUpdateDialog } from '../dialogs';
+import { Priorities } from './InvestigationSetup';
 import { formatDateTime, formatLocalDate, chicagoDate } from '../../domain/time';
 import { confidenceOf, classifyWebSource } from '../../server/finance';
 import type { FactLabel, FindingEvidence, ModelVar, OwnerFinding, PlanStepDraft } from '../../domain/types';
 
-type Tab = 'inbox' | 'goals' | 'sources' | 'results';
+type Tab = 'inbox' | 'priorities' | 'results';
 const URG: Record<string, [string, Tone]> = { URGENT: ['Urgent', 'bad'], NORMAL: ['Normal', 'gray'], STRATEGIC: ['Longer term', 'violet'] };
 const FACT: Record<FactLabel, [string, Tone, string]> = {
   CONFIRMED_SOURCE_FACT: ['Confirmed from a source', 'ok', 'A source we trust shows this.'],
@@ -24,7 +25,8 @@ export function OwnerAI() {
   const act = useAct();
   const [sp, setSp] = useSearchParams();
   const nav = useNavigate();
-  const tab = (sp.get('tab') as Tab) || 'inbox';
+  const rawTab = sp.get('tab');
+  const tab: Tab = rawTab === 'goals' || rawTab === 'sources' ? 'priorities' : (rawTab as Tab) || 'inbox';
   const [view, setView] = useState<'decision' | 'approved' | 'snoozed' | 'done' | 'all'>('decision');
   const [q, setQ] = useState('');
   const [area, setArea] = useState('');
@@ -38,10 +40,10 @@ export function OwnerAI() {
     <div className="stack">
       <div className="row between">
         <div><h1>AI Recommendations</h1><p className="muted" style={{ margin: 0 }}>Things the AI found that may need your decision. Nothing becomes a project or an assignment unless you choose it. Only you can see this.</p></div>
-        <button onClick={async () => { const r = await act(() => hub.runAiScan(uid)); if (r) setLastScan(`Scan finished (practice). ${r.created.length} new, ${r.updated.length} seen again. Repeats were added to the same item, not made twice.`); }}>Run a scan (practice)</button>
+        <button onClick={async () => { const r = await act(() => hub.runAiScan(uid)); if (r) setLastScan(`Investigation finished. ${r.created.length} new, ${r.updated.length} seen again. Only approved sources were used. Goals that could not run are listed under Priorities and sources.`); }}>Investigate now</button>
       </div>
       {lastScan && <div className="card info small" role="status">{lastScan}</div>}
-      <Tabs<Tab> tabs={[{ id: 'inbox', label: `Recommendations (${sum.needsDecision})` }, { id: 'goals', label: 'Goals' }, { id: 'sources', label: 'Where it looks' }, { id: 'results', label: 'Results tracker' }]} value={tab} onChange={(t) => setSp({ tab: t })} />
+      <Tabs<Tab> tabs={[{ id: 'inbox', label: `Recommendations (${sum.needsDecision})` }, { id: 'priorities', label: 'Priorities and sources' }, { id: 'results', label: 'Results tracker' }]} value={tab} onChange={(t) => setSp({ tab: t })} />
 
       {tab === 'inbox' && (
         <>
@@ -61,7 +63,7 @@ export function OwnerAI() {
               <select aria-label="Area" style={{ width: 'auto' }} value={area} onChange={(e) => setArea(e.target.value)}><option value="">Area: any</option>{areas.map((a) => <option key={a}>{a}</option>)}</select>
               <select aria-label="How urgent" style={{ width: 'auto' }} value={urgency} onChange={(e) => setUrgency(e.target.value)}><option value="">How urgent: any</option><option value="URGENT">Urgent</option><option value="NORMAL">Normal</option><option value="STRATEGIC">Longer term</option></select></div></details>
           </div>
-          {list.length === 0 && <Empty>Nothing here. Try “Everything”, or run a practice scan.</Empty>}
+          {list.length === 0 && <Empty>Nothing here. Try “Everything”, or choose what to investigate under Priorities and sources.</Empty>}
           <div className="card list">
             {list.map((f) => (
               <Link key={f.id} to={`/owner/ai/${f.id}`} className="lrow" aria-label={f.title}>
@@ -69,6 +71,8 @@ export function OwnerAI() {
                 <span className="s">{f.summary}</span>
                 <span className="m">
                   {f.urgency !== 'NORMAL' && <Chip tone={URG[f.urgency][1]}>{URG[f.urgency][0]}</Chip>}
+                  {f.isSample && <Chip tone="violet" title="Made-up sample data. Not a real analysis.">Sample finding</Chip>}
+                  {f.bucket && <Chip tone="info">{f.bucket}</Chip>}
                   <span>{f.area} · {f.kind}</span>
                   {f.status !== 'NEW' && <span>· {STATUS_LABEL[f.status]}</span>}
                   {f.projectMatch.type === 'ALREADY_COVERED' && <span className="okt">· Already covered by {f.projectMatch.projectKey}</span>}
@@ -79,8 +83,7 @@ export function OwnerAI() {
           </div>
         </>
       )}
-      {tab === 'goals' && <Goals />}
-      {tab === 'sources' && <Sources />}
+      {tab === 'priorities' && <Priorities />}
       {tab === 'results' && <Results />}
     </div>
   );
@@ -142,6 +145,8 @@ export function FindingDetail() {
         </div>
       </header>
 
+      <Glance f={f} />
+
       <section className="stack" aria-labelledby="ev">
         <h2 id="ev" style={{ marginBottom: 0 }}>Why we think so</h2>
         {f.evidence.map((e) => <EvidenceRow key={e.id} e={e} />)}
@@ -172,6 +177,35 @@ export function FindingDetail() {
       {dlg === 'ask' && f.linkedProjectId && <RequestUpdateDialog projectId={f.linkedProjectId} onClose={() => setDlg(null)} />}
       <span hidden>{String(nav)}</span>
     </div>
+  );
+}
+
+const KIND_TEXT: Record<string, string> = { SYNTHETIC: 'Made-up sample data', REAL_SNAPSHOT: 'One-time copy of real data', NONE: 'No data' };
+/** The four things Dalia asked for, in one place: what was found, which data supports it, which project, and the possible impact. */
+function Glance({ f }: { f: OwnerFinding }) {
+  const impact = f.impact ?? { kind: 'unknown' as const, text: 'Insufficient data to estimate. No sales, cost or time numbers are connected.', math: null, scenarios: null };
+  return (
+    <section className="stack" aria-labelledby="glance">
+      <h2 id="glance" style={{ marginBottom: 0 }}>At a glance</h2>
+      {f.isSample && <div className="banner warn" role="note"><strong>Sample finding.</strong> This came from made-up data. It is not a real analysis of any account.</div>}
+      <div className="grid2">
+        <div className="card stack"><h3 style={{ margin: 0 }}>What the AI found</h3><p style={{ margin: 0 }}>{f.summary}</p>{f.scope && <p className="small muted" style={{ margin: 0 }}><strong>Affects:</strong> {f.scope}</p>}
+          {f.bucket && <p className="small" style={{ margin: 0 }}><Chip tone="info">{f.bucket}</Chip> {f.bucketWhy}</p>}</div>
+        <div className="card stack"><h3 style={{ margin: 0 }}>Data it used</h3>
+          {(f.sourcesUsed ?? []).length ? <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>{f.sourcesUsed!.map((u) => <li key={u.sourceId}><strong>{u.name}</strong> <Chip tone={u.dataKind === 'SYNTHETIC' ? 'violet' : u.dataKind === 'REAL_SNAPSHOT' ? 'warn' : 'gray'}>{KIND_TEXT[u.dataKind]}</Chip>{u.coverage && <div className="small muted">{u.coverage}</div>}</li>)}</ul> : <p className="small muted" style={{ margin: 0 }}>The evidence list below names the data.</p>}
+          <p className="small muted" style={{ margin: 0 }}>{f.evidence.length} piece{f.evidence.length === 1 ? '' : 's'} of evidence below.</p></div>
+        <div className="card stack"><h3 style={{ margin: 0 }}>Project it recommends</h3>
+          {f.plan ? <><p style={{ margin: 0 }}><strong>{f.plan.title}</strong></p><p className="small" style={{ margin: 0 }}>{f.plan.employeeObjective}</p><ol className="small" style={{ margin: 0, paddingLeft: '1.1rem' }}>{f.plan.steps.slice(0, 5).map((st, i) => <li key={i}>{st.title}</li>)}</ol></>
+            : <p style={{ margin: 0 }}>{f.recommendedAction}</p>}
+          {(f.overlap ?? []).length > 0 && <p className="small" style={{ margin: 0 }}><strong>Related work:</strong> {f.overlap!.join('; ')}</p>}
+          {f.validation && <p className="small muted" style={{ margin: 0 }}><strong>How we will know it worked:</strong> {f.validation}</p>}
+          <p className="small muted" style={{ margin: 0 }}>Nothing is created or assigned until you choose.</p></div>
+        <div className="card stack"><h3 style={{ margin: 0 }}>Possible business impact</h3>
+          <p style={{ margin: 0 }}>{impact.text}</p>
+          {impact.kind !== 'unknown' && <p className="small muted" style={{ margin: 0 }}>Type: {impact.kind}{impact.math ? `. Math: ${impact.math}` : ''}</p>}
+          {(f.alternatives ?? []).length > 0 && <div><strong className="small">What else could explain it</strong><ul className="small" style={{ margin: 0, paddingLeft: '1.1rem' }}>{f.alternatives!.map((a, i) => <li key={i}>{a}</li>)}</ul></div>}</div>
+      </div>
+    </section>
   );
 }
 
@@ -332,42 +366,6 @@ function ApproveWizard({ f, onClose }: { f: OwnerFinding; onClose: () => void })
 }
 
 // ------------------------------------------------------------------ goals / sources / results
-function Goals() {
-  const { hub, uid } = useMe();
-  const act = useAct();
-  const goals = hub.listGoals(uid);
-  const [t, setT] = useState(''); const [d, setD] = useState(''); const [p, setP] = useState<'HIGH' | 'NORMAL' | 'LOW'>('NORMAL');
-  return (
-    <div className="stack">
-      <p className="muted" style={{ margin: 0 }}>Tell the AI what matters, in your own words. It does not need special rules for each idea.</p>
-      <form className="card stack" onSubmit={async (e) => { e.preventDefault(); const r = await act(() => hub.addGoal(uid, t, d, p), 'Goal added'); if (r) { setT(''); setD(''); } }}>
-        <div><label htmlFor="g-t">Add a goal</label><input id="g-t" type="text" value={t} onChange={(e) => setT(e.target.value)} placeholder="Example: Look for revenue leaks from Amazon listings" /></div>
-        <div><label htmlFor="g-d">More detail (if you want)</label><input id="g-d" type="text" value={d} onChange={(e) => setD(e.target.value)} /></div>
-        <div className="row"><label className="row" style={{ margin: 0 }}>How important <select value={p} onChange={(e) => setP(e.target.value as typeof p)} style={{ width: 'auto' }}><option value="HIGH">High</option><option value="NORMAL">Normal</option><option value="LOW">Low</option></select></label><button className="primary" type="submit" disabled={!t.trim()}>Add goal</button></div>
-      </form>
-      <div className="stack">{goals.map((g) => (
-        <div key={g.id} className="card pcard"><div className="top"><span className="name">{g.title}</span><Chip tone={g.priority === 'HIGH' ? 'bad' : 'gray'}>{g.priority.toLowerCase()}</Chip>{!g.enabled && <Chip tone="gray">Off</Chip>}</div><div className="small muted">{g.description}</div>
-          <div className="act"><label className="row" style={{ margin: 0, fontWeight: 500 }}><input type="checkbox" checked={g.enabled} onChange={(e) => act(() => hub.updateGoal(uid, g.id, { enabled: e.target.checked }))} /> Watch for this</label>
-            <select aria-label={`Importance of ${g.title}`} value={g.priority} onChange={(e) => act(() => hub.updateGoal(uid, g.id, { priority: e.target.value as 'HIGH' | 'NORMAL' | 'LOW' }))} style={{ width: 'auto', minHeight: 34 }}><option value="HIGH">High</option><option value="NORMAL">Normal</option><option value="LOW">Low</option></select></div></div>))}</div>
-    </div>
-  );
-}
-function Sources() {
-  const { hub, uid } = useMe();
-  const act = useAct();
-  const sources = hub.listSources(uid);
-  const o = hub.intakeOverview(uid);
-  return (
-    <div className="stack">
-      <p className="muted" style={{ margin: 0 }}>Where the AI is allowed to look. In this practice copy every source is pretend. Nothing here can reach a real account.</p>
-      <div className="stack">{sources.map((s) => (
-        <div key={s.id} className="card pcard"><div className="top"><span className="name">{s.name}</span><Chip tone={s.health === 'OK' ? 'ok' : s.health === 'NOT_CONNECTED' ? 'gray' : 'warn'}>{s.health === 'OK' ? 'Working (practice)' : s.health === 'NOT_CONNECTED' ? 'Not connected' : s.health === 'GAP' ? 'Some activity is missing' : 'Late'}</Chip>{s.sensitivity === 'OWNER_ONLY' && <Chip tone="violet" glyph="🔒">Only you</Chip>}</div>
-          <div className="meta"><span>Allowed: {s.allowed}</span><span>How often: {s.cadence}</span>{s.lastCheckedAt && <span>Last checked {formatDateTime(s.lastCheckedAt)}</span>}</div><div className="small muted">{s.note}</div>
-          <div className="act"><label className="row" style={{ margin: 0, fontWeight: 500 }}><input type="checkbox" checked={s.demoEnabled} onChange={(e) => act(() => hub.toggleSource(uid, s.id, e.target.checked))} /> Pretend connector on</label><span className="small muted">A real connection cannot be made from this practice copy.</span></div></div>))}</div>
-      <div className="card"><h2>AI cost and health</h2><p>This month: <strong>${o.monthSpendUsd.toFixed(2)}</strong> of ${o.budget}. The practice copy spends nothing. <Link to="/owner/data-intake">See computer activity and AI runs</Link></p></div>
-    </div>
-  );
-}
 function Results() {
   const { hub, uid } = useMe();
   const act = useAct();

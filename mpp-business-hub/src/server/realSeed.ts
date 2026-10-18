@@ -6,6 +6,8 @@ import type { OwnerFinding, FindingEvidence, ActivityBin, PrintJob, PrinterProbl
 export interface RealFinding { code: string; kind: OwnerFinding['kind']; area: string; urgency: OwnerFinding['urgency']; fact: OwnerFinding['factLabel']; project: OwnerFinding['projectMatch']; title: string; summary: string; action: string; uncertainties: string[]; evidence: [string, FindingEvidence['sourceType'], string, FindingEvidence['quality']][] }
 export interface RealLogs { printers: Record<string, string[]>; printJobs: PrintJob[]; printerProblems: PrinterProblemEvent[]; activityBins: ActivityBin[] }
 import { base, stepBase, settings } from './seed';
+import { catalogSources, catalogGoals } from '../domain/catalog';
+import type { IntelligenceSource } from '../domain/types';
 
 type Row = [string, string, 'D' | 'I' | 'B' | 'N' | 'X', string | null, string | null, (string | null)?, (string | null)?];
 interface RealProject { key: string; short: string; lead: string; members: string[]; deadline: string | null; priority: Project['priority']; title: string; details: string; steps: Row[]; closed?: string }
@@ -14,6 +16,17 @@ export interface RealTracker { people: { id: string; name: string; role: User['r
 const ts = (s: string | null) => (s ? chicagoToUtc(s.slice(0, 10), s.slice(11, 16)) : null);
 
 /** Builds a state from the owner's real tracker rows. Used only by the private real-data build. */
+const SRC_BY_TYPE: Record<string, string> = { MT_LOG: 'src-A2', PRINT_LOG: 'src-A4', PROJECT_RECORD: 'src-A1', SHEET: 'src-A1', OWNER_INPUT: 'src-A1', WEB: 'src-B9' };
+function realSources(now: string, logs?: RealLogs | null): IntelligenceSource[] {
+  const src = catalogSources();
+  const snap = (cat: string, patch: Partial<IntelligenceSource>) => Object.assign(src.find((x) => x.catalogId === cat)!, { dataKind: 'REAL_SNAPSHOT', approved: true, status: 'STALE', health: 'LATE', lastCheckedAt: now, ...patch });
+  snap('A1', { coverage: '8 projects from the tracker (the 5 to 8 most recently active), copied once on Oct 18', lag: 'One-time copy. It does not refresh.', scope: 'Dalia’s tracker: OCTOBER 2026 and each person’s tab. Not the time log.', note: 'A one-time read-only copy. It will not update by itself.' });
+  if (logs) {
+    snap('A2', { coverage: 'Oct 16, 8 AM to about 5 PM, 7 computers. Counts and times only.', lag: 'One day only. Does not refresh.', scope: 'Hourly files from the 7 company computers', note: 'One-time copy of one day. Customer names, order numbers and page titles were left out.' });
+    snap('A4', { coverage: 'Oct 16, print jobs and printer warnings from 5 computers', lag: 'One day only. Does not refresh.', scope: 'Print records from the print computers', note: 'One-time copy of one day. Document names were left out.' });
+  }
+  return src;
+}
 export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string, logs?: RealLogs | null, findings?: RealFinding[] | null): HubState {
   const now = ts(nowLocal)!;
   const users: User[] = t.people.map(p => ({ id: p.id, name: p.name, role: p.role, area: p.area, active: true, capabilities: [], primaryDeviceId: p.device, rosterNote: p.note }));
@@ -49,9 +62,17 @@ export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string,
     auditEvents: [], archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [], updateRequests: [], updateResponses: [], notifications: [], shifts: [],
     printJobs: logs?.printJobs.map(j => ({ ...j, uid: t.people.find(p => p.device === j.deviceId)?.id ?? null })) ?? [], printerProblems: logs?.printerProblems ?? [], activityBins: logs?.activityBins ?? [],
     stations: Object.entries(logs?.printers ?? {}).map(([deviceId, printers]): PrintStation => ({ deviceId, printers, defaultUid: t.people.find(p => p.device === deviceId)?.id ?? null })), opportunities: [], settings: settings(), workLog: [], workingVersions: [],
+    sources: realSources(now, logs), goals: realGoals(now),
     ownerFindings: (findings ?? []).map((f, i): OwnerFinding => ({ id: `af-r${i + 1}`, code: f.code, kind: f.kind, area: f.area, title: f.title, summary: f.summary, urgency: f.urgency, factLabel: f.fact,
       discoveredAt: now, lastEvidenceAt: now, analyzedAt: now, occurrences: [], decisions: [], status: 'NEW', projectMatch: f.project, linkedProjectId: null, approvedProjectId: null, modelId: null, plan: null,
-      dedupeKey: f.code, recommendedAction: f.action, uncertainties: f.uncertainties, ownerNotes: '', seenByOwner: false, goalIds: [],
-      evidence: f.evidence.map(([label, sourceType, sourceName, quality], k) => ({ id: `e${k + 1}`, label, sourceType, sourceName, url: null, observedAt: now, quality })) })), ownerModels: [], outcomes: [], goals: [], sources: [], workspaces: {},
+      dedupeKey: f.code, goalId: undefined, isSample: false, sourcesUsed: [...new Set(f.evidence.map((e) => SRC_BY_TYPE[e[1]]))].map((id) => ({ sourceId: id, name: 'Copy of real data', coverage: 'Oct 16 (logs) and Oct 18 (tracker)', dataKind: 'REAL_SNAPSHOT' as const })),
+      bucket: f.urgency === 'URGENT' ? 'Urgent' : f.kind === 'Open follow-up' || f.kind === 'Data quality gap' ? 'Follow up' : f.kind === 'Automation idea' || f.kind === 'Workflow improvement' ? 'Worth testing' : 'Background idea', bucketWhy: 'Written by Claude from the tracker and computer logs.', alternatives: f.uncertainties, impact: { kind: 'unknown' as const, text: 'Insufficient data to estimate. No sales, cost or time numbers are connected.', math: null, scenarios: null }, recommendedAction: f.action, uncertainties: f.uncertainties, ownerNotes: '', seenByOwner: false, goalIds: [],
+      evidence: f.evidence.map(([label, sourceType, sourceName, quality], k) => ({ id: `e${k + 1}`, label, sourceType, sourceName, url: null, observedAt: now, quality })) })), ownerModels: [], outcomes: [], workspaces: {},
   };
+}
+
+function realGoals(now: string) {
+  const g = catalogGoals(now);
+  for (const id of ['ig-A1a', 'ig-A1b', 'ig-A4a', 'ig-A2a']) g.find((x) => x.id === id)!.enabled = true;
+  return g;
 }

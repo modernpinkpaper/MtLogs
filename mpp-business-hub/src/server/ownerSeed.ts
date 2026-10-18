@@ -1,5 +1,6 @@
 import type { BusinessGoal, FindingEvidence, IntelligenceSource, OpportunityModel, OwnerFinding, PlanStepDraft } from '../domain/types';
 import { chicagoToUtc } from '../domain/time';
+import { catalogSources, catalogGoals } from '../domain/catalog';
 
 // SYNTHETIC. Owner-only. Nothing in this file is ever shown to an employee.
 const T = (day: string, hhmm: string) => chicagoToUtc(day, hhmm);
@@ -126,15 +127,33 @@ export function ownerSeed(): { findings: OwnerFinding[]; models: OpportunityMode
     ['Watch marketplace rule changes', 'Look at official public pages for rule or fee changes. Always show the date and source.', 'NORMAL'],
     ['Support the team', 'Spot training needs and unclear instructions. Never judge anyone from computer idle time.', 'NORMAL'],
   ];
-  const goals: BusinessGoal[] = goalTitles.map(([title, description, priority], i) => ({ id: `g-${i + 1}`, title, description, priority, enabled: true, area: 'All', createdAt: now }));
+  const legacyGoals: BusinessGoal[] = goalTitles.map(([title, description, priority], i) => ({ id: `g-${i + 1}`, title, description, priority, enabled: true, area: 'All', createdAt: now }));
 
-  const sources: IntelligenceSource[] = [
-    { id: 'src-1', name: 'MT Log hourly files', type: 'Computer activity', allowed: 'Company PCs, work apps only', sensitivity: 'TEAM', demoEnabled: true, health: 'OK', lastCheckedAt: now, note: 'Made-up sample files.', cadence: 'About every 5 minutes' },
-    { id: 'src-2', name: 'Project trackers (Google Sheets)', type: 'Tracker', allowed: 'Team tracker; private tracker kept apart', sensitivity: 'OWNER_ONLY', demoEnabled: false, health: 'NOT_CONNECTED', lastCheckedAt: null, note: 'Not connected. Needs your OK.', cadence: 'Daily (later)' },
-    { id: 'src-3', name: 'Google Drive project folders', type: 'Files', allowed: 'Only the folders you approve', sensitivity: 'TEAM', demoEnabled: false, health: 'NOT_CONNECTED', lastCheckedAt: null, note: 'Pretend folders only.', cadence: 'When files change (later)' },
-    { id: 'src-4', name: 'Print logs', type: 'Production', allowed: 'Printer job logs', sensitivity: 'TEAM', demoEnabled: true, health: 'GAP', lastCheckedAt: now, note: 'One logger has a data gap on Wednesday.', cadence: 'Daily' },
-    { id: 'src-5', name: 'Amazon, Etsy, Shopify (read-only)', type: 'Marketplaces', allowed: 'Listings, orders, fees (read-only)', sensitivity: 'OWNER_ONLY', demoEnabled: false, health: 'NOT_CONNECTED', lastCheckedAt: null, note: 'Not connected. Pretend checks only.', cadence: 'Daily (later)' },
-    { id: 'src-6', name: 'Official public pages', type: 'Web research', allowed: 'Marketplace help and policy pages', sensitivity: 'PUBLIC', demoEnabled: false, health: 'NOT_CONNECTED', lastCheckedAt: null, note: 'Simulated only in this practice copy.', cadence: 'Weekly (later)' },
-  ];
+  const sources = demoSources(now);
+
+  const catGoals = catalogGoals(now);
+  for (const id of ['ig-A1a', 'ig-A2a', 'ig-A4a', 'ig-B1a']) catGoals.find((g) => g.id === id)!.enabled = true;
+  const goals: BusinessGoal[] = [...legacyGoals.map((g) => ({ ...g, custom: true })), ...catGoals];
   return { findings, models, goals, sources };
 }
+
+/** Demo registry: every catalog source is listed. Only some have made-up sample data, and only two are approved. */
+function demoSources(now: string): IntelligenceSource[] {
+  const src = catalogSources();
+  const set = (cat: string, patch: Partial<IntelligenceSource>) => Object.assign(src.find((x) => x.catalogId === cat)!, patch);
+  const sample = (coverage: string, extra: Partial<IntelligenceSource> = {}): Partial<IntelligenceSource> => ({ dataKind: 'SYNTHETIC', status: 'DEMO_ONLY', health: 'OK', lastCheckedAt: now, coverage, lag: 'Made-up data. No real delay.', note: 'Made-up sample data. Nothing real is connected.', scope: 'Made-up sample records', ...extra });
+  set('A1', sample('Sample projects P-012, P-044, P-070, P-081. Oct 12 to Oct 16.'));
+  set('A2', sample('Sample computer files for Oct 13 and Oct 14.', { approved: true, demoEnabled: true, scope: 'Made-up sample computer files' }));
+  set('A3', sample('Sample project files and versions.'));
+  set('A4', sample('Sample print jobs Oct 12 to Oct 16. A gap on PRINT-3, Wed 1:00 to 3:00 PM.', { approved: true, demoEnabled: true, status: 'STALE', health: 'GAP', lag: 'Known gap on Wed Oct 14, 1:00 to 3:00 PM.' }));
+  set('A5', sample('Sample review answers and decisions.'));
+  set('B1', sample('Two made-up upload records.', { sampleRows: [
+    { id: 'up-1', label: 'FBA_TY001 move to PC107', detail: 'Upload 99104020742 ended with “Action required”', verified: false, at: chicagoToUtc('2026-10-16', '15:09') },
+    { id: 'up-2', label: 'FBA_TY001 second upload', detail: 'Upload 99105020742 was sent later', verified: false, at: chicagoToUtc('2026-10-16', '15:31') },
+  ] }));
+  set('B9', sample('Two made-up public pages.', { scope: 'Made-up public pages' }));
+  set('B2', { status: 'PENDING_PERMISSION', approved: true, note: 'You asked for this. Nothing is connected yet. Needs an Amazon Business Report export or read-only API you approve.' });
+  set('C2', { status: 'DISABLED', note: 'Off. Needs your explicit opt-in before anything is read.' });
+  return src;
+}
+export { catalogGoals };

@@ -4,6 +4,7 @@ import { addMinutes, chicagoDate, chicagoToUtc, formatLocalDate, isValidLocalDat
 import { compute, confidenceOf, classifyWebSource, findOwnerOnlyTerms, type Scenario } from './finance';
 import { provisionWorkspace } from './drive';
 import { HubError, PermissionDenied } from './errors';
+import { runInvestigations, sourceIsUsable } from './investigation';
 
 // Everything here is OWNER-ONLY and reads the owner-only collections. Employees get a separate, sanitized copy
 // (the project, steps and brief created on approval) that never contains these records.
@@ -129,6 +130,8 @@ export function investigateMore(hub: HubServer, uid: string, id: string) {
 interface ScanItem { dedupeKey: string; make: (hub: HubServer) => Omit<OwnerFinding, 'id' | 'code' | 'discoveredAt' | 'lastEvidenceAt' | 'analyzedAt' | 'occurrences' | 'status' | 'decisions' | 'linkedProjectId' | 'approvedProjectId' | 'seenByOwner' | 'goalIds' | 'ownerNotes'>; evidenceNote: string }
 const evd = (id: string, e: Omit<FindingEvidence, 'id'>): FindingEvidence => ({ id, ...e });
 
+/** The sample scan items only run when the matching source is approved AND holds made-up sample data. They are always labeled “Sample”. */
+const POOL_SOURCE: Record<string, string> = { 'prn-b-offline': 'src-A4', 'shopify-listing-prep': 'src-A2', 'old-policy-page': 'src-B9', 'training-need': 'src-A5' };
 const SCAN_POOL: ScanItem[] = [
   {
     dedupeKey: 'prn-b-offline', evidenceNote: 'Printer “PRN-B” reported offline again.',
@@ -177,6 +180,8 @@ export function runAiScan(hub: HubServer, uid: string) {
     // Each scan looks at the next pool items; every scan also "re-sees" something old to show de-duplication.
     const slice = st.scanCount === 1 ? SCAN_POOL : SCAN_POOL.slice(0, 2);
     for (const item of slice) {
+      const need = st.sources.find((x) => x.id === POOL_SOURCE[item.dedupeKey]);
+      if (!sourceIsUsable(need) || need!.dataKind !== 'SYNTHETIC') continue;
       const existing = st.ownerFindings.find((f) => f.dedupeKey === item.dedupeKey);
       if (existing) {
         const already = existing.occurrences.some((o) => o.note === item.evidenceNote && o.at === st.now);
@@ -186,6 +191,7 @@ export function runAiScan(hub: HubServer, uid: string) {
       const draft = item.make(hub);
       const code = `AF-${String(st.ownerFindings.length + 1).padStart(3, '0')}`;
       const f: OwnerFinding = { ...(draft as OwnerFinding), id: `af-${st.ownerFindings.length + 1}`, code, discoveredAt: st.now, lastEvidenceAt: st.now, analyzedAt: st.now, occurrences: [{ at: st.now, note: 'First seen.' }], status: 'NEW', decisions: [], linkedProjectId: null, approvedProjectId: null, seenByOwner: false, goalIds: [], ownerNotes: '' };
+      f.isSample = true; f.sourcesUsed = [{ sourceId: need!.id, name: need!.name, coverage: need!.coverage ?? '', dataKind: 'SYNTHETIC' }];
       st.ownerFindings.push(f); out.created.push(code);
       if (f.urgency === 'URGENT') hub.notify({ recipientUid: uid, senderUid: null, type: 'AI_FINDING', title: `Urgent: ${f.title}`, preview: f.summary, projectId: null, sourceEntityId: f.id, deepLink: `/owner/ai/${f.id}`, key: `n:finding:${f.dedupeKey}` });
     }
@@ -193,6 +199,8 @@ export function runAiScan(hub: HubServer, uid: string) {
     if (normal) hub.notify({ recipientUid: uid, senderUid: null, type: 'DAILY_DIGEST', title: `AI summary: ${normal} new item${normal === 1 ? '' : 's'} to look at`, preview: 'Everything is in AI Recommendations. Only urgent items alert you right away.', projectId: null, sourceEntityId: 'ai-digest', deepLink: '/owner/ai', key: `n:aidigest:${chicagoDate(st.now)}` });
     st.aiRuns.push({ id: hub.nid('airun'), startedAt: st.now, endedAt: st.now, cause: 'manual scan (simulated)', model: 'replay-adapter (no API)', inputTokens: 0, outputTokens: 0, costUsd: 0, outcome: 'OK', promptVersion: 'replay', sourceWatermark: null, errors: [] });
   });
+  const inv = runInvestigations(hub, uid);
+  out.created.push(...inv.created); out.updated.push(...inv.updated, ...inv.reopened);
   return out;
 }
 
@@ -285,7 +293,7 @@ export function assignProject(hub: HubServer, uid: string, projectId: string, as
 export function addGoal(hub: HubServer, uid: string, title: string, description: string, priority: 'HIGH' | 'NORMAL' | 'LOW') {
   owner(hub, uid);
   if (!title.trim()) throw new HubError('VALIDATION', 'Please write the goal in a few words.');
-  return hub.commit(() => { const g = { id: hub.nid('g'), title: title.trim(), description: description.trim(), priority, enabled: true, area: 'All', createdAt: hub.state.now }; hub.state.goals.push(g); return g; });
+  return hub.commit(() => { const g = { id: hub.nid('g'), title: title.trim(), description: description.trim(), question: description.trim() || title.trim(), priority, enabled: true, area: 'All', createdAt: hub.state.now, custom: true, sourceIds: [] as string[], checks: [] as string[] }; hub.state.goals.push(g); return g; });
 }
 export function updateGoal(hub: HubServer, uid: string, id: string, patch: { enabled?: boolean; priority?: 'HIGH' | 'NORMAL' | 'LOW' }) {
   owner(hub, uid); const g = hub.state.goals.find((x) => x.id === id);

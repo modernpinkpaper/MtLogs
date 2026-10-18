@@ -20,6 +20,8 @@ import * as PS from './pause';
 import type { PauseInput } from './pause';
 import * as PL from './pilot';
 import * as MG from './manager';
+import * as INV from './investigation';
+import { CHECK_LIBRARY } from '../domain/catalog';
 import * as DR from './drive';
 import { searchAll } from './search';
 import { computeShiftStats, groupProblemEpisodes, fourStateMinutes, weeklyPrinterSummary } from './print';
@@ -1888,8 +1890,20 @@ export class HubServer {
   employeeBriefPreview(uid: string, input: Parameters<typeof MG.employeeBriefPreview>[0]) { this.requireOwner(uid); return MG.employeeBriefPreview(input); }
   assignProject(uid: string, projectId: string, assignUids: string[], key: string) { return MG.assignProject(this, uid, projectId, assignUids, key); }
   addGoal(uid: string, title: string, description: string, priority: 'HIGH' | 'NORMAL' | 'LOW') { return MG.addGoal(this, uid, title, description, priority); }
-  updateGoal(uid: string, id: string, patch: Parameters<typeof MG.updateGoal>[3]) { return MG.updateGoal(this, uid, id, patch); }
-  toggleSource(uid: string, id: string, on: boolean) { return MG.toggleSource(this, uid, id, on); }
+  updateGoal(uid: string, id: string, patch: INV.GoalPatch) { return INV.patchGoal(this, uid, id, patch); }
+  toggleSource(uid: string, id: string, on: boolean) { return INV.setSourceApproval(this, uid, id, on); }
+  // ---- v1.7 investigation priorities and data sources (owner only)
+  setSourceApproval(uid: string, id: string, on: boolean) { return INV.setSourceApproval(this, uid, id, on); }
+  updateSource(uid: string, id: string, patch: INV.SourcePatch) { return INV.updateSource(this, uid, id, patch); }
+  addSource(uid: string, input: Parameters<typeof INV.addSource>[2]) { return INV.addSource(this, uid, input); }
+  removeSource(uid: string, id: string) { return INV.removeSource(this, uid, id); }
+  addInvestigationGoal(uid: string, input: Parameters<typeof INV.addInvestigationGoal>[2]) { return INV.addInvestigationGoal(this, uid, input); }
+  removeGoal(uid: string, id: string) { return INV.removeGoal(this, uid, id); }
+  goalReadiness(uid: string, id: string) { this.requireOwner(uid); const g = this.state.goals.find((x) => x.id === id); if (!g) throw new HubError('NOT_FOUND', 'We could not find that goal.'); return INV.goalReadiness(this, g); }
+  runInvestigations(uid: string) { return INV.runInvestigations(this, uid); }
+  setFindingBucket(uid: string, id: string, bucket: Parameters<typeof INV.setFindingBucket>[3]) { return INV.setFindingBucket(this, uid, id, bucket); }
+  goalBrief(uid: string, id: string) { return INV.goalBrief(this, uid, id); }
+  checkLibrary(uid: string) { this.requireOwner(uid); return CHECK_LIBRARY.map((c) => ({ ...c, runnable: INV.RUNNABLE_CHECKS.includes(c.id) })); }
   recordOutcome(uid: string, findingId: string, input: Parameters<typeof MG.recordOutcome>[3]) { return MG.recordOutcome(this, uid, findingId, input); }
   outcomeTracker(uid: string) { return MG.outcomeTracker(this, uid); }
   listGoals(uid: string) { this.requireOwner(uid); return this.state.goals; }
@@ -1995,7 +2009,7 @@ export class HubServer {
   }
 
   async bootstrap() {
-    if (REAL_MODE) { this.emit(); return; }
+    if (REAL_MODE) { this.runInvestigations(this.state.users.find((u) => u.role === 'OWNER')!.id); this.emit(); return; }
     this.ingestFile({ ...FX.FILE_ERIKA_14, text: FX.erika14Rev1() });
     this.ingestFile({ ...FX.FILE_PC04_13, text: FX.pc04_13() });
     await this.runAnalysis('seed: initial replay');
