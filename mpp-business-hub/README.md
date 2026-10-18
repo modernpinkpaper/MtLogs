@@ -65,3 +65,6 @@ Calmer screens and clearer next steps. See `docs/ux-overhaul-v1-2.md`.
 
 ## v1.3
 One focal point per screen. See `docs/attention-design-v1-3.md`.
+
+## v1.4
+Outcome-aware review cards, short Home alerts, usable step files, phone layout, project description cards, and "Log something I did". See `docs/ux-refinement-v1-4.md`. 149 tests.

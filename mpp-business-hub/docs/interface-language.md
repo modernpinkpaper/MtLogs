@@ -32,3 +32,15 @@ Say what is empty, why, and what to do next. Errors for a forbidden item say onl
 
 ## Glossary
 Settings → "Words used in this app" lists every term with one plain sentence. Source: `src/ui/lang.ts` (`WORDS`, `GLOSSARY`).
+
+## v1.4 additions
+| Before | Now |
+|---|---|
+| Big step | Needs a check or Dalia's approval |
+| We noticed activity on Step 3 | We detected a Shopify Lister test |
+| Did this happen? / Yes, accurate | A specific question, then "What happened?" with outcome answers |
+| Also waiting (2) | Other items needing attention (2) |
+| w-pc04-1016a: missing sequence 3 | Some computer activity may be missing (details behind "View technical details") |
+| ERIKAPC device; actor unverified | From the computer ERIKAPC. We can't tell who was using it. (AI guess) |
+| opens from All files | A button that opens the file, copies the path, or shows installation details |
+| Tracker and activity do not match | Needs confirmation |

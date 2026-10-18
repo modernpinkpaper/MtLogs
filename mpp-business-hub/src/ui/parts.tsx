@@ -4,6 +4,8 @@ import type { JournalType, ProjectEvent, Resource, ResourceLink } from '../domai
 import { chicagoDate, formatDate, formatDateTime } from '../domain/time';
 import { Chip, Copy, LinkChip, Modal, VerifyBadge } from './common';
 import { useAct, useMe } from './hubContext';
+import { resourceActions, resourceApproval } from '../domain/resourceView';
+import { ProjectInfo } from './projectRef';
 
 const JT_ICON: Partial<Record<JournalType, string>> = { STATUS_CHANGE: '⇄', UPDATE_REQUESTED: '❓', UPDATE_RESPONSE: '💬', PROACTIVE_UPDATE: '📣', AI_OBSERVATION: '✦', EMPLOYEE_REVIEW: '☑', RESOURCE: '⧉', VERIFICATION: '✔', BLOCKER: '⛔', LATE_EVIDENCE: '⏱', ACK: '👁', PLAN_CHANGE: '✎', ACCESS: '🔑', DECISION: '⚖', NOTE: '•' };
 
@@ -25,11 +27,11 @@ export function JournalList({ events, showProject, grouped }: { events: (Project
             <div><strong><span aria-hidden="true" className="jicon">{JT_ICON[e.type] ?? '•'}</span>{e.title}</strong></div>
             <div className="small" style={{ color: 'var(--text-2)' }}>{e.summary}</div>
             <div className="row small muted" style={{ gap: '.2rem .75rem', marginTop: 2 }}><span>{formatDateTime(e.occurredAt)}</span>
-              {showProject && <Link to={`/projects/${e.projectId}`}>{e.projectKey}</Link>}
+              {showProject && <span><Link to={`/projects/${e.projectId}`}>{e.projectKey}</Link><ProjectInfo projectId={e.projectId} label={e.projectKey} /></span>}
               {step && <Link to={`/projects/${e.projectId}/steps/${step.id}`}>Step {step.sortOrder}</Link>}
               <VerifyBadge state={e.verificationState} />
               {e.confidenceBand !== 'N_A' && <Chip tone="gray">confidence {e.confidenceBand.toLowerCase()}</Chip>}
-              <span>{e.actorLabel}</span>{e.sourceRefs.length ? <button className="link" onClick={() => setRaw(e.id)}>Show proof ({e.sourceRefs.length})</button> : null}</div>
+              <span>{plainActor(e.actorLabel)}</span>{e.sourceRefs.length ? <button className="link" onClick={() => setRaw(e.id)}>Show proof ({e.sourceRefs.length})</button> : null}</div>
             {raw === e.id && (
               <ul className="small" style={{ margin: '.2rem 0 0 1rem' }}>
                 {hub.state.events.filter((x) => e.sourceRefs.includes(x.id)).map((x) => <li key={x.id}>{formatDateTime(x.occurredAt)} — {x.allowedSummary} <span className="muted">[{x.id}]</span></li>)}
@@ -90,4 +92,73 @@ export function ResourceCard({ resource, links }: { resource: Resource; links: (
       {viewer && <Modal title={resource.label} onClose={() => setViewer(false)}><div className="card violet">This is a pretend preview. In the real app this would open your Google Drive file (<code>{resource.canonicalUrl}</code>). This practice copy never talks to Google.</div></Modal>}
     </div>
   );
+}
+
+// ---------------------------------------------------------------- step files: name, purpose, how it relates, approval, and one real action
+const OPEN_LABEL: Partial<Record<string, string>> = { INSTRUCTIONS: 'Open instructions', CHECKLIST: 'Open checklist', REFERENCE: 'Open reference' };
+const TYPE_LABEL: Record<string, string> = {
+  GOOGLE_SHEET: 'Spreadsheet', EXCEL: 'Spreadsheet', GOOGLE_DOC: 'Document', PDF: 'Document', SOP: 'Instructions', SCRIPT: 'Automation tool', SOURCE_REPOSITORY: 'Source code',
+  IMAGE_FOLDER: 'Image folder', IMAGE_ASSET: 'Images', NETWORK_SHARE: 'Shared folder', DRIVE_FOLDER: 'Folder', WINDOWS_FILE_PATH: 'File on a company computer', ARCHIVE: 'Archive',
+};
+
+/** One resource, with a button that really does something. No inert controls and no invented links. */
+export function StepResourceRow({ resource, role, roleLabel, suggested, groupUnapproved }: { resource: Resource; role: string; roleLabel: string; suggested?: boolean; groupUnapproved?: boolean }) {
+  const { hub, uid, me } = useMe();
+  const act = useAct();
+  const [viewer, setViewer] = useState(false);
+  const [where, setWhere] = useState(false);
+  const [fix, setFix] = useState(false);
+  const [loc, setLoc] = useState('');
+  const ap = resourceApproval(resource);
+  const canEdit = me.role === 'OWNER' || hub.listProjects(uid).some((p) => p.memberUids.includes(uid));
+  const isScript = resource.type === 'SCRIPT';
+  const isFolder = ['IMAGE_FOLDER', 'DRIVE_FOLDER', 'NETWORK_SHARE'].includes(resource.type);
+  const acts = resourceActions(resource);
+  const hasUrl = acts.open;
+  const hasPath = acts.copyPath;
+  const nothing = acts.unknown;
+  const openLabel = OPEN_LABEL[role] ?? (isScript ? 'Open source' : isFolder ? 'Open folder' : 'Open file');
+  return (
+    <div className="frow">
+      <div className="ft">
+        <strong>{resource.label}{suggested && <span className="small muted" style={{ fontWeight: 400 }}> · suggested by the AI</span>}</strong>
+        {ap && <span className={`vstate ${ap.tone}`} title={ap.hint}>{ap.label}</span>}
+      </div>
+      <div className="fs">{TYPE_LABEL[resource.type] ?? 'File'}{resource.purpose ? ` · ${resource.purpose}` : ''}</div>
+      <div className="fs">{roleLabel} for this step{resource.checklistSummary ? ` · ${resource.checklistSummary.yes} of ${resource.checklistSummary.total} marked “Yes”` : ''}</div>
+      <div className="fa">
+        {hasUrl && <button className={role === 'INPUT' || role === 'INSTRUCTIONS' ? '' : ''} onClick={() => setViewer(true)}>{openLabel}</button>}
+        {hasPath && <Copy text={resource.normalizedPath!} label={isFolder ? 'Copy folder path' : 'Copy path'} />}
+        {hasPath && <button className="quiet" onClick={() => setWhere(!where)} aria-expanded={where}>Where to find it</button>}
+        {isScript && <button className="quiet" onClick={() => setWhere(!where)} aria-expanded={where}>View installation details</button>}
+        {nothing && !isScript && <span className="small" style={{ color: 'var(--warn)' }}>Location not confirmed</span>}
+        {(nothing || (isScript && !hasUrl)) && canEdit && <button className="quiet" onClick={() => setFix(!fix)}>Add the location</button>}
+        {groupUnapproved && canEdit && resource.version && !resource.approvedVersion && <button onClick={() => act(() => hub.setApprovedVersion(uid, resource.id, resource.version!), 'Approved. This is now the version to use.')}>Use this version</button>}
+      </div>
+      {where && (
+        <div className="smallnote">
+          {isScript && <p style={{ margin: 0 }}><strong>Where it is installed:</strong> {resource.installPath ?? 'We do not know yet.'}{resource.installPath ? '' : ' Ask whoever set it up, then add the location here.'}</p>}
+          {isScript && <p style={{ margin: '.3rem 0 0' }}>{resource.sourceLinked ? 'Its source code is linked.' : 'Its source code is not linked yet, so we cannot open it. We never guess a link.'} Installed tools stay where they are. They are not moved into a project folder.</p>}
+          {hasPath && <p style={{ margin: isScript ? '.3rem 0 0' : 0 }}><strong>Where to find it:</strong> <code style={{ wordBreak: 'break-all' }}>{resource.normalizedPath}</code> — you need a company computer to open this. It is not an internet link.</p>}
+        </div>
+      )}
+      {fix && (
+        <div className="stack">
+          <label htmlFor={`loc-${resource.id}`}>Where is it? (a folder path like C:\Users\… or \\server\…, or a link)</label>
+          <input id={`loc-${resource.id}`} type="text" value={loc} onChange={(e) => setLoc(e.target.value)} />
+          <div className="row"><button className="primary" disabled={!loc.trim()} onClick={async () => { const r = await act(() => hub.setResourceLocation(uid, resource.id, loc), 'Saved. It is marked “not checked yet”.'); if (r) { setFix(false); setLoc(''); } }}>Save location</button><button className="quiet" onClick={() => setFix(false)}>Cancel</button></div>
+          <span className="small muted">We save what you type. We do not check it or make a link out of it.</span>
+        </div>
+      )}
+      {viewer && <Modal title={resource.label} onClose={() => setViewer(false)}><div className="card violet">This is a practice preview. In the real app this opens your Google Drive file (<code>{resource.canonicalUrl}</code>). This practice copy never connects to Google.</div></Modal>}
+      <span hidden>{role}</span>
+    </div>
+  );
+}
+
+/** Journal actor text in everyday words. The stored label is kept exactly as it was. */
+export function plainActor(label: string): string {
+  const m = label.match(/^(\S+) device; actor unverified \(automated AI suggestion\)$/);
+  if (m) return `From the computer ${m[1]}. We can’t tell who was using it. (AI guess)`;
+  return label;
 }

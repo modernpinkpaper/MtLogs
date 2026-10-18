@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { newKey, useAct, useMe } from '../hubContext';
-import { ChoiceGroup } from '../dialogs';
+import { ChoiceGroup, LogTaskDialog } from '../dialogs';
 import { Chip, CoverageChip, Empty, statusLabel } from '../common';
 import { formatDateTime, formatTime } from '../../domain/time';
 import { WORDS } from '../lang';
-import type { Finding, ResponseChoice, ReviewCard } from '../../domain/types';
+import type { ResponseChoice, ReviewCard, ReviewOutcome } from '../../domain/types';
+import { matchReason, reviewSpec, shortProjectName } from '../../domain/reviewKinds';
+import { ProjectLabel } from '../projectRef';
 
 /**
  * Review my work. One clear question per card.
@@ -21,6 +23,7 @@ export function Review() {
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [mixedMsg, setMixedMsg] = useState(false);
+  const [logging, setLogging] = useState(false);
   const bulkKey = useRef(newKey('bulk'));
   const requests = cards.filter((c) => c.cardType === 'OWNER_REQUEST');
   const findings = cards.filter((c) => c.cardType !== 'OWNER_REQUEST');
@@ -44,7 +47,7 @@ export function Review() {
     <div className="stack">
       <div>
         <h1>Review my work</h1>
-        <p className="muted" style={{ margin: 0 }}>Check what the system noticed, and answer Dalia’s requests. About 1 to 3 minutes. It is paid time.</p>
+        <p className="muted" style={{ margin: 0 }}>Check what the system noticed, and answer Dalia’s requests. About 1 to 3 minutes. It is paid time. {me.role === 'EMPLOYEE' && <button className="link" onClick={() => setLogging(true)}>Log something I did</button>}</p>
       </div>
       {offClock && <div className="card warn" role="status">Reviews are paid work, so you answer them while clocked in. <Link to="/clock">Clock in</Link> first. Your items will wait for you.</div>}
       {cards.length === 0 && <Empty>Nothing to review right now. {hub.reviewReadiness(uid).message}</Empty>}
@@ -56,11 +59,11 @@ export function Review() {
 
       {findings.length > 0 && (
         <section aria-labelledby="fd">
-          <div className="row between"><h2 id="fd" className="group-title" style={{ margin: 0 }}>Did this happen? <span className="count">{findings.length}</span></h2>
+          <div className="row between"><h2 id="fd" className="group-title" style={{ margin: 0 }}>Work we noticed <span className="count">{findings.length}</span></h2>
             {eligibleCount > 1 && !offClock && <button onClick={() => { setSelecting(!selecting); setPicked([]); setMixedMsg(false); }} aria-pressed={selecting}>{selecting ? 'Stop selecting' : WORDS.selectMultiple}</button>}</div>
           {selecting && (
             <div className="card flat" role="region" aria-label="Select multiple items">
-              <p className="small" style={{ margin: 0 }}>Choose the items below that are accurate, then confirm them together. Only simple, low-risk items can be selected. Items with unclear results need their own answer.</p>
+              <p className="small" style={{ margin: 0 }}>Choose the items where what we noticed is accurate, then confirm them together. This only says the activity is accurate. It never says the work is finished. Items about results, uploads or big steps need their own answer.</p>
             </div>
           )}
           <div className="stack" style={{ marginTop: 8 }}>
@@ -80,6 +83,7 @@ export function Review() {
           )}
         </section>
       )}
+      {logging && <LogTaskDialog onClose={() => setLogging(false)} />}
       {done.length > 0 && (
         <details className="card flat"><summary>Done recently ({done.length})</summary>
           {done.map((c) => <div key={c.id} className="small muted">{c.title} — {formatDateTime(c.lastUpdatedAt)}</div>)}
@@ -102,40 +106,50 @@ function CardView({ card, highlight, disabled, select, first }: { card: ReviewCa
   const isRequest = card.cardType === 'OWNER_REQUEST';
   const req = card.updateRequestId ? hub.getRequest(uid, card.updateRequestId) : null;
   const paused = !!project?.pause?.isPaused;
+  const tool = step ? hub.stepResources(uid, step.id).find((x) => x.link.role === 'AUTOMATION_TOOL')?.resource.label : null;
+  const spec = f0 ? reviewSpec(f0, step, tool) : null;
   const [choice, setChoice] = useState<ResponseChoice | 'NOT_SURE' | null>(null);
+  const [outcome, setOutcome] = useState<ReviewOutcome | null>(null);
   const [note, setNote] = useState('');
   const [help, setHelp] = useState(false);
   const [link, setLink] = useState('');
-  const [fix, setFix] = useState(false);
-  const [correction, setCorrection] = useState('');
+  const [showAct, setShowAct] = useState(false);
+  const [corr, setCorr] = useState<'WRONG_STEP' | 'WRONG_PERSON' | 'OTHER'>('WRONG_STEP');
   const [cls, setCls] = useState<'LINK_EXISTING' | 'NEW_STEP' | 'ROUTINE' | 'POTENTIAL_PROJECT'>('ROUTINE');
   const [linkStep, setLinkStep] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const projects = hub.listProjects(uid).filter((p) => p.visibility !== 'OWNER_PRIVATE');
-  const [clsProject, setClsProject] = useState(projects[0]?.id ?? '');
+  const mine = projects.filter((p) => p.memberUids.includes(uid) || hub.isOwner(uid));
+  const [clsProject, setClsProject] = useState(mine[0]?.id ?? '');
+  const evs = f0 ? hub.findingEvidence(uid, f0.id) : [];
   const start = () => { void act(() => hub.startReview(uid, card.id)); };
 
-  const submit = async (action: 'CONFIRM' | 'NEEDS_CORRECTION' | 'NOT_MY_WORK' | 'DISMISS' | 'DEFER' | 'SEND_STATUS', okMsg: string) => {
+  const submit = async (action: 'CONFIRM' | 'NOT_MY_WORK' | 'DISMISS' | 'DEFER' | 'SEND_STATUS', okMsg: string) => {
     const unmatched = f0?.findingType === 'AI_UNMATCHED_WORK' && action === 'CONFIRM';
     const classification = unmatched ? { kind: cls, projectId: cls === 'LINK_EXISTING' || cls === 'NEW_STEP' ? clsProject : undefined, stepId: cls === 'LINK_EXISTING' ? linkStep : undefined, newStepTitle: newTitle } : null;
-    const withResult = action === 'CONFIRM' && choice && choice !== 'NOT_SURE' && step;
     await act(() => hub.submitDecision(uid, card.id, {
-      action: withResult ? 'SEND_STATUS' : action, statusAnswer: choice && choice !== 'NOT_SURE' ? choice : null, note, correctionText: correction, evidenceLinks: link ? [link] : [], needsOwnerHelp: help, classification, idempotencyKey: key.current,
+      action, statusAnswer: choice && choice !== 'NOT_SURE' ? choice : null, note, evidenceLinks: link ? [link] : [], needsOwnerHelp: help, classification, idempotencyKey: key.current,
     }), okMsg);
   };
 
-  const whatToDo = isRequest ? 'Pick how it is going, then send your answer.'
-    : f0?.findingType === 'AI_UNMATCHED_WORK' ? 'Tell us what this work was.'
-    : f0?.findingType === 'LATE_EVIDENCE' ? 'Look at the new facts. Tell us if your first answer still holds.'
-    : f0?.whilePaused ? 'Tell us what this was. The project stays paused.'
-    : 'Tell us if this is accurate.';
+  const wrongStepOk = corr !== 'WRONG_STEP' || !!linkStep;
+  const sendOutcome = async () => {
+    if (!outcome) return;
+    if (outcome === 'NOT_SURE') { await submit('DEFER', 'Saved for your next paid shift'); return; }
+    const correction = outcome === 'MISREAD' ? (corr === 'WRONG_STEP' ? { kind: 'WRONG_STEP' as const, projectId: clsProject, stepId: linkStep } : { kind: corr }) : null;
+    const msg = outcome === 'NOT_ME' ? 'Saved. We kept the activity and did not credit it to you.' : outcome === 'MISREAD' ? 'Thanks. We saved your fix next to the AI’s guess.' : outcome === 'PROBLEM' ? 'Sent. Dalia can see you ran into a problem.' : 'Thank you. Saved.';
+    await act(() => hub.submitDecision(uid, card.id, { outcome, correction, note, correctionText: outcome === 'MISREAD' && corr === 'OTHER' ? note : undefined, needsOwnerHelp: help, idempotencyKey: key.current }), msg);
+  };
+  const canSend = !!outcome && (outcome !== 'MISREAD' || (corr === 'OTHER' ? !!note.trim() : wrongStepOk));
+  const fmt = (iso: string) => formatTime(iso);
+  const window = evs.length ? (fmt(evs[0].occurredAt) === fmt(evs[evs.length - 1].occurredAt) ? fmt(evs[0].occurredAt) : `${fmt(evs[0].occurredAt)} to ${fmt(evs[evs.length - 1].occurredAt)}`) : null;
 
   return (
     <article className={`card ${first ? 'focal' : ''} ${isRequest && !first ? 'pink' : ''} ${highlight ? 'focus' : ''}`} aria-labelledby={`t-${card.id}`} onFocus={start} onMouseEnter={start}>
       <div className="row between">
         <div style={{ minWidth: 0 }}>
-          <div className="row small muted">
-            {project && <Link to={`/projects/${project.id}${step ? `/steps/${step.id}` : ''}`}>{project.key}{step ? `, Step ${step.sortOrder}` : ''}</Link>}
+          <div className="row small muted" style={{ gap: '.3rem .75rem' }}>
+            {project && <span><ProjectLabel projectId={project.id} text={project.key} /> · {shortProjectName(project)}{step ? <> · <Link to={`/projects/${project.id}/steps/${step.id}`}>Step {step.sortOrder}</Link></> : null}</span>}
             <span>{formatDateTime(card.createdAt)}</span>
             {card.provisional && <Chip tone="warn" glyph="…" title="We are still reading today’s activity. This may change.">{WORDS.checkingToday}</Chip>}
             {!isRequest && card.sourceCoverage !== 'FINAL' && <CoverageChip state={card.sourceCoverage} />}
@@ -143,7 +157,7 @@ function CardView({ card, highlight, disabled, select, first }: { card: ReviewCa
             {req?.importance === 'IMPORTANT' && <Chip tone="bad" glyph="!">Important</Chip>}
           </div>
           <h2 id={`t-${card.id}`} style={{ marginTop: 4 }}>
-            {isRequest ? `${hub.userName(req?.requestedByUid ?? null)} asked for an update${step ? ` on Step ${step.sortOrder}: ${step.title}` : project ? ` on ${project.key}` : ''}` : f0 ? questionFor(f0, step?.sortOrder, project?.key) : card.title}
+            {isRequest ? `${hub.userName(req?.requestedByUid ?? null)} asked for an update${step ? ` on Step ${step.sortOrder}: ${step.title}` : project ? ` on ${shortProjectName(project)}` : ''}` : spec ? spec.question : card.title}
           </h2>
         </div>
         {select && select !== 'blocked' && <label className="row" style={{ fontWeight: 500, margin: 0 }}><input type="checkbox" checked={select.checked} onChange={(e) => select.onChange(e.target.checked)} /> {WORDS.selectItem}</label>}
@@ -152,130 +166,109 @@ function CardView({ card, highlight, disabled, select, first }: { card: ReviewCa
 
       {isRequest ? (
         <div className="stack" style={{ marginTop: '.6rem' }}>
-          <p className="q" style={{ margin: 0 }}>“{card.explanatoryText}”</p>
+          <p className="lead" style={{ margin: 0 }}>“{card.explanatoryText}”</p>
           {paused && <p className="small" style={{ margin: 0 }}>This project is paused{project?.pause?.reasonNote ? `: ${project.pause.reasonNote}` : ''}. Your answer does not resume it.</p>}
-                    <ChoiceGroup value={choice === 'NOT_SURE' ? null : choice} onChange={setChoice} name={`c-${card.id}`} />
+          <ChoiceGroup value={choice === 'NOT_SURE' ? null : choice} onChange={setChoice} name={`c-${card.id}`} />
           <p className="small muted" style={{ margin: 0 }}>“Completed” means you finished it. It is {WORDS.employeeConfirmed.toLowerCase()}. It is not {WORDS.checkedInSource.toLowerCase()}.</p>
-          <div><label htmlFor={`n-${card.id}`}>Add a note (optional)</label><textarea id={`n-${card.id}`} value={note} onChange={(e) => setNote(e.target.value)} /></div>
-          <div><label htmlFor={`l-${card.id}`}>A link or file name that shows your work (optional)</label><input id={`l-${card.id}`} type="text" value={link} onChange={(e) => setLink(e.target.value)} /></div>
-          <label style={{ fontWeight: 500 }}><input type="checkbox" checked={help} onChange={(e) => setHelp(e.target.checked)} /> I need Dalia’s help (leave this off for a normal update)</label>
+          <div><label htmlFor={`n-${card.id}`}>Add a note (optional)</label><textarea id={`n-${card.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: The test worked. I will run the rest tomorrow." /></div>
+          <details className="soft"><summary>Add a link or ask for help</summary>
+            <div className="stack" style={{ marginTop: 8 }}>
+              <div><label htmlFor={`l-${card.id}`}>A link or file name that shows your work (optional)</label><input id={`l-${card.id}`} type="text" value={link} onChange={(e) => setLink(e.target.value)} /></div>
+              <label style={{ fontWeight: 500 }}><input type="checkbox" checked={help} onChange={(e) => setHelp(e.target.checked)} /> I need Dalia’s help (leave this off for a normal update)</label>
+            </div></details>
           <div className="row">
             <button className={first ? 'primary' : ''} disabled={!choice || choice === 'NOT_SURE' || disabled} onClick={() => submit('SEND_STATUS', 'Update sent to Dalia')}>Send update to Dalia</button>
-            <button disabled={disabled} onClick={() => submit('DEFER', 'Saved for your next paid shift')}>Answer later</button>
+            <button className="quiet" disabled={disabled} onClick={() => submit('DEFER', 'Saved for your next paid shift')}>Answer later</button>
           </div>
         </div>
-      ) : f0 && (
+      ) : f0 && spec && (
         <div className="stack" style={{ marginTop: '.4rem' }}>
-          <p className="lead">{f0.inference}</p>
+          <p className="lead" style={{ margin: 0 }}>{spec.evidence}</p>
+          {window && (
+            <div className="seen">
+              <span>{window} · {evs.length} action{evs.length === 1 ? '' : 's'} on {f0.deviceId}</span>
+              <button className="link" onClick={() => setShowAct(!showAct)} aria-expanded={showAct}>{showAct ? 'Hide activity details' : 'View activity details'}</button>
+            </div>
+          )}
+          {showAct && (
+            <div className="smallnote">
+              <strong>What the computer showed</strong>
+              <ul className="timeline">{evs.map((e) => <li key={e.id}><time>{fmt(e.occurredAt)}</time><span>{e.allowedSummary.replace(/^ui action\b/i, 'clicked').replace(/^file opened\b/i, 'opened a file').replace(/^file saved\b/i, 'saved a file')}</span></li>)}</ul>
+              {matchReason(f0, step) && <p style={{ margin: '.6rem 0 0' }}><strong>Why we matched it here:</strong> {matchReason(f0, step)}</p>}
+              {f0.uncertainties.length > 0 && <p style={{ margin: '.4rem 0 0' }}><strong>What we do not know:</strong> {f0.uncertainties.join(' ')}</p>}
+              {f0.refs.submissionRefs.length > 0 && <p style={{ margin: '.4rem 0 0' }}>Upload numbers seen, oldest first: {f0.refs.submissionRefs.map((r) => <code key={r} style={{ marginRight: 8 }}>{r}</code>)}</p>}
+              <p className="muted" style={{ margin: '.4rem 0 0' }}>How sure we are: {f0.confidenceBand === 'HIGH' ? 'likely match' : f0.confidenceBand === 'MEDIUM' ? 'possible match' : 'weak match'}.</p>
+              <details style={{ marginTop: 4 }}><summary>View technical details</summary>{f0.sourceEventIds.map((id) => <div key={id}><code>{id}</code></div>)}</details>
+            </div>
+          )}
 
           {f0.findingType === 'AI_UNMATCHED_WORK' ? (
-            <div className="card flat stack">
-              <strong>What do you want to do with this work?</strong>
-              <div><label htmlFor={`cls-${card.id}`}>Choose one</label>
+            <div className="stack answers">
+              <div><label htmlFor={`cls-${card.id}`}>What do you want to do with this work?</label>
                 <select id={`cls-${card.id}`} value={cls} onChange={(e) => setCls(e.target.value as typeof cls)}>
-                  <option value="ROUTINE">Save it as everyday work (not part of a project)</option>
+                  <option value="ROUTINE">Save it as a small task (not part of a project)</option>
                   <option value="LINK_EXISTING">Add it to a project step</option>
                   <option value="NEW_STEP">Make a new step in a project</option>
                   <option value="POTENTIAL_PROJECT">This might be a new project (tell Dalia)</option>
                 </select></div>
               {(cls === 'ROUTINE' || cls === 'POTENTIAL_PROJECT') && (
-                <div><label htmlFor={`nt-${card.id}`}>What was it? (a few words)</label><input id={`nt-${card.id}`} type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Example: Fixed the front artwork for “MS066”" />
+                <div><label htmlFor={`nt-${card.id}`}>Give it a short name</label><input id={`nt-${card.id}`} type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Example: Updated the listing for “MS066”" />
                   <p className="small muted">It goes in your own “Other work” list and Dalia can see it. It does not change any project.</p></div>)}
               {(cls === 'LINK_EXISTING' || cls === 'NEW_STEP') && (
                 <div><label htmlFor={`cp-${card.id}`}>Project</label>
-                  <select id={`cp-${card.id}`} value={clsProject} onChange={(e) => { setClsProject(e.target.value); setLinkStep(''); }}>{projects.filter((p) => p.memberUids.includes(uid) || hub.isOwner(uid)).map((p) => <option key={p.id} value={p.id}>{p.key} — {p.title.slice(0, 40)}</option>)}</select></div>)}
+                  <select id={`cp-${card.id}`} value={clsProject} onChange={(e) => { setClsProject(e.target.value); setLinkStep(''); }}>{mine.map((p) => <option key={p.id} value={p.id}>{p.key} — {shortProjectName(p)}</option>)}</select></div>)}
               {cls === 'LINK_EXISTING' && clsProject && (
                 <div><label htmlFor={`ls-${card.id}`}>Step</label>
                   <select id={`ls-${card.id}`} value={linkStep} onChange={(e) => setLinkStep(e.target.value)}><option value="">Choose a step…</option>{hub.projectSteps(uid, clsProject).map((s) => <option key={s.id} value={s.id}>Step {s.sortOrder}: {s.title.slice(0, 60)}</option>)}</select></div>)}
               {cls === 'NEW_STEP' && <div><label htmlFor={`nt2-${card.id}`}>New step name</label><input id={`nt2-${card.id}`} type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} /></div>}
               <div className="row"><button className={first ? 'primary' : ''} disabled={disabled || (cls === 'LINK_EXISTING' && !linkStep) || (cls === 'NEW_STEP' && !newTitle.trim())} onClick={() => submit('CONFIRM', 'Saved')}>Save this</button></div>
-              <hr style={{ border: 0, borderTop: '1px solid var(--border)', width: '100%' }} />
-              <div><label htmlFor={`sk-${card.id}`}>Or skip it and do not log it. Why? (optional)</label>
-                <input id={`sk-${card.id}`} type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: just a quick look, nothing to record" />
-                <p className="small muted">Skipped items are not added to any list. Dalia can still see that it was skipped.</p></div>
-              <div className="row"><button disabled={disabled} onClick={() => submit('DISMISS', 'Skipped. It was not logged.')}>Skip it (do not log)</button><button disabled={disabled} onClick={() => submit('NOT_MY_WORK', 'Saved')}>{WORDS.notMyWork}</button><button className="ghost" disabled={disabled} onClick={() => submit('DEFER', 'Saved for your next paid shift')}>Answer later</button></div>
+              <details className="soft"><summary>Not a task? Skip it, or say it was not your work</summary>
+                <div className="stack" style={{ marginTop: 8 }}>
+                  <div><label htmlFor={`sk-${card.id}`}>Why? (optional)</label>
+                    <input id={`sk-${card.id}`} type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: just a quick look, nothing to record" />
+                    <p className="small muted">Skipped items are not added to any list. Dalia can still see that it was skipped.</p></div>
+                  <div className="row"><button disabled={disabled} onClick={() => submit('DISMISS', 'Skipped. It was not logged.')}>Skip it (do not log)</button><button disabled={disabled} onClick={() => submit('NOT_MY_WORK', 'Saved')}>{WORDS.notMyWork}</button></div>
+                </div></details>
+              <div><button className="quiet" disabled={disabled} onClick={() => submit('DEFER', 'Saved for your next paid shift')}>Answer later</button></div>
             </div>
           ) : (
-            <>
-              <div className="stack answers">
-                <div className="row">
-                  <button className={first ? 'primary' : ''} disabled={disabled} onClick={() => submit('CONFIRM', f0.whilePaused ? 'Added to the project history' : 'Thank you. Saved as accurate.')}>{f0.whilePaused ? 'Yes. Add it to the project history' : WORDS.yesAccurate}</button>
-                  <button disabled={disabled} onClick={() => setFix(!fix)} aria-expanded={fix}>{WORDS.somethingIncorrect}</button>
-                  <button disabled={disabled} onClick={() => submit('NOT_MY_WORK', 'Saved')}>{WORDS.notMyWork}</button>
-                  <button className="ghost" disabled={disabled} onClick={() => submit('DEFER', 'Saved for your next paid shift')}>Answer later</button>
-                </div>
-                {fix && (
-                  <div className="stack"><label htmlFor={`co-${card.id}`}>What is incorrect? (We keep what the system noticed and save your fix next to it.)</label>
-                    <textarea id={`co-${card.id}`} value={correction} onChange={(e) => setCorrection(e.target.value)} />
-                    <div><button className={first ? 'primary' : ''} disabled={!correction.trim()} onClick={() => submit('NEEDS_CORRECTION', 'Saved your fix')}>Save my fix</button></div></div>)}
-              </div>
-              {step && (
-                <details className="soft">
-                  <summary>What was the result? <span className="muted small" style={{ fontWeight: 400 }}> (optional, a separate question)</span></summary>
-                  <div className="stack" style={{ marginTop: 8 }}>
-                    <p className="small muted" style={{ margin: 0 }}>Saying “yes, accurate” only confirms what the system noticed. If you also know the result, pick it here. Your answer is {WORDS.employeeConfirmed.toLowerCase()}. It is not {WORDS.checkedInSource.toLowerCase()}.</p>
-                    <ResultPicker value={choice} onChange={setChoice} name={`r-${card.id}`} />
-                    <textarea aria-label="Note about the result" placeholder="Add a note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-                    <label style={{ fontWeight: 500 }}><input type="checkbox" checked={help} onChange={(e) => setHelp(e.target.checked)} /> I need Dalia’s help</label>
-                    <p className="small muted" style={{ margin: 0 }}>Then press “{WORDS.yesAccurate}” above to send both answers.</p>
+            <div className="stack answers">
+              <fieldset style={{ border: 'none', padding: 0, margin: 0 }} className="answerlist">
+                <legend className="small" style={{ fontWeight: 600, marginBottom: 6 }}>What happened?</legend>
+                {spec.choices.map((c) => (
+                  <div key={c.outcome} className={`choice ${outcome === c.outcome ? 'sel' : ''}`} onClick={() => !disabled && setOutcome(c.outcome)}>
+                    <input type="radio" id={`o-${card.id}-${c.outcome}`} name={`o-${card.id}`} disabled={disabled} checked={outcome === c.outcome} onChange={() => setOutcome(c.outcome)} />
+                    <label htmlFor={`o-${card.id}-${c.outcome}`}>{c.label}</label>
                   </div>
-                </details>
+                ))}
+              </fieldset>
+              {outcome === 'MISREAD' && (
+                <div className="correct stack">
+                  <strong className="small">What did the AI get wrong?</strong>
+                  <div className="choice" onClick={() => setCorr('WRONG_STEP')}><input type="radio" id={`c1-${card.id}`} name={`corr-${card.id}`} checked={corr === 'WRONG_STEP'} onChange={() => setCorr('WRONG_STEP')} /><label htmlFor={`c1-${card.id}`}>It matched the wrong project or step</label></div>
+                  {corr === 'WRONG_STEP' && (
+                    <div className="stack">
+                      <div><label htmlFor={`cp2-${card.id}`}>Which project?</label><select id={`cp2-${card.id}`} value={clsProject} onChange={(e) => { setClsProject(e.target.value); setLinkStep(''); }}>{mine.map((p) => <option key={p.id} value={p.id}>{p.key} — {shortProjectName(p)}</option>)}</select></div>
+                      <div><label htmlFor={`ls2-${card.id}`}>Which step?</label><select id={`ls2-${card.id}`} value={linkStep} onChange={(e) => setLinkStep(e.target.value)}><option value="">Choose a step…</option>{hub.projectSteps(uid, clsProject).map((s) => <option key={s.id} value={s.id}>Step {s.sortOrder}: {s.title.slice(0, 60)}</option>)}</select></div>
+                    </div>
+                  )}
+                  <div className="choice" onClick={() => setCorr('WRONG_PERSON')}><input type="radio" id={`c2-${card.id}`} name={`corr-${card.id}`} checked={corr === 'WRONG_PERSON'} onChange={() => setCorr('WRONG_PERSON')} /><label htmlFor={`c2-${card.id}`}>Someone else was using this computer</label></div>
+                  <div className="choice" onClick={() => setCorr('OTHER')}><input type="radio" id={`c3-${card.id}`} name={`corr-${card.id}`} checked={corr === 'OTHER'} onChange={() => setCorr('OTHER')} /><label htmlFor={`c3-${card.id}`}>Something else (tell us below)</label></div>
+                </div>
               )}
-            </>
-          )}
-          <details className="soft">
-            <summary>Why we think so, and what we do not know</summary>
-            <div className="stack" style={{ marginTop: 8 }}>
-              <dl className="rv">
-                <dt>What the system noticed</dt><dd>{f0.headline}</dd>
-                {f0.uncertainties.length > 0 && (<><dt>What it does not know</dt><dd><ul style={{ margin: 0, paddingLeft: '1.1rem' }}>{f0.uncertainties.map((u, i) => <li key={i}>{u}</li>)}</ul></dd></>)}
-              </dl>
-              {step && <div className="small muted">The step’s status right now is “{statusLabel(step.status)}”. Your answer does not change it.</div>}
-              <EvidenceToggle f={f0} />
+              <div><label htmlFor={`n-${card.id}`}>Anything else we should know? (Optional)</label><textarea id={`n-${card.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder={spec.notePlaceholder} /></div>
+              {outcome === 'NOT_ME' && <p className="small muted" style={{ margin: 0 }}>We keep the activity. It just won’t be credited to you. That does not mean no work happened.</p>}
+              {outcome && ['DONE', 'DONE_PART'].includes(outcome) && spec.kind !== 'LATE' && <p className="small muted" style={{ margin: 0 }}>This is your report. It is {WORDS.employeeConfirmed.toLowerCase()}, not {WORDS.checkedInSource.toLowerCase()}.{step?.impact === 'HIGH' ? ' This step still needs a check in the source system, or Dalia’s approval, before it counts as done.' : ''}</p>}
+              <div className="row">
+                <button className={first ? 'primary' : ''} disabled={disabled || !canSend} onClick={sendOutcome}>{outcome === 'NOT_SURE' ? 'Answer later' : 'Send answer'}</button>
+                {outcome !== 'NOT_SURE' && <button className="quiet" disabled={disabled} onClick={() => submit('DEFER', 'Saved for your next paid shift')}>Answer later</button>}
+              </div>
             </div>
-          </details>
+          )}
         </div>
       )}
       {disabled && <p className="small muted">Clock in to send this. Reviews are paid work.</p>}
       {me.role === 'OWNER' && null}
     </article>
-  );
-}
-
-function ResultPicker({ value, onChange, name }: { value: ResponseChoice | 'NOT_SURE' | null; onChange: (c: ResponseChoice | 'NOT_SURE') => void; name: string }) {
-  const opts: [ResponseChoice | 'NOT_SURE', string][] = [['COMPLETED', 'Completed'], ['IN_PROGRESS', 'Still working on it'], ['BLOCKED', 'Blocked — I need help'], ['NOT_SURE', 'Not sure. I need to check']];
-  return (
-    <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
-      {opts.map(([k, l]) => (
-        <div key={k} className={`choice ${value === k ? 'sel' : ''}`} onClick={() => onChange(k)}>
-          <input type="radio" id={`${name}-${k}`} name={name} checked={value === k} onChange={() => onChange(k)} /><label htmlFor={`${name}-${k}`}>{l}</label>
-        </div>))}
-    </fieldset>
-  );
-}
-
-function questionFor(f: Finding, stepNo: number | undefined, key: string | undefined): string {
-  if (f.findingType === 'AI_UNMATCHED_WORK') return 'We found work that may not belong to a project. What was it?';
-  if (f.findingType === 'LATE_EVIDENCE') return `New activity arrived after your review${key ? ` of ${key}` : ''}. Does your first answer still hold?`;
-  if (f.whilePaused) return `We found activity on ${key ?? 'a project'} while it is paused. What was it?`;
-  return `We noticed activity${stepNo ? ` on Step ${stepNo}` : ''}${key ? ` of ${key}` : ''}. Did this happen?`;
-}
-
-function EvidenceToggle({ f }: { f: Finding }) {
-  const { hub, uid } = useMe();
-  const [open, setOpen] = useState(false);
-  const evs = open ? hub.findingEvidence(uid, f.id) : [];
-  return (
-    <div>
-      <button className="link" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Hide where this came from' : `Show where this came from (${f.sourceEventIds.length} activity item${f.sourceEventIds.length === 1 ? '' : 's'})`}</button>
-      {open && (
-        <div className="card flat small" style={{ marginTop: 6 }}>
-          <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>{evs.map((e) => <li key={e.id}>{formatTime(e.occurredAt)} — {e.allowedSummary}</li>)}</ul>
-          {f.refs.submissionRefs.length > 0 && <p style={{ margin: '.4rem 0 0' }}>Upload numbers seen, oldest first: {f.refs.submissionRefs.map((r) => <code key={r} style={{ marginRight: 8 }}>{r}</code>)}</p>}
-          <p className="muted" style={{ margin: '.4rem 0 0' }}>We can only see the computer, not the person. How sure we are: {f.confidenceBand === 'HIGH' ? 'likely match' : f.confidenceBand === 'MEDIUM' ? 'possible match' : 'weak match'}.</p>
-          <details style={{ marginTop: 4 }}><summary>Advanced</summary>{f.sourceEventIds.map((id) => <div key={id}><code>{id}</code></div>)}</details>
-        </div>
-      )}
-    </div>
   );
 }

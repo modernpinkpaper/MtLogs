@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ProjectInfo } from '../projectRef';
 import { useNavigate } from 'react-router-dom';
 import { useAct, useMe } from '../hubContext';
 import { Chip, Empty } from '../common';
@@ -58,7 +59,7 @@ export function Notifications() {
     return (
       <div className={`card note ${!n.readAt ? 'unread' : 'read'} ${inGroup ? 'flat' : ''}`}>
         <div className="row between">
-          <div className="row" style={{ gap: '.4rem' }}>{!n.readAt && <i className="newdot" aria-label="New" />}<span className="eyebrow">{LABEL[n.type]}</span>{n.acknowledgedAt && <Chip tone="ok" glyph="✔">Seen</Chip>}</div>
+          <div className="row" style={{ gap: '.4rem' }}>{!n.readAt && <i className="newdot" aria-label="New" />}<span className="eyebrow">{LABEL[n.type]}</span>{n.projectId && <ProjectInfo projectId={n.projectId} />}{n.acknowledgedAt && <Chip tone="ok" glyph="✔">Seen</Chip>}</div>
           <span className="small muted">{formatDateTime(n.createdAt)}</span>
         </div>
         <h3 style={{ marginTop: 4, fontWeight: n.readAt ? 550 : 700 }}>{n.title}</h3>

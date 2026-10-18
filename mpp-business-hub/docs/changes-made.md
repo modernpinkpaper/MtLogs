@@ -48,3 +48,6 @@ See `docs/ux-overhaul-v1-2.md` for the audit, what changed, and how to check it.
 
 ## v1.3 Attention design
 See `docs/attention-design-v1-3.md`: a type and spacing system, one focal point and one primary button per screen, quieter badges, and details behind open-and-close sections. Nothing removed.
+
+## v1.4 Targeted refinement
+See `docs/ux-refinement-v1-4.md`: outcome-aware review cards, short Home alerts with technical details behind a link, step files with real actions and approval labels, task-first phone layout, one definition of project counts, project description cards, and "Log something I did". A checkpoint tag `checkpoint-before-v1-4` was saved first.

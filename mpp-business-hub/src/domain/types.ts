@@ -75,7 +75,11 @@ export interface Project {
   id: string;
   key: string; // P-012
   title: string;
+  /** Short everyday name for alerts and lists, like "Shopify listings". */
+  shortName?: string;
   objective: string;
+  /** Plain-language description for the hover/click card. Written by Dalia or the people on the project. */
+  description?: string;
   ownerUid: string;
   /** Assigned people. Access is membership-based; ownerUid alone never grants employee access. */
   memberUids: string[];
@@ -145,7 +149,7 @@ export interface Step {
   lastConfirmedAt: string | null;
   lastVerifiedAt: string | null;
   /** Latest human-reported status from an update response/proactive update. */
-  humanReported: { choice: ResponseChoice; note: string | null; at: string; byUid: string } | null;
+  humanReported: { choice: ResponseChoice; note: string | null; at: string; byUid: string; outcome?: ReviewOutcome; outcomeText?: string } | null;
   /** Independent verifier results for this step (e.g. marketplace state). */
   verifications: Verification[];
   /** Latest Not-yet-handled "new activity" marker. */
@@ -202,6 +206,10 @@ export interface Resource {
   approvedVersion: string | null;
   suggestedVersion: { version: string; modifiedAt: string; note: string } | null;
   supersededById: string | null;
+  /** Explicitly marked as still being edited. Never inferred from a file name. */
+  isDraft?: boolean;
+  /** Installed scripts live where the tool needs them. They are never moved to a project folder. */
+  installPath?: string | null;
   sourceLinked?: boolean; // scripts: is source/manifest linked?
   checklistSummary?: { total: number; yes: number; fix: number; blank: number; sourceNote: string } | null;
   notes?: string;
@@ -400,6 +408,8 @@ export interface Finding {
   groupKey: string;
   /** Activity noticed on a project that is currently paused. Neutral wording; never resumes anything. */
   whilePaused?: boolean;
+  /** A person said someone else was using that computer. The activity stays; the attribution is disputed. */
+  attributionDisputed?: boolean;
 }
 
 export type CardType = 'AI_PROGRESS' | 'AI_COMPLETION_SUGGESTION' | 'AI_DISCREPANCY' | 'AI_UNMATCHED_WORK' | 'BLOCKER' | 'RESOURCE_SUGGESTION' | 'OWNER_REQUEST' | 'LATE_EVIDENCE';
@@ -426,8 +436,12 @@ export interface ReviewCard {
   groupKey: string;
 }
 
-export type ResponseChoice = 'COMPLETED' | 'IN_PROGRESS' | 'NOT_STARTED' | 'BLOCKED' | 'WAITING' | 'NOT_APPLICABLE';
+export type ResponseChoice = 'COMPLETED' | 'IN_PROGRESS' | 'NOT_STARTED' | 'BLOCKED' | 'WAITING' | 'NOT_APPLICABLE' | 'NEED_CLARIFICATION';
 export type CardAction = 'CONFIRM' | 'NEEDS_CORRECTION' | 'NOT_MY_WORK' | 'DISMISS' | 'DEFER' | 'SEND_STATUS';
+/** What happened with the work. Separate from "did the AI see it right?" and never proof by itself. */
+export type ReviewOutcome = 'DONE' | 'DONE_PART' | 'PROBLEM' | 'WORKING' | 'NOT_ME' | 'MISREAD' | 'NOT_SURE' | 'WORKED_PAUSED';
+export type ReviewKindId = 'AUTOMATION_TEST' | 'AMAZON_UPLOAD' | 'FILE_EDIT' | 'UNMATCHED' | 'PAUSED' | 'LATE' | 'REQUEST' | 'GENERAL';
+export interface ReviewCorrection { kind: 'WRONG_STEP' | 'WRONG_PERSON' | 'OTHER'; projectId?: string; stepId?: string }
 
 export interface ReviewDecision {
   id: string;
@@ -439,6 +453,9 @@ export interface ReviewDecision {
   evidenceLinks: string[];
   correctionText: string | null;
   classificationChoice: string | null;
+  /** What the person said happened. Activity accuracy is the action; this is the result. */
+  outcome?: ReviewOutcome | null;
+  correction?: ReviewCorrection | null;
   submittedAt: string;
   reviewStartedAt: string | null;
   duringPaidShift: boolean;
@@ -592,12 +609,21 @@ export interface Verifier { id: string }
 export interface WorkLogEntry {
   id: string;
   uid: string;
+  /** Empty for small tasks a person logged by hand. */
   findingId: string;
-  kind: 'EVERYDAY' | 'MAYBE_PROJECT';
+  kind: 'EVERYDAY' | 'MAYBE_PROJECT' | 'SMALL_TASK';
   title: string;
   loggedAt: string;
   deviceId: string;
   evidenceSummaries: string[];
+  /** When the work was done (a person can enter it by hand). */
+  doneAt?: string;
+  /** Who asked for it ("Dalia asked Erika"). */
+  requestedByUid?: string | null;
+  note?: string | null;
+  origin?: 'DETECTED' | 'MANUAL';
+  projectId?: string | null;
+  stepId?: string | null;
 }
 
 // ======================= v1.1: AI Recommendations (OWNER-ONLY unless noted) =======================

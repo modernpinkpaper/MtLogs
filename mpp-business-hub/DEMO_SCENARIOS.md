@@ -52,3 +52,13 @@ S. **Assign.** Assign to Erika. She gets a notification and sees the brief only.
 T. **Pretend Drive folders.** Project → Files → set up folders. Run again: nothing duplicates.
 U. **Privacy.** Switch to Erika: no AI Recommendations, no private projects, no money in search.
 V. **Search.** Press the search box, type "FBA": each result says why it matched.
+
+## v1.4 scenarios
+W. **Report the real outcome (Erika → Review).** The first card asks "Did you test the Shopify Lister today?". Open "View activity details" to see the times. Choose "Completed the test successfully" and Send. The step is "In progress", not done, and the history says it is her report.
+X. **Fix a wrong guess.** On a card choose "The AI misunderstood what I was doing", then "It matched the wrong project or step" (pick the right step) or "Someone else was using this computer".
+Y. **Amazon stays unverified.** Demo operations → release the FBA_TY001 hour. Answer "I uploaded it, but I haven't seen the result yet". Nothing is marked verified, and the project cannot close.
+Z. **Use the right file.** Open P-012 Step 3. Two SEO Master copies exist and none is approved. Press "Use this version" on one, then "Open file". The images folder offers "Copy folder path". The Shopify Lister offers "View installation details".
+AA. **Project description.** Click the small "i" beside P-012 anywhere. Edit the description.
+AB. **Log something I did (Erika).** My Work → "Log something I did". As Dalia open Other work → "Logged by hand".
+AC. **Phone.** Make the window narrow and open P-012: the step comes first, files next, the full plan folds under "All steps".
+AD. **Home alert.** As Dalia, Home shows "Shopify listings — Progress needs confirmation" and "Review progress". "View technical details" shows the project, step and times.

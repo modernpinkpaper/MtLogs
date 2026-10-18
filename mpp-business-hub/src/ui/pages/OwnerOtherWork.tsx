@@ -3,21 +3,29 @@ import { useAct, useMe } from '../hubContext';
 import { Chip, Empty, Tabs } from '../common';
 import { formatDateTime } from '../../domain/time';
 
-type Tab = 'waiting' | 'everyday' | 'maybeProject' | 'attached' | 'skipped' | 'notMine';
-const LABELS: Record<Tab, string> = { waiting: 'Waiting for a person', everyday: 'Everyday work', maybeProject: 'Maybe a new project', attached: 'Added to a project', skipped: 'Skipped', notMine: 'Not them' };
+type Tab = 'waiting' | 'everyday' | 'maybeProject' | 'attached' | 'skipped' | 'notMine' | 'byHand';
+const LABELS: Record<Tab, string> = { waiting: 'Waiting for a person', everyday: 'Everyday work', maybeProject: 'Maybe a new project', attached: 'Added to a project', skipped: 'Skipped', notMine: 'Not them', byHand: 'Logged by hand' };
 
 export function OwnerOtherWork({ embedded }: { embedded?: boolean } = {}) {
   const { hub, uid } = useMe();
   const act = useAct();
   const data = hub.otherWork(uid);
   const [tab, setTab] = useState<Tab>('skipped');
-  const rows = data[tab];
+  const rows = tab === 'byHand' ? [] : data[tab];
   return (
     <div className="stack">
       {!embedded && (<div><h1>Other work</h1>
         <p className="muted">Work the system saw that is not part of a tracked step. Nothing disappears when someone skips it. You can always see it here and send it back.</p></div>)}
       <Tabs tabs={(Object.keys(LABELS) as Tab[]).map((t) => ({ id: t, label: `${LABELS[t]} (${data[t].length})` }))} value={tab} onChange={setTab} />
-      {rows.length === 0 && <Empty>Nothing here.</Empty>}
+      {tab === 'byHand' && data.byHand.length === 0 && <Empty>Nothing logged by hand yet. People can use “Log something I did” for small jobs the computer did not see.</Empty>}
+      {tab === 'byHand' && data.byHand.map((r) => (
+        <article key={r.entry.id} className="card stack">
+          <div className="row between"><strong>{r.entry.title}</strong><span className="small muted">{r.linkedTo ? `Added to ${r.linkedTo}` : 'Small task, not part of a project'}</span></div>
+          <div className="small muted">{r.byName} wrote this{r.entry.doneAt ? ` · done ${formatDateTime(r.entry.doneAt)}` : ''}{r.askedBy ? ` · asked by ${r.askedBy}` : ''}</div>
+          {r.entry.note && <div className="small">“{r.entry.note}”</div>}
+          <div className="small muted">Written by the person. The computer did not see it. It never changes a step’s status.</div>
+        </article>))}
+      {tab !== 'byHand' && rows.length === 0 && <Empty>Nothing here.</Empty>}
       {rows.map((r) => (
         <article key={r.finding.id} className="card stack">
           <div className="row between">

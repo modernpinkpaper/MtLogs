@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ProjectInfo } from '../projectRef';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAct, useMe } from '../hubContext';
 import { Chip, Empty, Modal, ProjectStatusChip } from '../common';
@@ -50,7 +51,7 @@ export function Projects() {
   const attentionByProject = useMemo(() => {
     const m = new Map<string, string>();
     if (!owner) return m;
-    for (const item of hub.ownerOverview(uid).queue) { const mt = item.link.match(/^\/projects\/([^/?]+)/); if (mt && !m.has(mt[1])) m.set(mt[1], item.kind); }
+    for (const item of hub.ownerOverview(uid).queue) { const mt = item.link.match(/^\/projects\/([^/?]+)/); if (mt && !m.has(mt[1])) m.set(mt[1], item.chip); }
     return m;
   }, [hub, uid, owner, hub.getVersion()]);
   const myCards = hub.outstandingCards(uid);
@@ -111,14 +112,13 @@ export function Projects() {
       { id: 'done', title: 'Completed / Canceled', rows: rest.filter((r) => ['COMPLETED', 'CANCELED'].includes(r.status)).sort(cmp), collapsed: true },
     ].filter((g) => g.rows.length || g.id === 'prog');
   })();
-  const activeCount = rows.filter((r) => !['PAUSED', 'COMPLETED', 'CANCELED'].includes(r.status)).length;
-  const pausedCount = rows.filter((r) => r.status === 'PAUSED').length;
+  const pc = hub.projectCounts(uid);
 
   return (
     <div className="stack">
       <div className="row between">
         <div><h1>Projects</h1>
-          <p className="muted" style={{ margin: 0 }}>{activeCount} active · {pausedCount} paused{owner ? ' · includes your private projects' : ''}</p></div>
+          <p className="muted" style={{ margin: 0 }}>{pc.team} team project{pc.team === 1 ? '' : 's'} active{owner ? ` · ${pc.private} private` : ''} · {pc.paused} paused</p></div>
         {owner && <button className="primary" onClick={() => setAdding(true)}>New project</button>}
       </div>
 
@@ -205,6 +205,7 @@ export function PCard({ r, compact, onAsk, onResume }: { r: { p: Project; steps:
         <span className="m">{[people, when, pr.label, pilot].filter(Boolean).join(' · ')}</span>
       </Link>
       <span className="end">
+        <ProjectInfo projectId={p.id} label={p.key} />
         {status !== 'IN_PROGRESS' && <ProjectStatusChip status={status} />}
         {attention && status !== 'PAUSED' && <Chip tone="pink" glyph="!">{attention}</Chip>}
         {p.visibility === 'OWNER_PRIVATE' && <Chip tone="violet" glyph="🔒">Only Dalia</Chip>}

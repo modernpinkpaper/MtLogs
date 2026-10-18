@@ -9,25 +9,6 @@ $ npm test (verbose)
 
  RUN  v2.1.9 /home/user/MtLogs/mpp-business-hub
 
- ✓ src/test/evidence.test.ts > C. evidence vs official status > observed Shopify “Make 1 draft” raises a finding, never overwrites official Not Started or marks Done
- ✓ src/test/evidence.test.ts > C. evidence vs official status > a draft click ≠ published listing: verifier says not found → still not complete; confirmation by employee does not change status
- ✓ src/test/evidence.test.ts > C. evidence vs official status > high-impact completion needs independent verification or explicit owner approval; employees can never mark it verified
- ✓ src/test/evidence.test.ts > C. evidence vs official status > routine steps may be employee-confirmed; invalid transitions are rejected and every transition is audited
- ✓ src/test/evidence.test.ts > C. evidence vs official status > a blocker needs a reason and the last active state is kept as history
- ✓ src/test/evidence.test.ts > C. evidence vs official status > no logs / partial logs never conclude “did no work”
- ✓ src/test/evidence.test.ts > C. evidence vs official status > InDesign save does not close anything and surfaces as unmatched work to classify
- ✓ src/test/evidence.test.ts > C. evidence vs official status > shared PC: activity stays “actor unverified” until evidence/confirmation; “Not my work” keeps it unattributed
- ✓ src/test/evidence.test.ts > C. evidence vs official status > correcting an AI suggestion creates a review/audit entry and preserves the original finding + events
- ✓ src/test/evidence.test.ts > FBA_TY001 regression (primary failure scenario) > never stops at the first failure, reports both references chronologically, and stays unverified
- ✓ src/test/evidence.test.ts > FBA_TY001 regression (primary failure scenario) > an employee “Completed upload” report is labelled employee-reported; PC107 membership stays unverified until a verifier returns it
- ✓ src/test/evidence.test.ts > FBA_TY001 regression (primary failure scenario) > later events after a confirmed review become an immutable LATE_EVIDENCE supplement (earlier answer untouched)
- ✓ src/test/evidence.test.ts > G. operational quality > JSONL ingestion is idempotent, handles mid-write tails, revisions, duplicates and sequence gaps
- ✓ src/test/evidence.test.ts > G. operational quality > shows coverage and watermark separately from check time; provisional cards say so
- ✓ src/test/evidence.test.ts > G. operational quality > prompt injection in a file name is treated as data: no status change, text omitted, flagged
- ✓ src/test/evidence.test.ts > G. operational quality > model output is schema-validated; invalid or policy-violating output is rejected and the clock is unaffected
- ✓ src/test/evidence.test.ts > G. operational quality > live adapter is disabled and makes no call; AI outage leaves clock + requests working
- ✓ src/test/evidence.test.ts > G. operational quality > optional analysis honours the budget circuit-breaker but required review keeps working
- ✓ src/test/evidence.test.ts > G. operational quality > the intake trace connects source → event → episode → finding → card → decision → journal
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > a scan only writes owner-private suggestions: no project, no assignment, no employee notification
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > Scenario: approve without assigning → project exists, nobody can see it, folder is created; then Dalia assigns Erika
  ✓ src/test/manager.test.ts > AI Recommendations: owner decides, employees get a clean copy > assigning in the same step as approving works, and retrying approval does not create a second project
@@ -64,14 +45,34 @@ $ npm test (verbose)
  ✓ src/test/pause.test.ts > Pause and resume > a step can be put on hold without pausing the project; its status is kept
  ✓ src/test/pause.test.ts > Pause and resume > finished projects are never auto-resumed; reopening is explicit and audited; a paused project cannot be closed
  ✓ src/test/pause.test.ts > Pause and resume > paused projects stay searchable and journals show both pause and resume in plain sentences
- ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia → Erika → Dalia, with real notification, journal entry, response record and state changes
- ✓ src/test/requests.test.ts > B. owner update request round trip > double-send / network retry creates exactly one response and one notification
- ✓ src/test/requests.test.ts > B. owner update request round trip > "Completed" is employee-reported only: never becomes VERIFIED, and the notification says so
- ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia can acknowledge and follow up without changing the employee’s historical answer
- ✓ src/test/requests.test.ts > B. owner update request round trip > an employee can proactively send an update to Dalia without any request
- ✓ src/test/requests.test.ts > B. owner update request round trip > other employees cannot read, intercept or answer a request not addressed to them
- ✓ src/test/requests.test.ts > B. owner update request round trip > recipients must be authorized for the project
- ✓ src/test/requests.test.ts > B. owner update request round trip > a request can be answered at clock-out or after next clock-in, and the card survives skipping
+ ✓ src/test/ux14.test.ts > 1. Review cards ask about the real outcome, not only whether the AI saw it > the Shopify test card asks a specific question and offers outcome answers
+ ✓ src/test/ux14.test.ts > 1. Review cards ask about the real outcome, not only whether the AI saw it > Erika reports a passed test: it is recorded as her report, the step is in progress (not done), and nothing is verified
+ ✓ src/test/ux14.test.ts > 1. Review cards ask about the real outcome, not only whether the AI saw it > a problem tells Dalia, with Erika’s own words
+ ✓ src/test/ux14.test.ts > 2. Partial progress never completes the project > “uploaded, haven’t seen the result” stays unverified and in progress, and the project cannot close
+ ✓ src/test/ux14.test.ts > 2. Partial progress never completes the project > 6. “Amazon accepted it” is only her report: no verification exists until a real check is recorded
+ ✓ src/test/ux14.test.ts > 2. Partial progress never completes the project > the answer rules are plain functions: a passed test is progress, a finished file is reported, a paused-project answer changes nothing
+ ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > wrong step: the activity moves to the right step, and the first guess stays in the history
+ ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > wrong person: the activity is kept, attribution is disputed, and Dalia is told someone else used that computer
+ ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > “I didn’t work on this” is never turned into “no work happened”
+ ✓ src/test/ux14.test.ts > 3. Fast corrections: wrong step, wrong person, “not my work” > a wrong-step fix cannot move work onto a project the person is not on
+ ✓ src/test/ux14.test.ts > 4. Two-way update requests, with “I need clarification” > Dalia asks, Erika answers “I need clarification” with a note, Dalia is notified in the app and it is in the journal
+ ✓ src/test/ux14.test.ts > 5. Bulk confirmation only says the activity is accurate > it never completes or verifies anything, and it refuses big or conflicting steps
+ ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > Step 3 shows copies of the SEO Master with no approved version, and “FINAL” in a name does not make one
+ ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > Erika approves one copy, and it opens directly; the other stays unapproved
+ ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > 8. each kind of resource gets the right control: link, copy path, installation details, or “not confirmed”
+ ✓ src/test/ux14.test.ts > 7–9. Step files are directly usable, with clear approval > adding a location never invents a link: a path is saved as a path, a link stays “not checked yet”
+ ✓ src/test/ux14.test.ts > 11. One definition of “active projects” > Home and Projects use the same counts, and private projects are named separately
+ ✓ src/test/ux14.test.ts > 11. One definition of “active projects” > employees never see a private count, only their own team projects
+ ✓ src/test/ux14.test.ts > 2 (Home). Alerts are short, explain why, and keep technical detail behind “technical” > every alert has a title, a reason and one button; raw diagnostics are not in the title
+ ✓ src/test/ux14.test.ts > 2 (Home). Alerts are short, explain why, and keep technical detail behind “technical” > two or more employee answers become one “updates are ready” alert
+ ✓ src/test/ux14.test.ts > 12–13. Pause, timekeeping and private data survive the new cards > an answer about a paused project never resumes it
+ ✓ src/test/ux14.test.ts > 12–13. Pause, timekeeping and private data survive the new cards > clock in and out are never blocked by reviews, even when the AI is down
+ ✓ src/test/ux14.test.ts > 12–13. Pause, timekeeping and private data survive the new cards > employees cannot read the private project card or owner-only financial text in any new alert
+ ✓ src/test/ux14.test.ts > Project description card > people on the project can write what it is; people who are not on it cannot
+ ✓ src/test/ux14.test.ts > Log something I did (small tasks the computer did not see) > a small task is saved, shown to Dalia with who asked, and changes no status
+ ✓ src/test/ux14.test.ts > Log something I did (small tasks the computer did not see) > attached to a step it appears in that step’s history; double-send makes one entry
+ ✓ src/test/ux14.test.ts > Log something I did (small tasks the computer did not see) > it is paid work (clock in first), needs a name, and cannot be attached to someone else’s project
+ ✓ src/test/ux14.test.ts > 14. Print-team daily numbers and weekly owner analysis are still separate > weekly analysis is owner-only; the daily stats are the person’s own
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > the spec’s Shopify example: 200 × 5 ÷ 60 = 16.67 hours, $20/hour = $333.33 of freed time, NOT cash savings
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > low, base and high scenarios come from the stored inputs
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > revenue is not profit: without a margin it says so and shows no profit, no return
@@ -82,6 +83,33 @@ $ npm test (verbose)
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > two ideas that improve the same output are never added together
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > blocks money and strategy words from worker-facing text
  ✓ src/test/finance.test.ts > Impact calculator (owner-only math) > old public pages are not presented as new changes; dates are kept
+ ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia → Erika → Dalia, with real notification, journal entry, response record and state changes
+ ✓ src/test/requests.test.ts > B. owner update request round trip > double-send / network retry creates exactly one response and one notification
+ ✓ src/test/requests.test.ts > B. owner update request round trip > "Completed" is employee-reported only: never becomes VERIFIED, and the notification says so
+ ✓ src/test/requests.test.ts > B. owner update request round trip > Dalia can acknowledge and follow up without changing the employee’s historical answer
+ ✓ src/test/requests.test.ts > B. owner update request round trip > an employee can proactively send an update to Dalia without any request
+ ✓ src/test/requests.test.ts > B. owner update request round trip > other employees cannot read, intercept or answer a request not addressed to them
+ ✓ src/test/requests.test.ts > B. owner update request round trip > recipients must be authorized for the project
+ ✓ src/test/requests.test.ts > B. owner update request round trip > a request can be answered at clock-out or after next clock-in, and the card survives skipping
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > observed Shopify “Make 1 draft” raises a finding, never overwrites official Not Started or marks Done
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > a draft click ≠ published listing: verifier says not found → still not complete; confirmation by employee does not change status
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > high-impact completion needs independent verification or explicit owner approval; employees can never mark it verified
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > routine steps may be employee-confirmed; invalid transitions are rejected and every transition is audited
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > a blocker needs a reason and the last active state is kept as history
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > no logs / partial logs never conclude “did no work”
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > InDesign save does not close anything and surfaces as unmatched work to classify
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > shared PC: activity stays “actor unverified” until evidence/confirmation; “Not my work” keeps it unattributed
+ ✓ src/test/evidence.test.ts > C. evidence vs official status > correcting an AI suggestion creates a review/audit entry and preserves the original finding + events
+ ✓ src/test/evidence.test.ts > FBA_TY001 regression (primary failure scenario) > never stops at the first failure, reports both references chronologically, and stays unverified
+ ✓ src/test/evidence.test.ts > FBA_TY001 regression (primary failure scenario) > an employee “Completed upload” report is labelled employee-reported; PC107 membership stays unverified until a verifier returns it
+ ✓ src/test/evidence.test.ts > FBA_TY001 regression (primary failure scenario) > later events after a confirmed review become an immutable LATE_EVIDENCE supplement (earlier answer untouched)
+ ✓ src/test/evidence.test.ts > G. operational quality > JSONL ingestion is idempotent, handles mid-write tails, revisions, duplicates and sequence gaps
+ ✓ src/test/evidence.test.ts > G. operational quality > shows coverage and watermark separately from check time; provisional cards say so
+ ✓ src/test/evidence.test.ts > G. operational quality > prompt injection in a file name is treated as data: no status change, text omitted, flagged
+ ✓ src/test/evidence.test.ts > G. operational quality > model output is schema-validated; invalid or policy-violating output is rejected and the clock is unaffected
+ ✓ src/test/evidence.test.ts > G. operational quality > live adapter is disabled and makes no call; AI outage leaves clock + requests working
+ ✓ src/test/evidence.test.ts > G. operational quality > optional analysis honours the budget circuit-breaker but required review keeps working
+ ✓ src/test/evidence.test.ts > G. operational quality > the intake trace connects source → event → episode → finding → card → decision → journal
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > Dalia sees owner-private and all company projects
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > no employee can discover the private project: list, search, counts, notifications, journal, resources, AI retrieval, direct id
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > a guessed id and a non-existent id produce the identical generic error (no data-bearing message)
@@ -91,19 +119,6 @@ $ npm test (verbose)
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > employees cannot forge responses, self-authorize, or mark high-risk results externally verified
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > employees cannot read other employees’ cards, notifications, decisions, print stats or the roster
  ✓ src/test/permissions.test.ts > E. permissions and owner privacy > inactive users cannot act at all
- ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > Scenario 4: 19 verified + 1 unresolved upload shows 19/20, not 20/20; the 20th verification reaches the target and asks Dalia
- ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > checkbox, upload and “tried” never count as verified; employees cannot verify or go outside the list
- ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > only Dalia can approve the next batch, only after the target, and the earlier test stays in the history
- ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > auto-pause happens only when Dalia chose it ahead of time, and never publishes or expands anything
- ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > setup checks its numbers and is safe to click twice
- ✓ src/test/print.test.ts > F. print analytics > printer problem snapshots collapse to state episodes (hundreds of snapshots ≠ hundreds of incidents)
- ✓ src/test/print.test.ts > F. print analytics > print staff see their own daily stats; stats never block clock-out; missing data is flagged not zeroed
- ✓ src/test/print.test.ts > F. print analytics > weekly report is owner-only and states coverage, caveats, and no cross-person ranking
- ✓ src/test/print.test.ts > F. print analytics > four-state classification treats missing coverage separately from NEITHER_OBSERVED
- ✓ src/test/print.test.ts > F. print analytics > Carolina’s output follows her actual assignment for the day without losing authorized access
- ✓ src/test/print.test.ts > F. print analytics > print-only users receive no daily AI review card even when their device has activity
- ✓ src/test/print.test.ts > F. print analytics > opportunities distinguish expected capacity from realized value and approval creates a measured project
- ✓ src/test/print.test.ts > time handling (America/Chicago, DST-aware) > converts local wall time to UTC across DST and displays in CT
  ✓ src/test/resources.test.ts > D. resources, journal, audit > one canonical resource links to many steps with different roles
  ✓ src/test/resources.test.ts > D. resources, journal, audit > provider ID overrides filenames: two similarly named SEO sheets stay distinct with different counts
  ✓ src/test/resources.test.ts > D. resources, journal, audit > local/network paths and unknown links are not invented as clickable cloud links
@@ -113,14 +128,27 @@ $ npm test (verbose)
  ✓ src/test/resources.test.ts > D. resources, journal, audit > audit shows before/after, actor, time and reason for transitions
  ✓ src/test/resources.test.ts > D. resources, journal, audit > employee resource lists contain no unauthorized/private items
  ✓ src/test/resources.test.ts > D. resources, journal, audit > projects keep their step hierarchy; employees can add substeps only under their own steps; progress is explicit counts
- ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > AI finding text, notifications and messages read easily
- ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > error messages are short and plain
- ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > names of steps are shown in quotes in notifications
+ ✓ src/test/print.test.ts > F. print analytics > printer problem snapshots collapse to state episodes (hundreds of snapshots ≠ hundreds of incidents)
+ ✓ src/test/print.test.ts > F. print analytics > print staff see their own daily stats; stats never block clock-out; missing data is flagged not zeroed
+ ✓ src/test/print.test.ts > F. print analytics > weekly report is owner-only and states coverage, caveats, and no cross-person ranking
+ ✓ src/test/print.test.ts > F. print analytics > four-state classification treats missing coverage separately from NEITHER_OBSERVED
+ ✓ src/test/print.test.ts > F. print analytics > Carolina’s output follows her actual assignment for the day without losing authorized access
+ ✓ src/test/print.test.ts > F. print analytics > print-only users receive no daily AI review card even when their device has activity
+ ✓ src/test/print.test.ts > F. print analytics > opportunities distinguish expected capacity from realized value and approval creates a measured project
+ ✓ src/test/print.test.ts > time handling (America/Chicago, DST-aware) > converts local wall time to UTC across DST and displays in CT
+ ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > Scenario 4: 19 verified + 1 unresolved upload shows 19/20, not 20/20; the 20th verification reaches the target and asks Dalia
+ ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > checkbox, upload and “tried” never count as verified; employees cannot verify or go outside the list
+ ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > only Dalia can approve the next batch, only after the target, and the earlier test stays in the history
+ ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > auto-pause happens only when Dalia chose it ahead of time, and never publishes or expands anything
+ ✓ src/test/pilot.test.ts > Limited tests (pilot checkpoints) > setup checks its numbers and is safe to click twice
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > skipping logs nothing, keeps the item, and the owner can still see it with the reason
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > “everyday work” is saved to the person’s own list and shown to the owner, without touching any project
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > “maybe a new project” tells the owner; “add to a step” links it to the project
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > the owner can send a skipped item back; the earlier decision stays in history; only the owner can see this page
  ✓ src/test/otherwork.test.ts > unmatched work: skip, everyday work, or add to a project > “not me” also stays visible to the owner
+ ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > AI finding text, notifications and messages read easily
+ ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > error messages are short and plain
+ ✓ src/test/plainlanguage.test.ts > plain language (about a 5th–6th grade reading level) > names of steps are shown in quotes in notifications
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > clock-in commits even with pending reviews, AI outage and log outage; reviews are only offered AFTER commit
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > clock-out works immediately with pending cards, and leaves them untouched
  ✓ src/test/clock.test.ts > A. clock and paid-time protections > clock-out is unaffected by AI outage, missing logs and missing print stats
@@ -131,12 +159,14 @@ $ npm test (verbose)
  ✓ src/test/search.test.ts > Search that explains itself > pausing does not remove anything from search
  ✓ src/test/search.test.ts > Search that explains itself > results are scoped: Arantza sees none of Erika’s projects, nobody sees private items, only the owner sees recommendations and people
 
- Test Files  13 passed (13)
-      Tests  121 passed (121)
-   Start at  02:02:35
-   Duration  2.80s (transform 842ms, setup 0ms, collect 2.68s, tests 1.53s, environment 4ms, prepare 949ms)
+ Test Files  14 passed (14)
+      Tests  149 passed (149)
+   Start at  04:35:46
+   Duration  2.86s (transform 775ms, setup 0ms, collect 2.71s, tests 1.79s, environment 4ms, prepare 968ms)
 
 
-$ node e2e/v11.mjs → NO ERRORS, ALL CHECKS PASSED
-  (includes attention-design checks: exactly one primary button on Home, AI finding, My Work, Review and step page; page title larger than section headings; no repeated Open buttons; no sideways scroll on a phone; answer buttons on the first screen of a review card)
+$ node e2e/v11.mjs   → NO ERRORS, ALL CHECKS PASSED
+  (outcome answers, wrong-step fix panel, Amazon stays unverified, step files with real actions and approval labels, project info card, log something I did, counts agree, short Home alerts, phone order, one primary button per screen)
+$ node e2e/smoke.mjs → NO ERRORS, ALL CHECKS PASSED
+  (Dalia asks, Erika answers, Dalia is notified and the link opens the exact step, both are in the journal, 15 older screens open, private project denied)
 ```

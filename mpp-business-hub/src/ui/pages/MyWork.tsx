@@ -1,5 +1,9 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMe } from '../hubContext';
+import { LogTaskDialog } from '../dialogs';
+import { ProjectInfo } from '../projectRef';
+import { shortProjectName } from '../../domain/reviewKinds';
 import { Chip, Empty, StepState } from '../common';
 import { formatDate, formatDateTime } from '../../domain/time';
 import { notReadyReason, pauseLine } from '../../domain/projectStatus';
@@ -37,6 +41,7 @@ export function MyWork() {
     .sort((a, b) => (b.s.lastConfirmedAt ?? '').localeCompare(a.s.lastConfirmedAt ?? '')).slice(0, 5);
   const saved = hub.myWorkLog(uid);
   const firstName = me.name.split(' ')[0];
+  const [logging, setLogging] = useState(false);
 
   // The one thing to do first: a request from Dalia beats a step. Otherwise the first ready step.
   const firstReq = requests[0];
@@ -53,6 +58,7 @@ export function MyWork() {
           <Chip tone={shift ? 'ok' : 'gray'} glyph={shift ? '●' : '○'}>{shift ? 'Pay clock is running' : 'Clocked out'}</Chip>
           {!shift && me.role === 'EMPLOYEE' && <Link to="/clock">Clock in</Link>}
           {(area === 'PRINT' || area === 'MIXED') && <Link to="/print/my-stats">Today’s printing</Link>}
+          <button className="quiet" onClick={() => setLogging(true)}>Log something I did</button>
         </span>
       </div>
 
@@ -74,7 +80,7 @@ export function MyWork() {
         <section aria-labelledby="first" className="hero">
           <div className="eyebrow" id="first">Do this next</div>
           <h2>{hero.s.title}</h2>
-          <div className="muted small">{hero.p.key} · {hero.p.title.slice(0, 70)}{hero.s.dueAt ? ` · Due ${formatDate(hero.s.dueAt)}` : ''}</div>
+          <div className="muted small">{hero.p.key} · {shortProjectName(hero.p)}<ProjectInfo projectId={hero.p.id} label={hero.p.key} />{hero.s.dueAt ? ` · Due ${formatDate(hero.s.dueAt)}` : ''}</div>
           {hero.s.instructions && <p className="clamp">{hero.s.instructions}</p>}
           <div className="row">
             <Link to={`/projects/${hero.p.id}/steps/${hero.s.id}`}><button className="primary big">Open this step</button></Link>
@@ -90,7 +96,7 @@ export function MyWork() {
           <div className="card list">
             {[...groups.values()].map(({ p, rows }) => (
               <div key={p.id} className="lgroup">
-                <Link className="lhead" to={`/projects/${p.id}`}>{p.key} · {p.title}</Link>
+                <div className="lhead"><Link to={`/projects/${p.id}`}>{p.key} · {shortProjectName(p)}</Link><ProjectInfo projectId={p.id} label={p.key} /></div>
                 {rows.map(({ s }) => <StepLine key={s.id} p={p} s={s} />)}
               </div>
             ))}
@@ -134,10 +140,11 @@ export function MyWork() {
           <summary>Other work you saved <span className="count">{saved.length}</span></summary>
           <div className="card list" style={{ marginTop: 8 }}>
             {saved.map((w) => (
-              <div key={w.id} className="lline static"><span className="t">{w.title}</span><span className="small muted">{w.kind === 'EVERYDAY' ? 'Everyday work' : 'Maybe a new project'} · {formatDateTime(w.loggedAt)}</span></div>))}
+              <div key={w.id} className="lline static"><span className="t">{w.title}</span><span className="small muted">{w.kind === 'EVERYDAY' ? 'Everyday work' : w.kind === 'SMALL_TASK' ? 'Small task you logged' : 'Maybe a new project'} · {formatDateTime(w.loggedAt)}</span></div>))}
           </div>
         </details>
       )}
+      {logging && <LogTaskDialog onClose={() => setLogging(false)} />}
     </div>
   );
 }

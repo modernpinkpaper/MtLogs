@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAct, useMe } from '../hubContext';
 import { Chip, Modal } from '../common';
+import { shortProjectName } from '../../domain/reviewKinds';
 import { RequestUpdateDialog } from '../dialogs';
+import { ProjectInfo } from '../projectRef';
 import { formatDateTime, formatTime, relativeAgo } from '../../domain/time';
 
 /** Owner Home: what needs your decision, what changed, who needs help. Details are one click away. */
@@ -17,14 +19,16 @@ export function OwnerOverview() {
   const ai = hub.inboxSummary(uid);
   const unread = hub.listNotifications(uid).filter((n) => !n.readAt).length;
   const decisions = [
-    ...(ai.approvedUnassigned ? ai.unassignedProjects.map((p) => ({ kind: 'Choose who works on it', label: `${p.key} “${p.title}” is approved but nobody is assigned`, link: `/projects/${p.id}?assign=1`, weight: 96 })) : []),
-    ...(ai.urgent ? [{ kind: 'Urgent AI recommendation', label: `${ai.urgent} urgent recommendation${ai.urgent === 1 ? '' : 's'} need a look`, link: '/owner/ai', weight: 99 }] : []),
-    ...(ai.needsDecision - ai.urgent > 0 ? [{ kind: 'AI Recommendations', label: `${ai.needsDecision - ai.urgent} recommendation${ai.needsDecision - ai.urgent === 1 ? '' : 's'} waiting for your decision`, link: '/owner/ai', weight: 55 }] : []),
+    ...(ai.approvedUnassigned ? ai.unassignedProjects.map((p) => ({ kind: 'Choose who works on it', label: `${p.key} “${p.title}” is approved but nobody is assigned`, title: `${shortProjectName(p)} — Choose who works on it`, why: 'You approved it, but nobody can see it yet.', cta: 'Choose who works on it', chip: 'Needs an assignee', link: `/projects/${p.id}?assign=1`, weight: 96, projectId: p.id, technical: [] as string[] })) : []),
+    ...(ai.urgent ? [{ kind: 'Urgent AI recommendation', label: `${ai.urgent} urgent recommendation${ai.urgent === 1 ? '' : 's'} need a look`, title: ai.urgent === 1 ? 'An urgent AI opportunity needs your decision' : `${ai.urgent} urgent AI opportunities need your decision`, why: 'The AI found something that may cost you if it waits.', cta: 'Review it', chip: 'Urgent', link: '/owner/ai', weight: 99, projectId: undefined, technical: [] as string[] }] : []),
+    ...(ai.needsDecision - ai.urgent > 0 ? [{ kind: 'AI Recommendations', label: `${ai.needsDecision - ai.urgent} recommendation${ai.needsDecision - ai.urgent === 1 ? '' : 's'} waiting for your decision`, title: ai.needsDecision - ai.urgent === 1 ? 'New AI opportunity needs your approval' : `${ai.needsDecision - ai.urgent} AI opportunities need your decision`, why: 'Nothing becomes a project until you approve it.', cta: 'Review opportunities', chip: 'Your decision', link: '/owner/ai', weight: 55, projectId: undefined, technical: [] as string[] }] : []),
     ...o.queue,
   ].sort((a, b) => b.weight - a.weight);
   const first = decisions[0];
   const others = decisions.slice(1);
   const shown = all ? others : others.slice(0, 4);
+  const [details, setDetails] = useState(false);
+  const pc = o.counts;
 
   return (
     <div className="stack">
@@ -33,8 +37,9 @@ export function OwnerOverview() {
           <h1>Home</h1>
           <p>
             {decisions.length === 0 ? 'Nothing needs you right now.' : `${decisions.length} thing${decisions.length === 1 ? ' needs' : 's need'} you.`}{' '}
-            <Link to="/projects">{o.counts.active} active project{o.counts.active === 1 ? '' : 's'}</Link>
-            {o.counts.paused > 0 && <>, <Link to="/projects?status=PAUSED">{o.counts.paused} paused</Link></>}.
+            <Link to="/projects">{pc.team} team project{pc.team === 1 ? '' : 's'} active</Link>
+            {pc.private > 0 && <>, <Link to="/projects?mine=1">{pc.private} private</Link></>}
+            {pc.paused > 0 && <>, <Link to="/projects?status=PAUSED">{pc.paused} paused</Link></>}.
           </p>
         </div>
         <button onClick={() => setReq(true)}>Ask for an update</button>
@@ -50,17 +55,21 @@ export function OwnerOverview() {
         ) : (
           <>
             <div className="eyebrow" id="dec">Start here</div>
-            <p className="focus-title" style={{ margin: '.35rem 0 .2rem' }}>{first.label}</p>
-            <p className="muted" style={{ margin: 0 }}>{first.kind}</p>
-            <div style={{ marginTop: 'var(--sp-4)' }}><Link to={first.link}><button className="primary big">Open it</button></Link></div>
+            <p className="focus-title" style={{ margin: '.35rem 0 .2rem' }}>{first.title}{first.projectId && <ProjectInfo projectId={first.projectId} label={first.title} />}</p>
+            <p className="lead" style={{ margin: 0 }}>{first.why}</p>
+            <div className="row" style={{ marginTop: 'var(--sp-4)' }}>
+              <Link to={first.link}><button className="primary big">{first.cta}</button></Link>
+              {(first.technical?.length ?? 0) > 0 && <button className="link small" onClick={() => setDetails(!details)} aria-expanded={details}>{details ? 'Hide technical details' : 'View technical details'}</button>}
+            </div>
+            {details && first.technical && <ul className="small smallnote" style={{ margin: 'var(--sp-3) 0 0', paddingLeft: '1.2rem' }}>{first.technical.map((t) => <li key={t}>{t}</li>)}</ul>}
             {others.length > 0 && (
               <div style={{ marginTop: 'var(--sp-5)' }}>
-                <h3 style={{ marginBottom: 0 }}>Also waiting <span className="count">{others.length}</span></h3>
+                <h3 style={{ marginBottom: 0 }}>Other items needing attention <span className="count">({others.length})</span></h3>
                 <div className="list">
                   {shown.map((q, i) => (
                     <Link key={i} to={q.link} className="lrow">
-                      <span className="t" style={{ fontWeight: 550 }}>{q.label}</span>
-                      <span className="m"><span>{q.kind}</span></span>
+                      <span className="t" style={{ fontWeight: 550 }}>{q.title}</span>
+                      <span className="m"><span>{q.chip}</span></span>
                     </Link>
                   ))}
                 </div>

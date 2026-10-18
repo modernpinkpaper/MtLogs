@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { newKey, useAct, useMe } from '../hubContext';
 import { Chip, Empty, Modal, ObservedChip, ProjectStatusChip, SourceChip, StatusChip, StepState, Tabs, VerifyBadge, statusLabel } from '../common';
-import { JournalList, ResourceCard } from '../parts';
+import { JournalList, ResourceCard, StepResourceRow } from '../parts';
 import { JournalFilters } from './Journal';
 import { RequestUpdateDialog, SendUpdateDialog } from '../dialogs';
+import { ProjectInfo } from '../projectRef';
 import { ChangeScheduleDialog, PauseBanner, PauseDialog, PilotPanel, PilotSetupDialog, ResumeDialog, SuggestDialog } from '../pauseUi';
 import { deadlineInfo, nextStep, notReadyReason, pauseLine, progressCounts, projectWorkStatus } from '../../domain/projectStatus';
 import { formatDate, formatDateTime } from '../../domain/time';
@@ -65,14 +66,14 @@ export function ProjectDetail() {
         <div className="row between" style={{ alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0, flex: '1 1 340px' }}>
             <div className="row" style={{ gap: '.4rem' }}>
-              <span className="eyebrow">{project.key}</span>
+              <span className="eyebrow">{project.key}</span><ProjectInfo projectId={project.id} label={project.key} />
               {status !== 'IN_PROGRESS' && <ProjectStatusChip status={status} />}
               {paused && <Chip tone="violet">{pauseLine(project, owner)}</Chip>}
               {project.visibility === 'OWNER_PRIVATE' && <Chip tone="violet" glyph="🔒">Only Dalia</Chip>}
               {project.pinned && <Chip tone="gray" glyph="📌">Pinned</Chip>}
             </div>
             <h1 style={{ margin: '.2rem 0 0', fontSize: '1.5rem' }}>{project.title}</h1>
-            <p className="muted" style={{ margin: '.35rem 0 0', maxWidth: '64ch' }}>{project.objective}</p>
+            <p className="muted proj-obj" style={{ margin: '.35rem 0 0', maxWidth: '64ch' }}>{project.description ?? project.objective}</p>
           </div>
           <div className="row">
             {owner && project.visibility !== 'OWNER_PRIVATE' && <button onClick={() => setDlg('request')}>Ask for an update</button>}
@@ -252,7 +253,7 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
         <h2 style={{ marginBottom: 4 }}>Step {step.sortOrder}: {step.title}</h2>
         <div className="row"><StepState status={step.status} hold={!!step.onHold} />
           {['REPORTED_COMPLETE', 'VERIFIED_COMPLETE'].includes(step.status) && <SourceChip source={step.verificationSource} />}
-          {step.impact === 'HIGH' && <Chip tone="warn" glyph="!" title="This is a big step. It needs a check in the source system or Dalia’s approval.">Big step</Chip>}
+          {step.impact === 'HIGH' && <Chip tone="warn" glyph="!" title="This step needs a check in the source system, or Dalia’s approval, before it counts as done.">Needs a check or Dalia’s approval</Chip>}
           {step.dueAt && <span className="small muted">Due {formatDate(step.dueAt)}</span>}</div>
         {(paused || why) && <p className="small" style={{ color: 'var(--warn)', margin: '.4rem 0 0' }}>{paused ? 'This project is paused, so this step is not scheduled right now. Your work is saved.' : `Not ready: ${why}`}</p>}
         {step.onHold && <p className="small" style={{ margin: '.3rem 0 0' }}>On hold{step.onHold.reason ? `: ${step.onHold.reason}` : ''}. The rest of the project keeps going.</p>}
@@ -271,7 +272,7 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
           <details><summary>What this means</summary><div>{step.observedNote}</div><div className="muted">The step’s status did not change. Only a person, or a check in the source system, can change it.</div></details>
         </div>
       )}
-      {step.humanReported && <div className="small"><Chip tone="info" glyph="☑">Employee confirmed</Chip> {hub.userName(step.humanReported.byUid)}: {CHOICE_LABEL[step.humanReported.choice]} · {formatDateTime(step.humanReported.at)}{step.humanReported.note ? ` — “${step.humanReported.note}”` : ''}</div>}
+      {step.humanReported && <div className="small"><Chip tone="info" glyph="☑">Employee confirmed</Chip> {hub.userName(step.humanReported.byUid)}: {step.humanReported.outcomeText ?? CHOICE_LABEL[step.humanReported.choice]} · {formatDateTime(step.humanReported.at)}{step.humanReported.note ? ` — “${step.humanReported.note}”` : ''}</div>}
       {step.blockerReason && <div className="card bad small">{step.status === 'BLOCKED' ? 'Blocked' : 'Waiting'}: {step.blockerReason}</div>}
 
       <div>
@@ -304,16 +305,19 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
       <div>
         <div className="row between"><h3>Files for this step</h3>{canWork && ws?.state === 'READY' && <button className="link" onClick={() => setDlg('sheet')}>Create a checklist sheet</button>}</div>
         {resources.length === 0 && <p className="small muted" style={{ margin: 0 }}>No files are linked to this step yet.</p>}
-        {resources.slice(0, 5).map(({ link, resource }) => (
-          <div key={link.id} className="small" style={{ marginBottom: 6 }}>
-            <Chip tone="gray">{ROLE_LABEL[link.role]}</Chip> <strong>{resource.label}</strong> {link.associationState === 'SUGGESTED' && <Chip tone="violet" glyph="✦">Suggested</Chip>}
-            {resource.checklistSummary && <span className="muted"> · {resource.checklistSummary.yes} of {resource.checklistSummary.total} marked “Yes”</span>}
-            {resource.suggestedVersion && <Chip tone="warn" glyph="!">Newer version not approved</Chip>}
-            {resource.normalizedPath && <span className="muted"> · on a company computer (copy the path in All files)</span>}
-            {resource.canonicalUrl && resource.linkState === 'VERIFIED' && <span className="muted"> · opens from All files</span>}
-          </div>
-        ))}
-        <button className="link" onClick={() => onTab('files')}>See all project files{resources.length > 5 ? ` (${resources.length - 5} more for this step)` : ''}</button>
+        {(() => {
+          // Two or more copies of the same kind of input with none approved: say so, and let the team pick one.
+          const inputs = resources.filter((x) => x.link.role === 'INPUT');
+          const unapproved = inputs.length > 1 && inputs.every((x) => !x.resource.approvedVersion);
+          const ordered = [...resources].sort((a, b) => Number(!!b.resource.approvedVersion) - Number(!!a.resource.approvedVersion));
+          return (
+            <>
+              {unapproved && <div className="smallnote" role="status" style={{ margin: '.4rem 0' }}><strong>{inputs.length} copies of this file exist and none is approved yet.</strong> A name like “FINAL” is not an approval. Pick the one to use.</div>}
+              {ordered.slice(0, 6).map(({ link, resource }) => <StepResourceRow key={link.id} resource={resource} role={link.role} roleLabel={ROLE_LABEL[link.role]} suggested={link.associationState === 'SUGGESTED'} groupUnapproved={unapproved && link.role === 'INPUT'} />)}
+            </>
+          );
+        })()}
+        <button className="link" onClick={() => onTab('files')}>{resources.length > 6 ? `See ${resources.length - 6} more and the full library` : 'See the full file library'}</button>
       </div>
 
       <details className="soft">
@@ -325,7 +329,7 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
         <details>
           <summary className="small">More options for this step</summary>
           <div className="stack" style={{ marginTop: 8 }}>
-            {step.impact === 'HIGH' && step.status === 'REPORTED_COMPLETE' && !owner && <p className="small muted">This is a big step. Only a check in the source system, or Dalia, can confirm it is done.</p>}
+            {step.impact === 'HIGH' && step.status === 'REPORTED_COMPLETE' && !owner && <p className="small muted">This step needs a check in the source system, or Dalia’s approval, before it counts as done.</p>}
             {choices.length === 0 ? <span className="muted small">No status changes are available to you right now.</span> : (
               <>
                 <input type="text" aria-label="Reason or note" placeholder="Why? (needed if blocked)" value={reason} onChange={(e) => setReason(e.target.value)} />

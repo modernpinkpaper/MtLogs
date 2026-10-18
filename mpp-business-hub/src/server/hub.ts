@@ -1,15 +1,16 @@
 import type {
   Area, AuditEvent, CardAction, Finding, JournalType, Notification, NotificationType, Project, ProjectEvent, Resource,
-  ResourceLink, ResourceRole, ResponseChoice, ReviewCard, ReviewDecision, Shift, Step, StepStatus, UpdateRequest, UpdateResponse,
+  ResourceLink, ResourceRole, ResponseChoice, ReviewCard, ReviewCorrection, ReviewDecision, ReviewOutcome, Shift, Step, StepStatus, UpdateRequest, UpdateResponse,
   User, VerificationState, WorkAssignment,
 } from '../domain/types';
-import { addMinutes, chicagoDate, chicagoToUtc, minutesBetween, nextBusinessMorning } from '../domain/time';
+import { addMinutes, chicagoDate, chicagoToUtc, formatDate, minutesBetween, nextBusinessMorning } from '../domain/time';
 import { buildSeedState, NOW } from './seed';
 import type { HubState } from './state';
 import { HubError, PermissionDenied } from './errors';
 import { assignEpisodes, findSequenceGaps, hashText, normalizeEvent, parseJsonl } from '../ai/ingest';
 import type { AnalysisContext, FindingDraft, ModelAdapter } from '../ai/adapter';
 import { describeEvent, validateFindingDraft } from '../ai/adapter';
+import { outcomeEffect, plainToolName, reviewKind, shortProjectName } from '../domain/reviewKinds';
 import { ReplayAnalyzer } from '../ai/replay';
 import { cardTitle, cardTypeFor, Hub_rank } from './cards';
 import * as PS from './pause';
@@ -22,13 +23,23 @@ import { computeShiftStats, groupProblemEpisodes, fourStateMinutes, weeklyPrinte
 import * as FX from '../ai/fixtures';
 import type { AiRun, CardType, CoverageState, IntakeRun, IntakeStage, WorkLogEntry } from '../domain/types';
 
-export const STORAGE_KEY = 'mpp-hub-demo-state-v2';
+export interface QueueItem {
+  /** Old label kept for tests and filters. */
+  kind: string; label: string; link: string; weight: number;
+  /** What a person reads: a short title, one sentence on why it matters, and one button. */
+  title: string; why: string; cta: string; chip: string;
+  /** Behind "View technical details". Never shown on Home itself. */
+  technical?: string[];
+  /** Set when the item is about one project, so the screen can show its description card. */
+  projectId?: string;
+}
+export const STORAGE_KEY = 'mpp-hub-demo-state-v3';
 /** Compile-time guard: demo-only operations exist only in this prototype build. */
 export const DEMO_MODE = true as const;
 
 export const CHOICE_LABEL: Record<ResponseChoice, string> = {
   COMPLETED: 'Completed', IN_PROGRESS: 'Still working on it', NOT_STARTED: 'Not started',
-  BLOCKED: 'Blocked — I need help', WAITING: 'Waiting for someone or something', NOT_APPLICABLE: 'No longer needed',
+  BLOCKED: 'Blocked — I need help', WAITING: 'Waiting for someone or something', NOT_APPLICABLE: 'No longer needed', NEED_CLARIFICATION: 'I need clarification',
 };
 
 const TRANSITIONS: Record<StepStatus, StepStatus[]> = {
@@ -362,7 +373,7 @@ export class HubServer {
     if (to === 'VERIFIED_COMPLETE') {
       const hasIndependent = step.verifications.some((v) => v.result === 'CONFIRMED');
       if (step.impact === 'HIGH') {
-        if (u.role !== 'OWNER') throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'This is a big step. It needs a check in the source system, or Dalia’s approval.');
+        if (u.role !== 'OWNER') throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'This step needs a check in the source system, or Dalia’s approval.');
         if (!hasIndependent && !opts.ownerApproval) throw new HubError('REQUIRES_INDEPENDENT_VERIFICATION', 'Nothing has been checked in the source system yet. You must choose to approve it yourself.');
         verificationSource = hasIndependent ? 'INDEPENDENT' : 'OWNER_APPROVED';
       } else {
@@ -391,8 +402,8 @@ export class HubServer {
   }
 
   /** Apply a human-reported choice as an official step change only when the transition is legal and not terminal. Never VERIFIED. */
-  applyHumanReport(step: Step, project: Project, choice: ResponseChoice, note: string | null, uid: string) {
-    step.humanReported = { choice, note, at: this.state.now, byUid: uid };
+  applyHumanReport(step: Step, project: Project, choice: ResponseChoice, note: string | null, uid: string, extra?: { outcome: ReviewOutcome; outcomeText: string }) {
+    step.humanReported = { choice, note, at: this.state.now, byUid: uid, ...(extra ?? {}) };
     const target: StepStatus | null =
       choice === 'COMPLETED' ? 'REPORTED_COMPLETE' : choice === 'IN_PROGRESS' ? 'IN_PROGRESS' : choice === 'BLOCKED' ? 'BLOCKED' : choice === 'WAITING' ? 'WAITING' : null;
     if (!target || step.status === target || TERMINAL.includes(step.status)) return;
@@ -707,11 +718,30 @@ export class HubServer {
     return d;
   }
 
-  submitDecision(uid: string, cardId: string, input: {
-    action: CardAction; statusAnswer?: ResponseChoice | null; note?: string | null; correctionText?: string | null; evidenceLinks?: string[];
+  submitDecision(uid: string, cardId: string, input0: {
+    action?: CardAction; statusAnswer?: ResponseChoice | null; note?: string | null; correctionText?: string | null; evidenceLinks?: string[];
     needsOwnerHelp?: boolean; classification?: { kind: 'LINK_EXISTING' | 'NEW_STEP' | 'ROUTINE' | 'POTENTIAL_PROJECT'; projectId?: string; stepId?: string; newStepTitle?: string } | null; idempotencyKey: string;
+    /** What happened with the work. When set, the action and status are worked out here, by the same rules the screen shows. */
+    outcome?: ReviewOutcome | null; correction?: ReviewCorrection | null;
   }): ReviewDecision {
     const card = this.getCard(uid, cardId);
+    let input = { ...input0, action: input0.action ?? ('CONFIRM' as CardAction) };
+    let fx: ReturnType<typeof outcomeEffect> | null = null;
+    if (input0.outcome && card.cardType !== 'OWNER_REQUEST') {
+      const pf = this.state.findings.find((f) => card.findingIds.includes(f.id));
+      const pstep = pf?.stepId ? this.state.steps.find((s) => s.id === pf.stepId) ?? null : null;
+      fx = outcomeEffect(pf ? reviewKind(pf, pstep) : 'GENERAL', input0.outcome, pstep);
+      const o = input0.outcome;
+      if (o === 'NOT_SURE') input = { ...input, action: 'DEFER' };
+      else if (o === 'NOT_ME') input = { ...input, action: 'NOT_MY_WORK' };
+      else if (o === 'MISREAD') {
+        const c = input0.correction;
+        if (c?.kind === 'WRONG_PERSON') input = { ...input, action: 'NOT_MY_WORK', correctionText: input0.correctionText ?? 'Someone else was using this computer.' };
+        else if (c?.kind === 'WRONG_STEP' && c.projectId && c.stepId) input = { ...input, action: 'NEEDS_CORRECTION', correctionText: input0.correctionText?.trim() || 'This work belongs to a different step.' };
+        else input = { ...input, action: 'NEEDS_CORRECTION', correctionText: input0.correctionText?.trim() || input0.note?.trim() || 'The AI misunderstood what I was doing.' };
+      } else if (fx.status) input = { ...input, action: 'SEND_STATUS', statusAnswer: fx.status };
+      else input = { ...input, action: 'CONFIRM' };
+    }
     const key = 'dec:' + input.idempotencyKey;
     // Cards for owner requests are answered through the response path (same idempotency, same atomic write).
     if (card.cardType === 'OWNER_REQUEST') {
@@ -742,7 +772,7 @@ export class HubServer {
             this.addJournal({
               projectId: f.projectId, stepIds: f.stepId ? [f.stepId] : [], type: 'EMPLOYEE_REVIEW', actorUid: uid,
               title: `${this.userName(uid)} ${newStatus === 'CONFIRMED' ? 'confirmed' : newStatus === 'CORRECTED' ? 'corrected' : newStatus === 'NOT_MINE' ? 'said “not my work” on' : 'dismissed'} an AI observation`,
-              summary: `${f.headline}${input.correctionText ? ` — correction: ${input.correctionText}` : ''}${input.note ? ` — note: ${input.note}` : ''}. The step status was not changed by this check.`,
+              summary: `${f.headline}${fx ? ` — ${this.userName(uid)} ${fx.text}` : ''}${input.correctionText ? ` — correction: ${input.correctionText}` : ''}${input.note ? ` — note: ${input.note}` : ''}. ${newStatus === 'NOT_MINE' ? 'This does not mean no work happened. The activity is kept and is not credited to this person. ' : ''}${fx?.needsCheck ? 'This is the employee’s report. It has not been checked in the source system. ' : ''}The activity check itself does not change the step status.`,
               verificationState: 'EMPLOYEE_CONFIRMED', sourceRefs: f.sourceEventIds,
             });
           }
@@ -752,7 +782,29 @@ export class HubServer {
         if (input.action === 'SEND_STATUS' && input.statusAnswer && f0?.stepId && f0.projectId) {
           const step = this.state.steps.find((s) => s.id === f0.stepId)!;
           const project = this.state.projects.find((p) => p.id === f0.projectId)!;
-          if (this.canWorkOnProject(this.user(uid), project)) this.applyHumanReport(step, project, input.statusAnswer, input.note?.trim() || null, uid);
+          if (this.canWorkOnProject(this.user(uid), project)) this.applyHumanReport(step, project, input.statusAnswer, input.note?.trim() || null, uid, fx && input.outcome ? { outcome: input.outcome, outcomeText: fx.text } : undefined);
+        }
+        if (input.outcome) { dec.outcome = input.outcome; dec.correction = input.correction ?? null; }
+        // Something went wrong: tell Dalia, with the person's own words.
+        if (fx?.problem && f0?.projectId) {
+          const project = this.state.projects.find((p) => p.id === f0.projectId)!;
+          this.notify({ recipientUid: project.ownerUid, senderUid: uid, type: 'BLOCKER', title: `${this.userName(uid)} ran into a problem — ${shortProjectName(project)}`, preview: input.note ?? 'No note was added.', projectId: project.id, stepId: f0.stepId, sourceEntityId: dec.id, deepLink: `/projects/${project.id}${f0.stepId ? `/steps/${f0.stepId}` : ''}`, key: `n:problem:${dec.id}` });
+        }
+        // Wrong person (shared computer): keep the activity, dispute who did it.
+        if (input.correction?.kind === 'WRONG_PERSON' && f0) {
+          f0.attributionDisputed = true;
+          const owner = this.state.users.find((u) => u.role === 'OWNER')!;
+          this.notify({ recipientUid: owner.id, senderUid: uid, type: 'DIRECT_MENTION', title: `${this.userName(uid)} says someone else used that computer`, preview: f0.headline, projectId: f0.projectId, stepId: f0.stepId, sourceEntityId: f0.id, deepLink: f0.projectId ? `/projects/${f0.projectId}` : '/owner/other-work', key: `n:wrongperson:${f0.id}` });
+        }
+        // Wrong project or step: move the activity to the right step. The first guess stays in the history.
+        if (input.correction?.kind === 'WRONG_STEP' && f0 && input.correction.projectId && input.correction.stepId) {
+          const project = this.projectFor(uid, input.correction.projectId);
+          if (!this.canWorkOnProject(this.user(uid), project)) throw new PermissionDenied();
+          const target = this.stepFor(uid, input.correction.stepId).step;
+          const was = f0.stepId ? this.state.steps.find((s) => s.id === f0.stepId) : null;
+          f0.projectId = project.id; f0.stepId = target.id;
+          target.lastActivityAt = this.state.now;
+          this.addJournal({ projectId: project.id, stepIds: [target.id], type: 'EMPLOYEE_REVIEW', actorUid: uid, title: 'Activity moved to this step', summary: `${f0.headline} — ${this.userName(uid)} said it belongs here${was ? `, not on “${was.title}”` : ''}. The first guess is kept in the history.`, verificationState: 'EMPLOYEE_CONFIRMED', sourceRefs: f0.sourceEventIds });
         }
         if (input.action === 'CONFIRM' && f0?.findingType === 'AI_UNMATCHED_WORK') this.applyClassification(uid, f0, input.classification ?? null);
         // Optional, separate owner-help flag: a routine note never auto-flags a crisis.
@@ -914,9 +966,31 @@ export class HubServer {
     return this.commit(() => {
       const before = { version: res.version, approvedVersion: res.approvedVersion, suggested: res.suggestedVersion };
       if (res.suggestedVersion?.version === version) { res.version = version; res.lastModifiedAt = res.suggestedVersion.modifiedAt; res.suggestedVersion = null; }
-      res.approvedVersion = version;
+      res.approvedVersion = version; res.isDraft = false;
       this.audit({ entityType: 'resource', entityId: res.id, action: 'SET_APPROVED_VERSION', before, after: { version: res.version, approvedVersion: version }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Deliberate approval of resource version', evidenceRefs: [], projectId: links[0]?.projectId ?? null });
       for (const pid of new Set(links.map((l) => l.projectId))) this.addJournal({ projectId: pid, type: 'RESOURCE', actorUid: uid, title: 'Approved version set', summary: `${res.label}: approved ${version}.`, verificationState: 'OFFICIAL', relatedResourceIds: [res.id] });
+      return res;
+    });
+  }
+  /**
+   * Fix a resource whose location is not confirmed. We never invent a link: a path is saved as a path,
+   * and a link is saved as "not checked yet" until a real integration verifies it.
+   */
+  setResourceLocation(uid: string, resourceId: string, location: string) {
+    const u = this.user(uid);
+    const res = this.visibleResources(u).find((r) => r.id === resourceId);
+    if (!res) throw new PermissionDenied();
+    const links = this.state.resourceLinks.filter((l) => l.resourceId === res.id);
+    if (u.role !== 'OWNER' && !links.some((l) => this.canWorkOnProject(u, this.state.projects.find((p) => p.id === l.projectId)!))) throw new PermissionDenied();
+    const loc = location.trim();
+    if (!loc) throw new HubError('VALIDATION', 'Type where it is, like a folder path or a link.');
+    const isPath = /^([a-z]:\\|\\\\)/i.test(loc);
+    return this.commit(() => {
+      const before = { normalizedPath: res.normalizedPath, canonicalUrl: res.canonicalUrl, linkState: res.linkState };
+      if (isPath) { res.normalizedPath = loc; res.linkState = 'LOCAL_ONLY'; }
+      else { res.notes = `${res.notes ? res.notes + ' ' : ''}${this.userName(uid)} says it is here: ${loc} (not checked yet).`; }
+      this.audit({ entityType: 'resource', entityId: res.id, action: 'SET_RESOURCE_LOCATION', before, after: { location: loc, verified: false }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Person supplied a location. It is not verified.', evidenceRefs: [], projectId: links[0]?.projectId ?? null });
+      for (const pid of new Set(links.map((l) => l.projectId))) this.addJournal({ projectId: pid, type: 'RESOURCE', actorUid: uid, title: 'File location added', summary: `${res.label}: ${this.userName(uid)} said it is at ${loc}. Not checked yet.`, verificationState: 'EMPLOYEE_CONFIRMED', relatedResourceIds: [res.id] });
       return res;
     });
   }
@@ -1256,24 +1330,41 @@ export class HubServer {
       `${unmatched.length} piece(s) of work that is not in any project`,
       `${pendingReview.length} AI guess(es) waiting for a person to check`,
     ];
-    const queue: { kind: string; label: string; link: string; weight: number }[] = [];
-    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['EMPLOYEE_RESPONSE'].includes(n.type))) queue.push({ kind: 'They answered you', label: n.title, link: n.deepLink, weight: 100 });
+    // Each item: a short title, one sentence of why it matters, and one button. Technical detail is kept, but behind "technical".
+    const queue: QueueItem[] = [];
+    const nm = (id: string | undefined) => (id ? this.userName(id) : 'Someone');
+    const responses2 = st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && n.type === 'EMPLOYEE_RESPONSE');
+    if (responses2.length >= 2) queue.push({ kind: 'They answered you', label: `${responses2.length} employee updates are ready`, title: `${responses2.length === 2 ? 'Two' : responses2.length === 3 ? 'Three' : responses2.length} employee updates are ready`, why: 'Your team answered your requests. Read them and close the loop.', cta: 'Read the updates', chip: 'Updates ready', link: '/notifications', weight: 100 });
+    else for (const n of responses2) queue.push({ kind: 'They answered you', label: n.title, title: n.title, why: n.preview, cta: 'Read the answer', chip: 'Update ready', link: n.deepLink, weight: 100 });
     for (const s of st.steps) {
       const p = st.projects.find((p) => p.id === s.projectId)!;
+      const short = shortProjectName(p);
+      const who = nm(s.assignedUids[0]);
       const paused = !!p.pause?.isPaused;
-      if (s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Needs a check in the source system', label: `${p.key} — ${s.title} (says it is done, but it has not been checked in the source system)`, link: `/projects/${p.id}/steps/${s.id}`, weight: 80 });
-      if (s.status === 'BLOCKED' && !paused) queue.push({ kind: 'Blocked', label: `${p.key} — ${s.title}: ${s.blockerReason ?? ''}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 90 });
+      const stepLink = `/projects/${p.id}/steps/${s.id}`;
+      const tech = [`${p.key} · Step ${s.sortOrder}: ${s.title}`];
+      if (s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Needs a check in the source system', label: `${p.key} — ${s.title} (says it is done, but it has not been checked in the source system)`, title: `${short} — Verify result`, why: `${who} says the work is done, but nobody has checked it in the source system yet.`, cta: 'Check the result', chip: 'Verify result', link: stepLink, weight: 80, technical: tech });
+      if (s.status === 'BLOCKED' && !paused) queue.push({ kind: 'Blocked', label: `${p.key} — ${s.title}: ${s.blockerReason ?? ''}`, title: `${who} needs help with ${short.toLowerCase()}`, why: s.blockerReason ?? 'This step is blocked.', cta: 'See what is blocking it', chip: 'Needs help', link: stepLink, weight: 90, technical: tech });
       // Ordinary nags are quiet while a project is paused.
-      if (!paused && s.dueAt && s.dueAt < st.now && !TERMINAL.includes(s.status)) queue.push({ kind: 'Late', label: `${p.key} — ${s.title}`, link: `/projects/${p.id}/steps/${s.id}`, weight: 70 });
-      if (!paused && s.observedReview === 'PENDING_EMPLOYEE' && s.status === 'NOT_STARTED' && s.observedLevel !== 'NO_EVIDENCE') queue.push({ kind: 'Tracker and activity do not match', label: `${p.key} — ${s.title}: we saw activity, but the tracker still says “Not started”`, link: `/projects/${p.id}/steps/${s.id}`, weight: 60 });
+      if (!paused && s.dueAt && s.dueAt < st.now && !TERMINAL.includes(s.status)) queue.push({ kind: 'Late', label: `${p.key} — ${s.title}`, title: `${short} — A step is late`, why: `“${s.title}” was due ${formatDate(s.dueAt)}.`, cta: 'Open the step', chip: 'Late', link: stepLink, weight: 70, technical: tech });
+      if (!paused && s.observedReview === 'PENDING_EMPLOYEE' && s.status === 'NOT_STARTED' && s.observedLevel !== 'NO_EVIDENCE') {
+        const fnd = st.findings.filter((f) => f.stepId === s.id && f.status === 'PROPOSED').slice(-1)[0];
+        const kind = fnd ? reviewKind(fnd, s) : 'GENERAL';
+        const toolLink = st.resourceLinks.find((l) => l.stepId === s.id && l.role === 'AUTOMATION_TOOL');
+        const toolLabel = plainToolName(toolLink ? st.resources.find((r) => r.id === toolLink.resourceId)?.label : null);
+        const what = kind === 'AUTOMATION_TEST' ? `tested the ${toolLabel === 'the tool' ? 'tool' : toolLabel}` : kind === 'AMAZON_UPLOAD' ? 'uploaded to Amazon' : 'worked on this';
+        queue.push({ kind: 'Tracker and activity do not match', label: `${p.key} — ${s.title}: we saw activity, but the tracker still says “Not started”`, title: `${short} — Progress needs confirmation`, why: `${who} ${what}, but the project hasn’t been updated.`, cta: 'Review progress', chip: 'Needs confirmation', link: stepLink, weight: 60, technical: [...tech, ...(fnd ? [`How sure: ${fnd.confidenceBand.toLowerCase()}`, `Source: ${fnd.deviceId} (we only see the computer, not the person)`, `Activity items: ${fnd.sourceEventIds.length}`] : [])] });
+      }
     }
     for (const p of st.projects.filter((p) => p.pause?.isPaused && !p.closedAt)) {
-      if (p.deadlineAt && p.deadlineAt < st.now && (p.pause!.pausedAt ?? '') <= p.deadlineAt) queue.push({ kind: 'Pick a new deadline', label: `${p.key} was paused, and its original deadline has passed`, link: `/projects/${p.id}`, weight: 65 });
+      if (p.deadlineAt && p.deadlineAt < st.now && (p.pause!.pausedAt ?? '') <= p.deadlineAt) queue.push({ kind: 'Pick a new deadline', label: `${p.key} was paused, and its original deadline has passed`, title: `${shortProjectName(p)} — Pick a new deadline`, why: 'It was paused and its old deadline has passed. Dates never move on their own.', cta: 'Choose a deadline', chip: 'New deadline needed', link: `/projects/${p.id}`, weight: 65, technical: [`${p.key} · original deadline ${formatDate(p.deadlineAt)}`] });
     }
-    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && !n.readAt && ['RESUME_REMINDER', 'PAUSE_SUGGESTION', 'PILOT_REACHED', 'AI_FINDING'].includes(n.type))) queue.push({ kind: 'Needs your decision', label: n.title, link: n.deepLink, weight: 95 });
-    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['BLOCKER', 'NEEDS_VERIFICATION'].includes(n.type))) queue.push({ kind: n.type === 'BLOCKER' ? 'Blocked' : 'Needs a check in the source system', label: n.title, link: n.deepLink, weight: 85 });
-    for (const a of st.archives.filter((a) => a.coverageState === 'INCOMPLETE')) queue.push({ kind: 'Data problem', label: `${a.deviceId} ${a.hourWindow}:00 file is missing some events (${a.sequenceGaps.join('; ')})`, link: '/owner/data-intake', weight: 50 });
-    if (st.settings.aiOutage || st.settings.logSyncOutage) queue.push({ kind: 'Data problem', label: st.settings.aiOutage ? 'The AI helper is off (demo switch)' : 'Computer data is late (demo switch)', link: '/owner/data-intake', weight: 55 });
+    const NCTA: Record<string, string> = { RESUME_REMINDER: 'Decide now', PAUSE_SUGGESTION: 'Read the suggestion', PILOT_REACHED: 'Review the limited test', AI_FINDING: 'Review it' };
+    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && !n.readAt && ['RESUME_REMINDER', 'PAUSE_SUGGESTION', 'PILOT_REACHED', 'AI_FINDING'].includes(n.type))) queue.push({ kind: 'Needs your decision', label: n.title, title: n.title, why: n.preview, cta: NCTA[n.type], chip: 'Needs your decision', link: n.deepLink, weight: 95 });
+    for (const n of st.notifications.filter((n) => n.recipientUid === uid && !n.acknowledgedAt && ['BLOCKER', 'NEEDS_VERIFICATION'].includes(n.type))) queue.push({ kind: n.type === 'BLOCKER' ? 'Blocked' : 'Needs a check in the source system', label: n.title, title: n.title, why: n.preview, cta: n.type === 'BLOCKER' ? 'See what happened' : 'Check the result', chip: n.type === 'BLOCKER' ? 'Needs help' : 'Verify result', link: n.deepLink, weight: 85 });
+    for (const a of st.archives.filter((a) => a.coverageState === 'INCOMPLETE')) queue.push({ kind: 'Data problem', label: `${a.deviceId} ${a.hourWindow}:00 file is missing some events (${a.sequenceGaps.join('; ')})`, title: 'Some computer activity may be missing', why: 'Counts and AI guesses from that time may look low. It does not mean nobody worked.', cta: 'See what is missing', chip: 'Activity may be missing', link: '/owner/data-intake', weight: 50, technical: [`${a.deviceId} · file for ${a.hourWindow}:00`, ...a.sequenceGaps] });
+    if (st.settings.aiOutage || st.settings.logSyncOutage) queue.push({ kind: 'Data problem', label: st.settings.aiOutage ? 'The AI helper is off (demo switch)' : 'Computer data is late (demo switch)', title: st.settings.aiOutage ? 'The AI helper is off' : 'Computer activity is arriving late', why: 'Clocking in and out, requests and your own updates keep working.', cta: 'See details', chip: 'Data problem', link: '/owner/data-intake', weight: 55, technical: [st.settings.aiOutage ? 'AI outage (demo switch)' : 'Log sync outage (demo switch)'] });
+    for (const q of queue) q.projectId = q.link.match(/^\/projects\/([^/?]+)/)?.[1];
     queue.sort((a, b) => b.weight - a.weight);
     const workers = st.users.filter((u) => u.role === 'EMPLOYEE' && ['PROJECT', 'MIXED'].includes(this.areaOn(u.id))).concat(st.users.filter((u) => u.role === 'OWNER'));
     const workerCards = workers.map((u) => {
@@ -1289,7 +1380,7 @@ export class HubServer {
     return {
       today: st.now, lastSync: Object.values(st.deviceLastSeen).sort().pop() ?? null, dataThrough: latestRun?.dataThrough ?? null, lastOwnerLookAt: since,
       changeCount: ev.length, narrative, queue, workerCards,
-      counts: { active: st.projects.filter((p) => !p.closedAt && !p.canceledAt && !p.pause?.isPaused && p.visibility !== 'OWNER_PRIVATE').length, paused: st.projects.filter((p) => p.pause?.isPaused && !p.closedAt).length, waitingForYou: queue.length },
+      counts: { ...this.projectCounts(uid), waitingForYou: queue.length },
       print: this.weeklyPrintReport(uid).printers.map((p) => ({ printer: p.printer, completed: p.completed, failed: p.failed, incidents: p.incidents.length })),
       privateProjects: st.projects.filter((p) => p.visibility === 'OWNER_PRIVATE').length,
     };
@@ -1400,6 +1491,90 @@ export class HubServer {
     return { projects: r.projects.map((p) => p.key), steps: r.steps.map((s) => s.title), resources: r.resources.map((x) => x.label) };
   }
 
+  // ------------------------------------------------------------------ project counts (one definition, used everywhere)
+  /**
+   * Counts for the projects THIS person may see.
+   *  team    = active, not paused, shared with the team or assigned to people
+   *  private = active, not paused, Dalia-only (owner sees these; employees never do, and never see the number)
+   *  paused  = paused and not closed
+   * "Active" never includes paused, finished or canceled projects.
+   */
+  projectCounts(uid: string) {
+    const u = this.user(uid);
+    const live = this.state.projects.filter((p) => this.canReadProject(u, p) && !p.closedAt && !p.canceledAt);
+    const running = live.filter((p) => !p.pause?.isPaused);
+    const team = running.filter((p) => p.visibility !== 'OWNER_PRIVATE').length;
+    const priv = u.role === 'OWNER' ? running.filter((p) => p.visibility === 'OWNER_PRIVATE').length : 0;
+    return { team, private: priv, active: team + priv, paused: live.filter((p) => p.pause?.isPaused).length };
+  }
+
+  // ------------------------------------------------------------------ project description card (hover / click)
+  /** Everything the little description card needs. Same permission as opening the project: a hidden project gives the same error as a missing one. */
+  projectCard(uid: string, projectId: string) {
+    const p = this.projectFor(uid, projectId);
+    const steps = this.projectSteps(uid, projectId);
+    const next = steps.filter((s) => !s.parentStepId && !TERMINAL.includes(s.status) && s.status !== 'REPORTED_COMPLETE').sort((a, b) => a.sortOrder - b.sortOrder)[0] ?? null;
+    return {
+      id: p.id, key: p.key, shortName: shortProjectName(p), title: p.title, description: p.description?.trim() || null, objective: p.objective,
+      people: p.memberUids.map((m) => this.userName(m)), paused: !!p.pause?.isPaused, deadlineAt: p.deadlineAt, nextStepTitle: next?.title ?? null,
+      canEdit: this.user(uid).role === 'OWNER' || this.canWorkOnProject(this.user(uid), p),
+    };
+  }
+
+  /** Dalia or anyone on the project can write what the project is, in everyday words. */
+  setProjectDescription(uid: string, projectId: string, text: string) {
+    const p = this.projectFor(uid, projectId);
+    const u = this.user(uid);
+    if (u.role !== 'OWNER' && !this.canWorkOnProject(u, p)) throw new PermissionDenied();
+    const clean = text.trim();
+    if (clean.length > 600) throw new HubError('VALIDATION', 'Please keep the description under 600 characters.');
+    return this.commit(() => {
+      const before = p.description ?? null;
+      p.description = clean || undefined; p.updatedAt = this.state.now;
+      this.audit({ entityType: 'project', entityId: p.id, action: 'PROJECT_DESCRIPTION', before: { description: before }, after: { description: clean || null }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Description edited', evidenceRefs: [], projectId: p.id });
+      this.addJournal({ projectId: p.id, type: 'PLAN_CHANGE', actorUid: uid, title: 'Project description updated', summary: `${this.userName(uid)} updated what this project is about.`, verificationState: 'OFFICIAL' });
+      return p;
+    });
+  }
+
+  // ------------------------------------------------------------------ small tasks a person logs by hand
+  /**
+   * "Dalia remembered something, told Erika, Erika updated a listing." The computer logs may never show that, so a person can write it down.
+   * It is the person's own report. It never changes a step's status.
+   */
+  logSmallTask(uid: string, input: { title: string; doneAt?: string | null; requestedByUid?: string | null; note?: string | null; projectId?: string | null; stepId?: string | null; idempotencyKey: string }): WorkLogEntry {
+    this.user(uid);
+    const title = input.title.trim();
+    if (!title) throw new HubError('VALIDATION', 'Give it a short name, like “Updated the MS066 listing”.');
+    if (title.length > 120) throw new HubError('VALIDATION', 'Please keep the name under 120 characters.');
+    if (input.requestedByUid && !this.state.users.some((u) => u.id === input.requestedByUid)) throw new HubError('VALIDATION', 'We do not know who asked.');
+    return this.idem('small:' + input.idempotencyKey, () => {
+      this.requirePaidShiftForEmployee(uid);
+      let project: Project | null = null; let step: Step | null = null;
+      if (input.stepId) {
+        const r = this.stepFor(uid, input.stepId); step = r.step; project = r.project;
+        if (!this.canWorkOnProject(this.user(uid), project)) throw new PermissionDenied();
+      } else if (input.projectId) {
+        project = this.projectFor(uid, input.projectId);
+        if (!this.canWorkOnProject(this.user(uid), project)) throw new PermissionDenied();
+      }
+      return this.commit(() => {
+        const entry: WorkLogEntry = {
+          id: this.nid('wl'), uid, findingId: '', kind: 'SMALL_TASK', title, loggedAt: this.state.now, deviceId: 'entered by hand', evidenceSummaries: [],
+          doneAt: input.doneAt ?? this.state.now, requestedByUid: input.requestedByUid ?? null, note: input.note?.trim() || null, origin: 'MANUAL', projectId: project?.id ?? null, stepId: step?.id ?? null,
+        };
+        this.state.workLog.push(entry);
+        const asker = input.requestedByUid ? ` Asked by ${this.userName(input.requestedByUid)}.` : '';
+        if (project) {
+          if (step) step.lastActivityAt = entry.doneAt ?? this.state.now;
+          this.addJournal({ projectId: project.id, stepIds: step ? [step.id] : [], type: 'EMPLOYEE_REVIEW', actorUid: uid, title: `${this.userName(uid)} logged work${step ? ' on this step' : ''}`, summary: `${title}.${asker}${entry.note ? ` Note: “${entry.note}”.` : ''} Written by the person, not seen by the computer. The step status was not changed.`, verificationState: 'EMPLOYEE_CONFIRMED' });
+        }
+        this.audit({ entityType: 'workLog', entityId: entry.id, action: 'LOG_SMALL_TASK', before: null, after: { title, projectId: project?.id ?? null, stepId: step?.id ?? null, requestedBy: input.requestedByUid ?? null }, actorUid: uid, actorLabel: this.userName(uid), reason: 'Person logged a small task by hand', evidenceRefs: [], projectId: project?.id ?? null });
+        return entry;
+      });
+    });
+  }
+
   // ------------------------------------------------------------------ "other work" (unmatched work outcomes)
   myWorkLog(uid: string): WorkLogEntry[] {
     this.user(uid);
@@ -1421,7 +1596,12 @@ export class HubServer {
       };
     };
     const rows = unmatched.map(row);
+    const byHand = this.state.workLog.filter((w) => w.origin === 'MANUAL').slice().reverse().map((w) => ({
+      entry: w, byName: this.userName(w.uid), askedBy: w.requestedByUid ? this.userName(w.requestedByUid) : null,
+      linkedTo: w.projectId ? `${this.state.projects.find((p) => p.id === w.projectId)?.key}${w.stepId ? ` · Step ${this.state.steps.find((s) => s.id === w.stepId)?.sortOrder}` : ''}` : null,
+    }));
     return {
+      byHand,
       waiting: rows.filter((r) => r.finding.status === 'PROPOSED'),
       everyday: rows.filter((r) => r.logEntry?.kind === 'EVERYDAY'),
       maybeProject: rows.filter((r) => r.logEntry?.kind === 'MAYBE_PROJECT'),

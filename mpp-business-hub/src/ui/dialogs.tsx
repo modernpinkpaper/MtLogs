@@ -3,8 +3,10 @@ import { Modal } from './common';
 import { newKey, useAct, useMe } from './hubContext';
 import { CHOICE_LABEL } from '../server/hub';
 import type { ResponseChoice } from '../domain/types';
+import { chicagoDate, chicagoToUtc } from '../domain/time';
 
-const CHOICES: ResponseChoice[] = ['COMPLETED', 'IN_PROGRESS', 'NOT_STARTED', 'BLOCKED', 'WAITING', 'NOT_APPLICABLE'];
+const CHOICES: ResponseChoice[] = ['COMPLETED', 'IN_PROGRESS', 'BLOCKED', 'NOT_STARTED', 'NEED_CLARIFICATION'];
+const MORE_CHOICES: ResponseChoice[] = ['WAITING', 'NOT_APPLICABLE'];
 
 export function ChoiceGroup({ value, onChange, name }: { value: ResponseChoice | null; onChange: (c: ResponseChoice) => void; name: string }) {
   return (
@@ -16,6 +18,15 @@ export function ChoiceGroup({ value, onChange, name }: { value: ResponseChoice |
           <label htmlFor={`${name}-${c}`}>{CHOICE_LABEL[c]}</label>
         </div>
       ))}
+      <details className="soft" open={!!value && MORE_CHOICES.includes(value)}>
+        <summary className="small">Other answers</summary>
+        {MORE_CHOICES.map((c) => (
+          <div key={c} className={`choice ${value === c ? 'sel' : ''}`} onClick={() => onChange(c)}>
+            <input type="radio" id={`${name}-${c}`} name={name} checked={value === c} onChange={() => onChange(c)} />
+            <label htmlFor={`${name}-${c}`}>{CHOICE_LABEL[c]}</label>
+          </div>
+        ))}
+      </details>
     </fieldset>
   );
 }
@@ -111,6 +122,56 @@ export function SendUpdateDialog({ projectId, stepId, onClose }: { projectId: st
           {!hub.openShift(uid) && <p className="small" style={{ color: 'var(--warn)' }}>You are not clocked in. Updates are paid work, so please clock in first.</p>}
         </form>
       )}
+    </Modal>
+  );
+}
+
+/**
+ * "Log something I did". For small jobs the computer may never see: Dalia remembers something, tells Erika, Erika updates a listing.
+ * It is the person's own report. It never changes a step's status.
+ */
+export function LogTaskDialog({ onClose }: { onClose: () => void }) {
+  const { hub, uid } = useMe();
+  const act = useAct();
+  const key = useRef(newKey('small'));
+  const [title, setTitle] = useState('');
+  const [when, setWhen] = useState('');
+  const [askedBy, setAskedBy] = useState('');
+  const [target, setTarget] = useState('');
+  const [note, setNote] = useState('');
+  const myProjects = hub.listProjects(uid).filter((p) => p.memberUids.includes(uid));
+  const people = hub.state.users.filter((u) => u.active && u.id !== uid);
+  const clockedIn = !!hub.openShift(uid) || hub.isOwner(uid);
+
+  const save = async () => {
+    const [projectId, stepId] = target.split('|');
+    const doneAt = when ? chicagoToUtc(chicagoDate(hub.now), when) : undefined;
+    const r = await act(() => hub.logSmallTask(uid, { title, doneAt, requestedByUid: askedBy || null, note, projectId: projectId || null, stepId: stepId || null, idempotencyKey: key.current }), 'Saved. Dalia can see it under “Other work”.');
+    if (r) onClose();
+  };
+  return (
+    <Modal title="Log something I did" onClose={onClose}>
+      <form className="stack" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+        <p className="small muted" style={{ margin: 0 }}>Use this for small jobs the computer may not have seen, like a quick fix someone asked you to make. It is your own note. It does not change any step’s status.</p>
+        <div><label htmlFor="lt-title">What did you do?</label><input id="lt-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Example: Updated the listing for “MS066”" autoFocus /></div>
+        <div className="row" style={{ alignItems: 'flex-end' }}>
+          <div style={{ flex: '1 1 200px' }}><label htmlFor="lt-who">Who asked you to? (optional)</label>
+            <select id="lt-who" value={askedBy} onChange={(e) => setAskedBy(e.target.value)}><option value="">Nobody. I did it on my own</option>{people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+          <div style={{ flex: '0 1 150px' }}><label htmlFor="lt-when">About when? (optional)</label><input id="lt-when" type="time" value={when} onChange={(e) => setWhen(e.target.value)} /></div>
+        </div>
+        <div><label htmlFor="lt-for">What was it for?</label>
+          <select id="lt-for" value={target} onChange={(e) => setTarget(e.target.value)}>
+            <option value="">A small task. Not part of a project</option>
+            {myProjects.map((p) => (
+              <optgroup key={p.id} label={`${p.key} — ${p.shortName ?? p.title.slice(0, 40)}`}>
+                <option value={`${p.id}|`}>Part of this project (no particular step)</option>
+                {hub.projectSteps(uid, p.id).filter((s) => !s.parentStepId).map((s) => <option key={s.id} value={`${p.id}|${s.id}`}>Step {s.sortOrder}: {s.title.slice(0, 60)}</option>)}
+              </optgroup>))}
+          </select></div>
+        <div><label htmlFor="lt-note">Anything else? (optional)</label><textarea id="lt-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: Dalia noticed the price was wrong. I fixed it." /></div>
+        {!clockedIn && <p className="small" style={{ color: 'var(--warn)', margin: 0 }}>You are not clocked in. This is paid work, so please clock in first.</p>}
+        <div className="row"><button className="primary" type="submit" disabled={!title.trim()}>Save</button><button type="button" className="quiet" onClick={onClose}>Cancel</button></div>
+      </form>
     </Modal>
   );
 }
