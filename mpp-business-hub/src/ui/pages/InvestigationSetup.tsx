@@ -25,9 +25,29 @@ export function Priorities() {
         <strong>How this works.</strong> You choose what the AI looks into and which data it may read. Nothing is turned on for you. If a source is not connected, the AI says what is missing and does not guess. In this copy the AI runs plain rule-based checks on the data listed below. It makes no AI model call, reaches no store or account, and changes nothing outside this app.
       </div>
       <p className="muted" style={{ margin: 0 }}>{goals.filter((g) => g.enabled).length} goals are on. {ready} can run right now. {sources.filter((s) => s.approved).length} of {sources.length} sources are approved.</p>
+      <LearnedFromYou />
       <GoalsSection goals={goals} sources={sources} checks={checks} />
       <SourcesSection sources={sources} />
     </div>
+  );
+}
+
+/** What Dalia told the AI when she dismissed things. “Never again” rules can be turned off here. */
+function LearnedFromYou() {
+  const { hub, uid } = useMe();
+  const act = useAct();
+  const list = hub.feedbackList(uid);
+  if (list.length === 0) return <div className="card flat small muted" aria-label="What you told the AI">When you dismiss a recommendation from Home, your reason shows up here, so you can see what the AI is learning.</div>;
+  return (
+    <section className="card stack" aria-label="What you told the AI">
+      <h2 style={{ margin: 0 }}>What you told the AI <span className="count">{list.length}</span></h2>
+      <p className="small muted" style={{ margin: 0 }}>Every dismissal you gave a reason for. “Never again” stops that kind of recommendation until you turn it off.</p>
+      <div className="list">{list.slice(0, 12).map((m) => (
+        <div key={m.id} className="lline static">
+          <span className="t">{m.title}<span className="small muted"> · {m.note} · {formatDateTime(m.at)}</span></span>
+          {m.scope === 'NEVER_AGAIN' ? (m.active ? <span className="row" style={{ gap: 6 }}><Chip tone="warn">Never send this kind</Chip><button onClick={() => act(() => hub.undoFeedback(uid, m.id), 'Turned off. The AI may send this kind again.')}>Undo</button></span> : <Chip tone="gray">Rule turned off</Chip>) : <Chip tone="gray">Just that once</Chip>}
+        </div>))}</div>
+    </section>
   );
 }
 

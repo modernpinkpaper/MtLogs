@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAct, useMe } from '../hubContext';
 import { Chip } from '../common';
-import type { Area } from '../../domain/types';
-import { REAL_MODE } from '../../server/realLoader';
 
 export function OwnerTeam({ embedded }: { embedded?: boolean } = {}) {
   const { hub, uid } = useMe();
@@ -12,16 +10,15 @@ export function OwnerTeam({ embedded }: { embedded?: boolean } = {}) {
   const [name, setName] = useState('');
   return (
     <div className="stack">
-      {!embedded && (<div><h1>Team</h1><p className="muted">What a person does today decides what they see. Job titles do not. Made-up names are marked.</p></div>)}
-      <div className="tablewrap card"><table><thead><tr><th>Person</th><th>Job today</th><th>Clock</th><th>Projects</th><th>Reviews waiting</th><th>Notes</th><th></th></tr></thead><tbody>
-        {rows.filter((r) => r.user.role === 'EMPLOYEE').map((r) => (
+      {!embedded && (<div><h1>Team</h1><p className="muted">Everyone can see both project work and their own printing numbers. What the logs show decides what is useful, so nobody has to be set to a job. Made-up names are marked.</p></div>)}
+      <div className="tablewrap card"><table><thead><tr><th>Person</th><th>Clock</th><th>Projects</th><th>Reviews waiting</th><th>Customer service</th><th>Notes</th><th></th></tr></thead><tbody>
+        {rows.filter((r) => r.user.role === 'EMPLOYEE' || r.user.noClock).map((r) => (
           <tr key={r.user.id}>
             <td><strong>{r.user.name}</strong>{!r.user.active && <> <Chip tone="gray">inactive</Chip></>}</td>
-            <td><select aria-label={`Assignment today for ${r.user.name}`} style={{ width: 'auto' }} value={r.areaNow} onChange={(e) => act(() => hub.setAssignmentForToday(uid, r.user.id, e.target.value as Area), 'Assignment updated for today')}>
-              {(['PROJECT', 'PRINT', 'MIXED', 'UNASSIGNED'] as Area[]).map((a) => <option key={a}>{a}</option>)}</select></td>
-            <td>{r.clockedIn ? <Chip tone="ok" glyph="●">in</Chip> : <Chip tone="gray" glyph="○">out</Chip>}</td>
+            <td>{r.user.noClock ? <Chip tone="gray">does not clock in</Chip> : r.clockedIn ? <Chip tone="ok" glyph="●">in</Chip> : <Chip tone="gray" glyph="○">out</Chip>}</td>
             <td className="small">{r.projects.map((p) => <Link key={p.id} to={`/projects/${p.id}`} style={{ marginRight: 6 }}>{p.key}{p.shared ? ' (read-only)' : ''}</Link>)}{!r.projects.length && '—'}</td>
             <td>{r.pendingCards}</td>
+            <td>{r.user.role === 'OWNER' ? <span className="muted small">Owner</span> : <label style={{ fontWeight: 500 }}><input type="checkbox" aria-label={`${r.user.name} can log errors`} checked={!!r.user.permissions?.includes('CUSTOMER_SERVICE')} onChange={(e) => act(() => hub.setCustomerService(uid, r.user.id, e.target.checked), e.target.checked ? `${r.user.name} can now log errors` : 'Permission removed')} /> Can log errors</label>}</td>
             <td className="small muted">{r.user.rosterNote ?? r.user.capabilities.join(', ')}</td>
             <td><button className="quiet" onClick={() => act(() => hub.setUserActive(uid, r.user.id, !r.user.active))}>{r.user.active ? 'Deactivate' : 'Reactivate'}</button></td>
           </tr>))}</tbody></table></div>
@@ -30,8 +27,6 @@ export function OwnerTeam({ embedded }: { embedded?: boolean } = {}) {
         <button type="submit" disabled={!name.trim()}>Add with no jobs</button>
         <span className="small muted">New people start with no access to anything.</span>
       </form>
-      {REAL_MODE && <div className="card info small"><strong>Holiday season:</strong> everyone prints. Set each person’s “Job today” to <em>Mixed</em> to give them both project work and printing for the day. Mo’s physical inventory work cannot be seen by the computer, so it will not show up in his numbers. Use “Log something I did” for that.</div>}
-      <div className="card info small">Carolina’s job can change each day. Set today to <em>Project</em> to give her review cards. Set it to <em>Print</em> to show only her printing numbers. What she can open does not change.</div>
     </div>
   );
 }

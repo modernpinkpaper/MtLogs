@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { newKey, useAct, useMe } from '../hubContext';
-import { formatDateTime, formatDuration, formatTime, minutesBetween } from '../../domain/time';
+import { chicagoDate, formatDateTime, formatDuration, formatTime, minutesBetween } from '../../domain/time';
+import { PersonErrorCard } from '../errorUi';
+import { PrintDayCard } from '../printUi';
 import { Chip, CoverageChip, Modal } from '../common';
 import type { Shift } from '../../domain/types';
 
@@ -16,9 +18,10 @@ export function Clock() {
   const [confirmOut, setConfirmOut] = useState<{ shift: Shift; pending: number } | null>(null);
   const shift = hub.openShift(uid);
   const readiness = hub.reviewReadiness(uid);
-  const area = hub.areaOn(uid);
-  const showPrint = area === 'PRINT' || area === 'MIXED';
-  const print = showPrint ? hub.myPrintStats(uid) : null;
+  const today = chicagoDate(hub.now);
+  const errs = me.role === 'OWNER' ? { toReview: [], snoozed: [] } : hub.errorsForPerson(uid);
+  const printSum = me.role === 'OWNER' ? null : hub.printSummary(uid, uid, today);
+  const showPrint = !!printSum && hub.state.claims !== undefined && (printSum.day.orders > 0 || (!!confirmOut && printSum.hasRecentPrinting));
 
   if (me.role === 'OWNER') return <div><h1>Clock</h1><div className="card">The owner account doesn’t clock in. Switch to an employee to try the paid-time flows.</div></div>;
 
@@ -56,7 +59,13 @@ export function Clock() {
           <div className="stack">
             <div className="row between"><div><Chip tone="ok" glyph="●">Clocked in since {formatDateTime(shift.clockInAt)}</Chip><div className="muted small">Elapsed: {formatDuration(minutesBetween(shift.clockInAt, hub.now))}</div></div></div>
             <h2>Before you leave</h2>
-            {readiness.cards.length > 0 ? (
+            {errs.toReview.length > 0 && (
+              <div className="stack">
+                <div className="card warn small" role="status"><strong>{errs.toReview.length === 1 ? 'There is an error in your log.' : `There are ${errs.toReview.length} errors in your log.`}</strong> Please read {errs.toReview.length === 1 ? 'it' : 'them'} and acknowledge with a note. If you need to leave now, snooze {errs.toReview.length === 1 ? 'it' : 'them'} and you will see {errs.toReview.length === 1 ? 'it' : 'them'} again when you clock in.</div>
+                {errs.toReview.map((e) => <PersonErrorCard key={e.id} e={e} />)}
+              </div>
+            )}
+            {errs.toReview.length > 0 ? null : readiness.cards.length > 0 ? (
               <div className="card pink">
                 <strong>{readiness.cards.length} review card(s) are ready.</strong>{readiness.provisional > 0 && <> <Chip tone="warn" glyph="…">{readiness.provisional} Not final yet</Chip></>}
                 <p className="small">If you review now, you still get paid (about 1 to 3 minutes). Or you can clock out now and review next time.</p>
@@ -81,21 +90,7 @@ export function Clock() {
         )}
       </div>
 
-      {print && (
-        <div className="card">
-          <div className="row between"><h2>Today’s printing numbers</h2>{print.stats.pendingSync && <Chip tone="warn" glyph="…">Still catching up</Chip>}</div>
-          <p className="small muted">{print.stats.coverageNote}</p>
-          <div className="statrow">
-            <div className="stat"><div className="v">{print.stats.completed}</div><div className="l">Completed jobs</div></div>
-            <div className="stat"><div className="v">{print.stats.attempted}</div><div className="l">Attempted</div></div>
-            <div className="stat"><div className="v">{print.stats.sheets}</div><div className="l">Sheets (completed)</div></div>
-            <div className="stat"><div className="v">{print.stats.failed}</div><div className="l">Failed</div></div>
-            <div className="stat"><div className="v">{print.stats.retries}</div><div className="l">Retries</div></div>
-          </div>
-          <p className="small muted">{print.stats.retryRateNote} These are just numbers. They are not a grade and they do not change your pay.</p>
-        </div>
-      )}
-
+      {showPrint && <PrintDayCard forUid={uid} date={today} title="Today’s printing numbers" />}
       {overlay !== null && (
         <Modal title="You clocked in" onClose={() => setOverlay(null)}>
           <div className="stack">

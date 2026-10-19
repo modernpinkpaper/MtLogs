@@ -18,7 +18,8 @@ export function Layout() {
   const owner = me.role === 'OWNER';
   const counts = hub.counts(uid);
   const shift = hub.openShift(uid);
-  const area = hub.areaOn(uid);
+  const canLog = !owner && hub.canLogErrors(uid);
+  const myErrors = owner ? 0 : hub.errorsForPerson(uid).toReview.length;
   const hits = q.trim().length > 1 ? hub.searchAll(uid, q) : [];
   const urgentAi = owner ? hub.inboxSummary(uid).needsDecision : 0;
 
@@ -29,19 +30,20 @@ export function Layout() {
     ? [
         { to: '/home', label: 'Home', icon: '⌂' },
         { to: '/projects', label: 'Projects', icon: '▤', match: ['/projects'] },
-        { to: '/owner/ai', label: 'AI Recommendations', icon: '✦', badge: urgentAi, match: ['/owner/ai'] },
-        { to: '/owner/team', label: 'Team & Print', icon: '☺', match: ['/owner/team', '/owner/print-weekly', '/owner/other-work', '/owner/insights'] },
-        { to: '/notifications', label: 'Notifications', icon: '🔔', badge: counts.unreadNotifications },
+        { to: '/owner/team', label: 'Team & Print', icon: '☺', match: ['/owner/team', '/owner/print-weekly', '/owner/other-work', '/owner/insights', '/print'] },
       ]
     : [
-        { to: '/home', label: 'Home', icon: '⌂', badge: counts.pendingCards + counts.unreadNotifications },
+        { to: '/home', label: 'Home', icon: '⌂', badge: counts.pendingCards + counts.unreadNotifications + myErrors },
         { to: '/projects', label: 'Projects', icon: '▤', match: ['/projects'] },
         { to: '/clock', label: 'Clock', icon: '⏱' },
-        ...(area === 'PRINT' || area === 'MIXED' ? [{ to: '/print/my-stats', label: 'My printing', icon: '🖨' }] : []),
+        { to: '/print/my-stats', label: 'My printing', icon: '🖨' },
+        ...(canLog ? [{ to: '/errors', label: 'Errors', icon: '⚑' }] : []),
       ];
   const more: Item[] = [
     { to: '/review', label: 'Review my work', icon: '✓', badge: counts.pendingCards },
-    ...(owner ? [] : [{ to: '/notifications', label: 'Notifications', icon: '🔔', badge: counts.unreadNotifications }]),
+    { to: '/notifications', label: 'Notifications', icon: '🔔', badge: owner ? 0 : counts.unreadNotifications },
+    ...(owner ? [{ to: '/owner/ai', label: 'AI recommendations (all)', icon: '✦', badge: urgentAi }, { to: '/owner/ai?tab=priorities', label: 'Priorities and sources', icon: '☰' }] : []),
+    ...(owner ? [{ to: '/errors', label: 'Customer service errors', icon: '⚑' }] : []),
     { to: '/journal', label: 'History', icon: '✎' },
     { to: '/resources', label: 'Files', icon: '⧉' },
     ...(owner ? [{ to: '/owner/data-intake', label: 'Computer activity & AI cost', icon: '⇩' }] : []),

@@ -8,6 +8,7 @@ import { chicagoDate } from '../../domain/time';
 import type { Notification, NotificationType } from '../../domain/types';
 
 const LABEL: Record<NotificationType, string> = {
+  ERROR_LOGGED: 'Error logged', ERROR_ACKNOWLEDGED: 'Error acknowledged', ERROR_FOR_YOU: 'Error in your log', ERROR_REMINDER: 'Reminder',
   OWNER_UPDATE_REQUEST: 'Request for an update', FOLLOW_UP: 'Follow-up request', EMPLOYEE_RESPONSE: 'Answer from an employee', NEEDS_VERIFICATION: 'Needs a check in the source system', BLOCKER: 'Needs help',
   MISSING_COVERAGE: 'Some activity is missing', DAILY_DIGEST: 'Daily summary', WEEKLY_PRINT_INSIGHT: 'Weekly printing', DIRECT_MENTION: 'Project note', PROJECT_PAUSED: 'Project paused', PROJECT_RESUMED: 'Project active again',
   RESUME_REMINDER: 'Time to decide', PAUSE_SUGGESTION: 'Suggestion', PILOT_REACHED: 'Test finished', AI_FINDING: 'AI recommendation', PROJECT_ASSIGNED: 'New project', APPROVAL_REQUEST: 'Needs your approval', EMPLOYEE_UPDATE: 'Update from your team',

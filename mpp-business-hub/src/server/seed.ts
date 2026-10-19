@@ -1,3 +1,4 @@
+import { seedPracticeClaims } from './printStats';
 import type {
   ActivityBin, AuditEvent, Notification, Opportunity, PrintJob, PrinterProblemEvent, PrintStation, Project, ProjectEvent,
   Resource, ResourceLink, Settings, Shift, Step, User, WorkAssignment,
@@ -273,6 +274,8 @@ function opportunities(): Opportunity[] {
 
 export function buildSeedState(): HubState {
   const p = printData();
+  const baseShifts = shifts();
+  const practice = seedPracticeClaims(users(), baseShifts, NOW);
   const audit: AuditEvent[] = [];
   const o = ownerSeed();
   return {
@@ -280,7 +283,7 @@ export function buildSeedState(): HubState {
     lastOwnerLookAt: T('2026-10-15', '17:00'),
     users: users(), assignments: assignments(), projects: projects(), steps: steps(), resources: resources(), resourceLinks: links(),
     projectEvents: journal(), auditEvents: audit, archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [],
-    updateRequests: [], updateResponses: [], notifications: notifications(), shifts: shifts(), intakeRuns: [], aiRuns: [],
+    updateRequests: [], updateResponses: [], notifications: notifications(), shifts: [...baseShifts, ...practice.shifts], claims: practice.claims, intakeRuns: [], aiRuns: [],
     printJobs: p.jobs, printerProblems: p.problems, activityBins: p.bins, stations: STATIONS, opportunities: opportunities(),
     settings: settings(), idempotency: {}, counters: {}, printPendingSync: {}, deviceLastSeen: {}, seenInjection: false, workLog: [], workingVersions: [],
     ownerFindings: o.findings, ownerModels: o.models, outcomes: [], goals: o.goals, sources: o.sources, workspaces: {}, drive: { folders: [], shortcuts: [], failAfterOps: null, opCount: 0 },

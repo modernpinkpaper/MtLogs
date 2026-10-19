@@ -12,7 +12,7 @@ const ok = (c, m) => { if (!c) errors.push('CHECK FAILED: ' + m); };
 const U = 'http://localhost:4173/#';
 await p.goto(U + '/login');
 await p.getByRole('button', { name: /Dalia/ }).first().click();
-await p.waitForSelector('text=Start here');
+await p.waitForSelector('h1:has-text("Home")');
 await shot('s1-owner');
 // 1. Dalia asks for an update on a step
 await p.goto(U + '/projects/prj-012/steps/s-012-3');

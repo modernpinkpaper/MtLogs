@@ -4,7 +4,7 @@ const b = await chromium.launch(); const p = await b.newPage({ viewport: { width
 let bad = 0; const ok = (c, m) => { console.log((c ? '  ok  ' : 'CHECK FAILED: ') + m); if (!c) bad++; };
 const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 await p.goto(U + '/login'); await p.evaluate(() => localStorage.clear()); await p.reload();
-await p.getByRole('button', { name: /Erika/ }).first().click(); await p.waitForSelector('text=Your projects');
+await p.getByRole('button', { name: /Erika/ }).first().click(); await p.waitForSelector('h2:has-text("Notifications")');
 ok(await p.locator('nav >> text=Home').count() > 0, 'first page is called Home');
 await p.goto(U + '/projects/prj-070/steps/s-070-2'); await p.waitForSelector('text=What to do');
 ok(await p.locator('text=Who can see it').count() === 0 && await p.locator('text=How we count progress').count() === 0, 'removed "Who can see it" and "How we count progress"');

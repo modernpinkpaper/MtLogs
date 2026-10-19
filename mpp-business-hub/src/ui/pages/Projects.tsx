@@ -63,6 +63,7 @@ export function Projects() {
     return { p, steps, status: projectWorkStatus(p, steps), attention, next: nextStep(steps, p), last: hub.lastConfirmed(uid, p.id), needsResponse: hasReq, verifyPending: steps.some((s) => s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) };
   });
 
+  const newest = rows.map((r) => r.last?.at ?? '').filter(Boolean).sort().pop();
   const today = hub.now;
   const filtered = rows.filter((r) => {
     if (q && !`${r.p.key} ${r.p.title} ${r.steps.map((s) => s.title).join(' ')}`.toLowerCase().includes(q.toLowerCase())) return false;
@@ -155,12 +156,12 @@ export function Projects() {
         <section key={g.id} aria-label={g.title}>
           {g.collapsed ? (
             <details><summary className="group-title" style={{ cursor: 'pointer' }}>{g.title} <span className="count">{g.rows.length}</span></summary>
-              <div className="stack">{g.rows.map((r) => <PCard key={r.p.id} r={r} onAsk={setReqFor} onResume={setResumeFor} />)}</div></details>
+              <div className="stack">{g.rows.map((r) => <PCard key={r.p.id} r={r} mostRecent={!!newest && r.last?.at === newest} onAsk={setReqFor} onResume={setResumeFor} />)}</div></details>
           ) : (
             <>
               <h2 className="group-title">{g.title} <span className="count">{g.rows.length}</span></h2>
               {g.hint && <p className="small muted" style={{ margin: '-.3rem 0 .5rem' }}>{g.hint}</p>}
-              {g.rows.length === 0 ? <p className="muted small">Nothing here right now.</p> : <div className="stack">{g.rows.map((r) => <PCard key={r.p.id} r={r} onAsk={setReqFor} onResume={setResumeFor} />)}</div>}
+              {g.rows.length === 0 ? <p className="muted small">Nothing here right now.</p> : <div className="stack">{g.rows.map((r) => <PCard key={r.p.id} r={r} mostRecent={!!newest && r.last?.at === newest} onAsk={setReqFor} onResume={setResumeFor} />)}</div>}
             </>
           )}
         </section>

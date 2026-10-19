@@ -1,39 +1,47 @@
 import { useState } from 'react';
 import { useMe } from '../hubContext';
 import { Chip } from '../common';
-import { formatDuration, formatTime } from '../../domain/time';
+import { PrintDayCard, money } from '../printUi';
+import { ErrorFacts } from '../errorUi';
+import { addMinutes, chicagoDate, chicagoToUtc, formatTime } from '../../domain/time';
 
+/** Everyone has this page. It matters most for the people who print, and it is just as easy for the people who print twice a year. */
 export function PrintMyStats() {
   const { hub, uid, me } = useMe();
-  const [date, setDate] = useState('2026-10-16');
+  const today = chicagoDate(hub.now);
+  const days = Array.from({ length: 10 }, (_, i) => chicagoDate(addMinutes(chicagoToUtc(today, '12:00'), -i * 1440)));
+  const [date, setDate] = useState(today);
   const [who, setWho] = useState(uid);
+  const s = hub.printSummary(uid, who, date);
   const view = hub.myPrintStats(uid, who, date);
-  const s = view.stats;
-  const printUsers = hub.listUsers(uid).filter((u) => hub.state.stations.some((st) => st.defaultUid === u.id));
+  const people = hub.listUsers(uid).filter((u) => u.active && (u.role === 'EMPLOYEE' || u.noClock));
+  const errors = hub.listErrors(uid).filter((e) => e.uid === who && e.ownerAck).slice(0, 8);
+  const pct = (n: number | null) => (n == null ? '—' : `${n.toFixed(2)}%`);
   return (
     <div className="stack">
-      <div className="row between"><div><h1>My printing</h1><p className="muted">Simple numbers for the day. You do not need an AI review for normal printing.</p></div></div>
+      <div><h1>{who === uid ? 'My printing' : `${hub.userName(who)}’s printing`}</h1><p className="muted" style={{ margin: 0 }}>Your day, and how the last 30, 90 and 180 days look. These are numbers. They are not a grade.</p></div>
       <div className="row">
-        <label className="row" style={{ margin: 0 }}>Day <select style={{ width: 'auto' }} value={date} onChange={(e) => setDate(e.target.value)}>{['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'].map((d) => <option key={d}>{d}</option>)}</select></label>
-        {me.role === 'OWNER' && <label className="row" style={{ margin: 0 }}>Person <select style={{ width: 'auto' }} value={who} onChange={(e) => setWho(e.target.value)}>{printUsers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>}
-        <Chip tone="gray">Your job that day: {view.area.toLowerCase()}</Chip>
-        {s.pendingSync && <Chip tone="warn" glyph="…">Still catching up</Chip>}
-        <Chip tone={s.coverage === 'COMPLETE' ? 'ok' : s.coverage === 'PARTIAL' ? 'warn' : 'gray'} glyph={s.coverage === 'COMPLETE' ? '✔' : '!'}>Data: {s.coverage === 'COMPLETE' ? 'all here' : s.coverage === 'PARTIAL' ? 'some missing' : 'none yet'}</Chip>
+        <label className="row" style={{ margin: 0 }}>Day <select style={{ width: 'auto' }} value={date} onChange={(e) => setDate(e.target.value)}>{days.map((d) => <option key={d}>{d}</option>)}</select></label>
+        {me.role === 'OWNER' && <label className="row" style={{ margin: 0 }}>Person <select style={{ width: 'auto' }} value={who} onChange={(e) => setWho(e.target.value)}>{people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>}
+        {!s.hasRecentPrinting && s.hasClaims && <Chip tone="gray">No printing in the last 30 days</Chip>}
       </div>
-      <div className={`card ${s.coverage === 'COMPLETE' ? 'ok' : 'warn'}`}>{s.coverageNote}</div>
-      <div className="card">
-        <div className="statrow">
-          <div className="stat"><div className="v">{s.completed}</div><div className="l">Completed jobs</div></div>
-          <div className="stat"><div className="v">{s.attempted}</div><div className="l">Attempted jobs</div></div>
-          <div className="stat"><div className="v">{s.sheets}</div><div className="l">Sheets printed</div></div>
-          <div className="stat"><div className="v">{formatDuration(s.printMinutes)}</div><div className="l">Time printing</div></div>
-          <div className="stat"><div className="v">{s.failed}</div><div className="l">Failed</div></div>
-          <div className="stat"><div className="v">{s.retries}</div><div className="l">Retries</div></div>
-          <div className="stat"><div className="v">{s.awaitingResult}</div><div className="l">Still going</div></div>
-        </div>
-        <p className="small muted">{s.retryRateNote} {view.station ? `Printers: ${view.station.printers.join(', ')}.` : 'No print station is assigned.'} These numbers come from the printer. They are not a grade and they do not change pay.</p>
+
+      <PrintDayCard forUid={who} date={date} title={date === today ? 'Today' : date} />
+
+      <div className="card stack">
+        <h2 style={{ margin: 0 }}>Over time</h2>
+        {!hub.state.claims ? <p className="small muted" style={{ margin: 0 }}>{s.dataNote}</p> : (
+          <div className="tablewrap"><table><thead><tr><th>Last</th><th>Orders</th><th>Errors</th><th>Error rate</th><th>Average revenue per day</th><th>Revenue per hour</th></tr></thead><tbody>
+            {s.windows.map((w) => <tr key={w.days}><td>{w.days} days</td><td>{w.orders}</td><td>{w.errors}</td><td>{pct(w.errorRatePct)}</td><td>{money(w.avgDailyRevenue)}</td><td>{money(w.revenuePerHour)}</td></tr>)}</tbody></table></div>
+        )}
+        <p className="small muted" style={{ margin: 0 }}>Error rate = errors ÷ orders. Revenue per hour = revenue ÷ clocked hours, after taking out project time you confirmed.</p>
       </div>
-      <div className="card"><h2>Printer problems</h2>
+
+      <div className="card stack"><h2 style={{ margin: 0 }}>Errors in the log</h2>
+        {errors.length === 0 ? <span className="muted">None.</span> : errors.map((e) => <div key={e.id} className="card flat"><ErrorFacts e={e} />{e.personAck && <div className="small"><strong>Note:</strong> {e.personAck.note}</div>}</div>)}
+      </div>
+
+      <div className="card"><h2>Printer problems <span className="small muted" style={{ fontWeight: 400 }}>(from MT Logs)</span></h2>
         {view.problemEpisodes.length === 0 ? <span className="muted">No problems recorded.</span> : view.problemEpisodes.map((e) => (
           <div key={e.id} className="small">{e.printer}: {e.kind.toLowerCase()} from {formatTime(e.startedAt)}{e.endedAt ? ` to ${formatTime(e.endedAt)}` : ' (still open)'} — <strong>1 problem</strong> (the printer said so {e.snapshotCount} times)</div>))}
       </div>

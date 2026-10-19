@@ -1,3 +1,4 @@
+import { isMuted } from './ownerHome';
 import type { HubServer } from './hub';
 import type { BusinessGoal, FindingEvidence, IntelligenceSource, InvestigationBucket, OwnerFinding, PlanStepDraft, Project, ProposedPlan, Step } from '../domain/types';
 import { CHECK_LIBRARY, SOURCE_CATALOG } from '../domain/catalog';
@@ -367,6 +368,8 @@ export function runInvestigations(hub: HubServer, uid: string) {
 
 function upsert(hub: HubServer, g: BusinessGoal, cand: Cand, srcs: IntelligenceSource[], out: { created: string[]; updated: string[]; reopened: string[] }) {
   const st = hub.state; const now = st.now;
+  // Dalia said “don’t send me this kind”. Nothing is created or reopened until she turns that rule off.
+  if (isMuted(hub, cand.key.split(':')[0], g.id)) return;
   const existing = st.ownerFindings.find((f) => f.dedupeKey === cand.key);
   if (existing) {
     const closed = ['DISMISSED', 'ARCHIVED', 'SNOOZED', 'INFORMATIONAL'].includes(existing.status);

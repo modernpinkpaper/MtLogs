@@ -31,7 +31,7 @@ function realSources(now: string, logs?: RealLogs | null, sales?: HubState['sale
 }
 export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string, logs?: RealLogs | null, findings?: RealFinding[] | null, sales?: HubState['salesDaily'] | null): HubState {
   const now = ts(nowLocal)!;
-  const users: User[] = t.people.map(p => ({ id: p.id, name: p.name, role: p.role, area: p.area, active: true, capabilities: [], primaryDeviceId: p.device, rosterNote: p.note }));
+  const users: User[] = t.people.map(p => ({ id: p.id, name: p.name, role: p.role, area: p.area, active: true, capabilities: [], primaryDeviceId: p.device, rosterNote: p.note, ...(p.name === 'Mo' ? { role: 'OWNER' as const, noClock: true, rosterNote: 'Owner. Does not clock in. Prints part-time and does physical inventory work.' } : {}) }));
   const projects: Project[] = [];
   const steps: Step[] = [];
   const journal: ProjectEvent[] = [];
@@ -61,7 +61,7 @@ export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string,
   }
   return {
     ...demo, now, lastOwnerLookAt: chicagoToUtc('2026-10-16', '17:00'), users, assignments: [], projects, steps, resources: [], resourceLinks: [], projectEvents: journal,
-    auditEvents: [], archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [], updateRequests: [], updateResponses: [], notifications: [], shifts: [],
+    auditEvents: [], archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [], updateRequests: [], updateResponses: [], notifications: [], shifts: [], claims: undefined, dayNotes: undefined, errorLogs: undefined, aiFeedback: undefined, errorHintDismissals: undefined,
     printJobs: logs?.printJobs.map(j => ({ ...j, uid: t.people.find(p => p.device === j.deviceId)?.id ?? null })) ?? [], printerProblems: logs?.printerProblems ?? [], activityBins: logs?.activityBins ?? [],
     stations: Object.entries(logs?.printers ?? {}).map(([deviceId, printers]): PrintStation => ({ deviceId, printers, defaultUid: t.people.find(p => p.device === deviceId)?.id ?? null })), opportunities: [], settings: settings(), workLog: [], workingVersions: [],
     sources: realSources(now, logs, sales), goals: realGoals(now),

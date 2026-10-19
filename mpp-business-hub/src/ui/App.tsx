@@ -1,3 +1,4 @@
+import { Errors } from './pages/Errors';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useSession } from './hubContext';
 import { Layout } from './Layout';
@@ -39,6 +40,7 @@ export function App() {
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/resources" element={<Resources />} />
+            <Route path="/errors" element={<Errors />} />
             <Route path="/print/my-stats" element={<PrintMyStats />} />
             {/* Owner screens. Old addresses still work and send you to the new place. */}
             <Route path="/owner/overview" element={<Navigate to="/home" replace />} />

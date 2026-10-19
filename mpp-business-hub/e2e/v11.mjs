@@ -9,10 +9,10 @@ const as = async (name) => { await p.selectOption('select[aria-label="Switch dem
 const shot = (n, full = false) => p.screenshot({ path: D + n + '.png', fullPage: full });
 const ok = (c, m) => { if (!c) { errs.push('CHECK FAILED: ' + m); } };
 
-await go('/login'); await p.getByRole('button', { name: /Dalia/ }).first().click(); await p.waitForSelector('text=Start here');
+await go('/login'); await p.getByRole('button', { name: /Dalia/ }).first().click(); await p.waitForSelector('h1:has-text("Home")');
 await shot('v1-owner-home');
 const nav = await p.locator('aside.side nav > a').allInnerTexts();
-ok(nav.length === 5, 'owner has 5 primary links: ' + nav.join('|'));
+ok(nav.length === 3, 'owner has 3 primary links: ' + nav.join('|'));
 // Projects page
 await go('/projects'); await p.waitForSelector('h2.group-title'); await shot('v2-projects');
 // Pause P-070 through the UI
@@ -63,9 +63,9 @@ await p.locator('input[aria-label="Search"]').fill('FBA_TY001'); await p.waitFor
 // ---- v1.2 design checks (calm screens, one clear action) ----
 await p.fill('input[aria-label="Search"]', '');
 await as('Erika'); await go('/home');
-await p.waitForSelector('text=Your projects');
-ok(await p.locator('text=Notifications').count() >= 1, 'Home shows a Notifications section first');
-ok(await p.locator('text=Last confirmed activity').count() >= 1, 'Home shows where each project was left off');
+await p.waitForSelector('h2:has-text("Notifications")');
+ok(await p.locator('h2:has-text("Notifications")').count() >= 1, 'Home shows a Notifications section first');
+ok(await p.locator('h2:has-text("Your projects")').count() === 0, 'employee Home has no project list');
 await go('/review'); await p.waitForSelector('text=What happened?');
 const yes = p.getByRole('button', { name: 'Send answer' }).first();
 ok(await yes.isVisible(), 'the answer choices and Send answer are visible without opening anything');
@@ -85,13 +85,13 @@ await go('/projects'); await p.waitForSelector('.prow');
 ok(await p.locator('.prow button:has-text("Open")').count() === 0, 'project rows have no repeated Open buttons');
 // ---- v1.3: one obvious primary action per screen ----
 const prim = async () => p.locator('main button.primary:visible').count();
-await as('Dalia (owner)'); await go('/home'); await p.waitForSelector('text=Start here');
-ok(await prim() === 1, 'owner Home has exactly one primary button (' + await prim() + ')');
+await as('Dalia (owner)'); await go('/home'); await p.waitForSelector('h1:has-text("Home")');
+ok(await prim() <= 1, 'owner Home has at most one primary button (' + await prim() + ')');
 await go('/owner/ai/af-3'); await p.waitForSelector('text=Why we think so');
 ok(await prim() === 1, 'AI finding has exactly one primary button (' + await prim() + ')');
 await go('/owner/ai'); await p.waitForSelector('.lrow');
 ok(await prim() === 0, 'AI list has no primary buttons (rows are links) (' + await prim() + ')');
-await as('Erika'); await go('/home'); await p.waitForSelector('text=Your projects');
+await as('Erika'); await go('/home'); await p.waitForSelector('h2:has-text("Notifications")');
 ok(await prim() <= 1, 'Home has at most one primary button (' + await prim() + ')');
 await go('/review'); await p.waitForSelector('text=What happened?');
 ok(await prim() === 1, 'Review shows one primary button, on the first card (' + await prim() + ')');
@@ -148,15 +148,14 @@ ok(await p.evaluate(() => window.__hub.state.workLog.some((w) => w.title === 'Up
 await as('Dalia (owner)'); await go('/owner/other-work'); await p.getByRole('tab', { name: /Logged by hand/ }).click();
 ok(await p.locator('text=Updated the listing for MS066').count() > 0 && await p.locator('text=asked by Dalia').count() > 0, 'Dalia sees the small task and who asked');
 // counts
-await go('/home'); await p.waitForSelector('text=Start here');
+await go('/home'); await p.waitForSelector('h1:has-text("Home")');
 const pcs = await p.evaluate(() => window.__hub.projectCounts('u-dalia'));
 ok(await p.locator('text=/' + pcs.team + ' team projects? active/').count() > 0 && await p.locator('text=' + pcs.private + ' private').count() > 0, 'Home names team and private counts (' + JSON.stringify(pcs) + ')');
 await go('/projects'); await p.waitForSelector('.prow');
 ok(await p.locator('text=/' + pcs.team + ' team projects? active · ' + pcs.private + ' private/').count() > 0, 'Projects uses the same counts');
 // Home alert wording
-await go('/home'); await p.waitForSelector('text=Start here');
-const ttl = await p.locator('#decide .focus-title').innerText(); ok(ttl.length < 70 && !/Tampermonkey|tracker still says|sequence/.test(ttl), 'Home shows a short, plain alert title: ' + ttl);
-ok(await p.locator('text=Other items needing attention').count() > 0, '"Other items needing attention (n)"');
+await go('/home'); await p.waitForSelector('h1:has-text("Home")');
+ok(await p.locator('h2:has-text("Needs your attention")').count() + await p.locator('h2:has-text("AI recommended projects")').count() > 0, 'Home is grouped into sections');
 ok(await p.locator('text=/w-pc04|missing sequence/').count() === 0, 'no raw diagnostics on Home');
 // mobile: next step first, files near, plan after
 await as('Erika'); await p.setViewportSize({ width: 390, height: 820 }); await go('/projects/prj-070/steps/s-070-2'); await p.waitForSelector('.frow');

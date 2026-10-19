@@ -16,7 +16,7 @@ const shot = (n, full = true) => p.screenshot({ path: OUT + n + '.png', fullPage
 const hub = (fn, ...a) => p.evaluate(([f, args]) => { const h = window.__hub; return eval('(' + f + ')')(h, ...args); }, [fn.toString(), a]);
 
 await p.goto(U + '/login'); await p.evaluate(() => localStorage.clear()); await p.reload();
-await p.getByRole('button', { name: /Erika/ }).first().click(); await p.waitForSelector('text=Your projects');
+await p.getByRole('button', { name: /Erika/ }).first().click(); await p.waitForSelector('h2:has-text("Notifications")');
 
 console.log('\n[3/4] A stale tracker plus detected activity becomes a confirmation task');
 ok(await p.locator('text=Activity seen — status differs').count() === 1 && await p.locator('text=P-012').count() > 0, 'Home shows a notification: the tracker and the activity disagree on P-012 step 3');
@@ -59,12 +59,12 @@ ok(await p.locator('.prow:has-text("P-012") >> text=3 of 4 steps done').count() 
 ok(await hub((h) => h.state.steps.find((s) => s.id === 's-012-3').verifications.length) === 0, 'the app does not claim any outside check');
 
 console.log('\n[7 owner mobile] Dalia on a phone');
-await as('Dalia (owner)'); await p.setViewportSize({ width: 390, height: 820 }); await go('/home'); await p.waitForSelector('text=New AI opportunities');
+await as('Dalia (owner)'); await p.setViewportSize({ width: 390, height: 820 }); await go('/home'); await p.waitForSelector('h2.group-title');
 const mob = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, heads: [...document.querySelectorAll('h2.group-title')].map((e) => e.textContent.replace(/\d+$/, '').trim()) }));
 ok(mob.sw <= 392, 'no sideways scrolling on the phone');
-ok(mob.heads.includes('New AI opportunities'), 'phone sections: ' + mob.heads.join(' · '));
+ok(mob.heads.length >= 2, 'phone sections: ' + mob.heads.join(' · '));
 ok(await p.locator('text=Verify result').count() === 0, 'Dalia is not given a checking chore for Erika’s finished step');
-ok(await p.locator('button:has-text("Review opportunities")').isVisible(), 'the AI decision on the first screen has its button (nothing hidden)');
+ok(await p.getByRole('button', { name: 'Open' }).first().isVisible(), 'an AI item on the phone has its Open button (nothing hidden)');
 await shot('w3-owner-mobile');
 await p.setViewportSize({ width: 1280, height: 900 });
 

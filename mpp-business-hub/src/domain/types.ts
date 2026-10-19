@@ -14,6 +14,10 @@ export interface User {
   capabilities: string[];
   primaryDeviceId: string | null;
   rosterNote?: string;
+  /** v1.9: extra permissions Dalia can give. Customer service may log errors for team members. */
+  permissions?: 'CUSTOMER_SERVICE'[];
+  /** An owner who does not clock in (for example Moe). */
+  noClock?: boolean;
 }
 
 export interface WorkAssignment {
@@ -523,7 +527,8 @@ export interface UpdateResponse {
 export type NotificationType =
   | 'OWNER_UPDATE_REQUEST' | 'EMPLOYEE_RESPONSE' | 'NEEDS_VERIFICATION' | 'BLOCKER' | 'MISSING_COVERAGE'
   | 'DAILY_DIGEST' | 'WEEKLY_PRINT_INSIGHT' | 'DIRECT_MENTION' | 'FOLLOW_UP'
-  | 'PROJECT_PAUSED' | 'PROJECT_RESUMED' | 'RESUME_REMINDER' | 'PAUSE_SUGGESTION' | 'PILOT_REACHED' | 'AI_FINDING' | 'PROJECT_ASSIGNED' | 'APPROVAL_REQUEST' | 'EMPLOYEE_UPDATE';
+  | 'PROJECT_PAUSED' | 'PROJECT_RESUMED' | 'RESUME_REMINDER' | 'PAUSE_SUGGESTION' | 'PILOT_REACHED' | 'AI_FINDING' | 'PROJECT_ASSIGNED' | 'APPROVAL_REQUEST' | 'EMPLOYEE_UPDATE'
+  | 'ERROR_LOGGED' | 'ERROR_ACKNOWLEDGED' | 'ERROR_FOR_YOU' | 'ERROR_REMINDER';
 export type NotificationState = 'CREATED' | 'DELIVERED' | 'READ' | 'ACKNOWLEDGED' | 'DISMISSED';
 
 export interface Notification {
@@ -807,3 +812,33 @@ export interface ProjectWorkspace {
   log: { at: string; op: string; detail: string }[]; // always labeled simulated in the UI
 }
 export interface DriveSim { folders: WorkspaceFolder[]; shortcuts: WorkspaceShortcut[]; failAfterOps: number | null; opCount: number }
+
+// ---------- v1.9: owner feedback on AI findings ----------
+/** What Dalia told the AI when she dismissed something. NEVER_AGAIN stops that kind of finding for that goal until she undoes it. */
+export interface AiFeedback {
+  id: string; findingId: string; findingCode: string; checkKey: string; goalId: string | null; kind: FindingKind; area: string; title: string;
+  scope: 'THIS_TIME' | 'NEVER_AGAIN'; note: string; at: string; active: boolean;
+}
+
+// ---------- v1.9: print orders (claims) and errors ----------
+/** One claimed order from the print log. A claim is "what the order asked for", never how many tries it took. */
+export interface PrintClaim {
+  id: string; orderId: string; uid: string; claimedAt: string; buyer: string;
+  items: { sku: string; quantity: number; subtotal: number; prints: number }[];
+  subtotal: number; prints: number;
+}
+export interface DayNote { id: string; uid: string; date: string; text: string; at: string }
+
+/** A customer service error entry. The person sees it only after an owner has acknowledged it. */
+export interface ErrorLog {
+  id: string; uid: string; occurredOn: string; links: string[]; description: string;
+  createdByUid: string; createdAt: string;
+  /** Owner review. For an owner who is the subject (like Moe) one acknowledgement covers both the review and their own. */
+  ownerAck: { byUid: string; at: string; note: string; alsoForSubject: boolean } | null;
+  personAck: { at: string; note: string; byUid: string } | null;
+  /** Hidden from the clock-out check until this time (next clock in). Never a dismissal. */
+  snoozedUntilClockIn: boolean;
+  /** Edits made later are kept. */
+  history: { at: string; byUid: string; what: string }[];
+}
+export interface ErrorHintDismissal { key: string; uid: string; at: string }

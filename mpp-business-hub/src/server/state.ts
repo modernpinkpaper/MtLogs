@@ -1,4 +1,5 @@
 import type {
+  AiFeedback, PrintClaim, DayNote, ErrorLog, ErrorHintDismissal,
   ActivityBin, AiRun, AuditEvent, Finding, IntakeRun, MtLogEvent, NormalizedEvent, Notification, Opportunity, PrintJob,
   PrinterProblemEvent, PrintStation, Project, ProjectEvent, Resource, ResourceLink, ReviewCard, ReviewDecision, Settings,
   Shift, SourceArchive, BusinessGoal, IntelligenceSource, OpportunityModel, OutcomeMeasurement, OwnerFinding, ProjectWorkspace, DriveSim, Step, UpdateRequest, UpdateResponse, User, WorkAssignment, WorkEpisode, WorkLogEntry,
@@ -55,6 +56,12 @@ export interface HubState {
   drive: DriveSim;
   /** OWNER-ONLY. Daily store totals (dollars, orders, units) when a sales source is connected. Never read by employee-side methods. */
   salesDaily?: { d: string; amount: number; orders: number; units: number }[];
+  /** v1.9. Optional so older saved states keep loading. */
+  aiFeedback?: AiFeedback[];
+  claims?: PrintClaim[];
+  dayNotes?: DayNote[];
+  errorLogs?: ErrorLog[];
+  errorHintDismissals?: ErrorHintDismissal[];
   lastFindingsLookAt: string;
   lastScanAt: string | null;
   scanCount: number;

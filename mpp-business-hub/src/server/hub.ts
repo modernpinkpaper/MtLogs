@@ -22,6 +22,9 @@ import * as PL from './pilot';
 import * as MG from './manager';
 import * as INV from './investigation';
 import * as SW from './stepWork';
+import * as OH from './ownerHome';
+import * as EL from './errorLog';
+import * as PRS from './printStats';
 import { CHECK_LIBRARY } from '../domain/catalog';
 import { stepLabels } from '../domain/stepLabels';
 import * as DR from './drive';
@@ -458,6 +461,7 @@ export class HubServer {
       else {
         shift = { id: this.nid('sh'), uid, clockInAt: this.state.now, clockOutAt: null, reviewSessions: [], clockInKey: idempotencyKey, clockOutKey: null };
         this.state.shifts.push(shift);
+        EL.clearErrorSnoozes(this, uid);
       }
       return { shift, alreadyClockedIn, outstanding: this.outstandingCards(uid) };
     });
@@ -1899,6 +1903,25 @@ export class HubServer {
   // ---- v1.8 day-to-day work on a project (people on the project)
   addSteps(uid: string, projectId: string, count: number, parentStepId: string | null = null) { return SW.addSteps(this, uid, projectId, count, parentStepId); }
   renameStep(uid: string, stepId: string, title: string) { return SW.renameStep(this, uid, stepId, title); }
+  // ---- v1.9 ----
+  ownerHome(uid: string) { return OH.ownerHome(this, uid); }
+  dismissWithFeedback(uid: string, findingId: string, input: Parameters<typeof OH.dismissWithFeedback>[3]) { return OH.dismissWithFeedback(this, uid, findingId, input); }
+  feedbackList(uid: string) { return OH.feedbackList(this, uid); }
+  undoFeedback(uid: string, id: string) { return OH.undoFeedback(this, uid, id); }
+  setCustomerService(uid: string, targetUid: string, on: boolean) { return EL.setCustomerService(this, uid, targetUid, on); }
+  canLogErrors(uid: string) { return EL.canLogErrors(this, uid); }
+  logError(uid: string, input: EL.ErrorInput) { return EL.logError(this, uid, input); }
+  editError(uid: string, id: string, patch: Parameters<typeof EL.editError>[3]) { return EL.editError(this, uid, id, patch); }
+  ownerAcknowledgeError(uid: string, id: string, note = '') { return EL.ownerAcknowledge(this, uid, id, note); }
+  personAcknowledgeError(uid: string, id: string, note: string) { return EL.personAcknowledge(this, uid, id, note); }
+  snoozeError(uid: string, id: string) { return EL.snoozeError(this, uid, id); }
+  listErrors(uid: string, f: { mine?: boolean } = {}) { return EL.listErrors(this, uid, f); }
+  errorsForPerson(uid: string) { return EL.errorsForPerson(this, uid); }
+  errorPeople(uid: string) { return EL.errorPeople(this, uid); }
+  errorHints(uid: string) { return EL.errorHints(this, uid); }
+  dismissErrorHint(uid: string, key: string) { return EL.dismissErrorHint(this, uid, key); }
+  printSummary(uid: string, forUid: string = uid, ymd?: string) { return PRS.printSummary(this, uid, forUid, ymd); }
+  addDayNote(uid: string, ymd: string, text: string) { return PRS.addDayNote(this, uid, ymd, text); }
   setStepDescription(uid: string, stepId: string, text: string) { return SW.setStepDescription(this, uid, stepId, text); }
   renameProject(uid: string, projectId: string, title: string) { return SW.renameProject(this, uid, projectId, title); }
   reorderSteps(uid: string, projectId: string, parentStepId: string | null, orderedIds: string[]) { return SW.reorderSteps(this, uid, projectId, parentStepId, orderedIds); }
