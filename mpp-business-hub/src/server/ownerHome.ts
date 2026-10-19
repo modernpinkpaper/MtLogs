@@ -16,6 +16,15 @@ export function sectionOf(f: OwnerFinding): HomeSection {
   return f.plan ? 'AI_PROJECT' : 'OTHER';
 }
 
+export type AiSub = 'GROWTH' | 'SAVER_PC' | 'SAVER_OTHER' | 'OTHER';
+/** Growth = brings in money. Savers cut cost or time: PC based (a person repeating computer work, a script could help) or not PC based (printers, paper, cleaning, things the computer cannot see). */
+export function subOf(f: OwnerFinding): AiSub {
+  const sec = sectionOf(f);
+  if (sec === 'OPPORTUNITY') return 'GROWTH';
+  if (sec === 'OPTIMIZATION') return f.area === 'Production' || /printer|toner|ink|jam|inventory|paper|clean|envelope/i.test(`${f.title} ${f.summary}`) ? 'SAVER_OTHER' : 'SAVER_PC';
+  return 'OTHER';
+}
+
 export const checkKeyOf = (f: OwnerFinding) => f.dedupeKey.split(':')[0];
 const fb = (hub: HubServer): AiFeedback[] => (hub.state.aiFeedback ??= []);
 
@@ -30,9 +39,13 @@ export function ownerHome(hub: HubServer, uid: string) {
   const item = (f: OwnerFinding): HomeFindingItem => ({ id: f.id, code: f.code, title: f.title, summary: f.summary, urgent: f.urgency === 'URGENT', impact: f.impact?.text ?? '', isSample: !!f.isSample, link: `/owner/ai/${f.id}`, discoveredAt: f.discoveredAt });
   const by = (s: HomeSection) => open.filter((f) => sectionOf(f) === s).sort((a, b) => (a.urgency === 'URGENT' ? 0 : 1) - (b.urgency === 'URGENT' ? 0 : 1) || b.discoveredAt.localeCompare(a.discoveredAt)).map(item);
   const unassigned = st.projects.filter((p) => p.origin === 'AI_RECOMMENDATION' && !p.memberUids.length && !p.closedAt && !p.canceledAt).map((p) => ({ id: p.id, key: p.key, title: p.title }));
+  const sub = (k: AiSub) => open.filter((f) => subOf(f) === k).sort((a, b) => (a.urgency === 'URGENT' ? 0 : 1) - (b.urgency === 'URGENT' ? 0 : 1) || b.discoveredAt.localeCompare(a.discoveredAt)).map(item);
+  const covered: NotificationType[] = [...TEAM_TYPES, 'AI_FINDING', 'ERROR_LOGGED', 'ERROR_ACKNOWLEDGED', 'OWNER_UPDATE_REQUEST', 'FOLLOW_UP'];
+  const otherAlerts = st.notifications.filter((n) => n.recipientUid === uid && !covered.includes(n.type) && !n.acknowledgedAt && n.state !== 'DISMISSED' && (!n.snoozedUntil || n.snoozedUntil <= st.now)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const team = st.notifications.filter((n) => n.recipientUid === uid && TEAM_TYPES.includes(n.type) && !n.acknowledgedAt && n.state !== 'DISMISSED' && (!n.snoozedUntil || n.snoozedUntil <= st.now)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const alerts = st.notifications.filter((n) => n.recipientUid === uid && ['ERROR_ACKNOWLEDGED'].includes(n.type) && !n.acknowledgedAt && n.state !== 'DISMISSED');
   return {
+    ai: { growth: sub('GROWTH'), saverPc: sub('SAVER_PC'), saverOther: sub('SAVER_OTHER'), other: sub('OTHER') }, otherAlerts, reminders: hub.remindersDue(uid),
     aiProjects: by('AI_PROJECT'), opportunities: by('OPPORTUNITY'), optimizations: by('OPTIMIZATION'), other: by('OTHER'), unassigned, team,
     errorsToAcknowledge: errorsForOwner(hub, uid), errorsWaiting: errorsWaitingOnPeople(hub, uid), errorAnswers: alerts,
     muted: fb(hub).filter((m) => m.active && m.scope === 'NEVER_AGAIN').length,
@@ -76,4 +89,47 @@ export function undoFeedback(hub: HubServer, uid: string, id: string): AiFeedbac
 
 export function isMuted(hub: HubServer, checkKey: string, goalId: string): boolean {
   return fb(hub).some((m) => m.active && m.scope === 'NEVER_AGAIN' && m.checkKey === checkKey && (m.goalId === null || m.goalId === goalId));
+}
+
+// ---------------------------------------------------------------- History: everything that ever came to Home
+export interface HistoryExtra { id: string; at: string; kind: 'Alert' | 'Error' | 'AI recommendation'; title: string; summary: string; link: string }
+/** Alerts and things that were on Home stay here after they are cleared. A person sees only what was theirs. */
+export function historyExtras(hub: HubServer, uid: string): HistoryExtra[] {
+  const st = hub.state; const u = hub.user(uid); const out: HistoryExtra[] = [];
+  for (const n of st.notifications) if (n.recipientUid === uid) out.push({ id: `n-${n.id}`, at: n.createdAt, kind: 'Alert', title: n.title, summary: `${n.preview}${n.acknowledgedAt ? ` · cleared ${n.acknowledgedAt.slice(0, 10)}` : n.state === 'DISMISSED' ? ' · dismissed' : ''}`, link: n.deepLink });
+  for (const e of hub.listErrors(uid)) {
+    out.push({ id: `e1-${e.id}`, at: e.createdAt, kind: 'Error', title: `Error logged for ${e.personName}`, summary: `By ${e.createdByName}. Happened ${e.occurredOn}. ${e.description.replace(/\s+/g, ' ').slice(0, 160)}`, link: '/errors' });
+    if (e.ownerAck) out.push({ id: `e2-${e.id}`, at: e.ownerAck.at, kind: 'Error', title: `${hub.userName(e.ownerAck.byUid)} acknowledged the error for ${e.personName}`, summary: e.ownerAck.note || 'No note.', link: '/errors' });
+    if (e.personAck && e.personAck.byUid === e.uid) out.push({ id: `e3-${e.id}`, at: e.personAck.at, kind: 'Error', title: `${e.personName} acknowledged the error`, summary: e.personAck.note, link: '/errors' });
+  }
+  if (u.role === 'OWNER') {
+    for (const f of st.ownerFindings) for (const d of f.decisions) out.push({ id: `d-${f.id}-${d.id}`, at: d.at, kind: 'AI recommendation', title: `${f.code} ${d.decision.replace(/_/g, ' ').toLowerCase()}: ${f.title}`, summary: d.rationale ?? '', link: `/owner/ai/${f.id}` });
+    for (const m of st.aiFeedback ?? []) out.push({ id: `fb-${m.id}`, at: m.at, kind: 'AI recommendation', title: `You told the AI: ${m.scope === 'NEVER_AGAIN' ? 'never send this kind' : 'not this time'}`, summary: `${m.title} · ${m.note}`, link: '/owner/ai?tab=priorities' });
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+// ---------------------------------------------------------------- the employee Home, and the number on the Home tab
+/** Everything an employee has to clear. One list: nothing lives in a second place. */
+export function employeeHome(hub: HubServer, uid: string) {
+  const st = hub.state;
+  const cards = hub.outstandingCards(uid);
+  const errs = hub.errorsForPerson(uid);
+  const files = hub.pendingFileSuggestions(uid);
+  const removals = hub.pendingFileRemovals(uid);
+  const linkIds = new Set(st.resourceLinks.map((l) => l.id));
+  const hidden: NotificationType[] = ['OWNER_UPDATE_REQUEST', 'FOLLOW_UP', 'ERROR_FOR_YOU'];
+  const alerts = st.notifications.filter((n) => n.recipientUid === uid && !hidden.includes(n.type) && !(n.type === 'APPROVAL_REQUEST' && linkIds.has(n.sourceEntityId)) && !n.acknowledgedAt && n.state !== 'DISMISSED' && (!n.snoozedUntil || n.snoozedUntil <= st.now)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return { requests: cards.filter((c) => c.cardType === 'OWNER_REQUEST'), toConfirm: cards.filter((c) => c.cardType !== 'OWNER_REQUEST'), files, removals, errors: [...errs.toReview, ...errs.snoozed], reminders: hub.remindersDue(uid), alerts };
+}
+
+/** The number on the Home tab and the bell: how many things are waiting to be cleared. */
+export function homeCount(hub: HubServer, uid: string): number {
+  if (hub.user(uid).role === 'OWNER') {
+    const h = ownerHome(hub, uid); const o = hub.ownerOverview(uid);
+    return h.errorsToAcknowledge.length + h.errorAnswers.length + h.team.length + h.otherAlerts.length + h.reminders.length + h.unassigned.length
+      + h.ai.growth.length + h.ai.saverPc.length + h.ai.saverOther.length + h.ai.other.length + o.queue.filter((q) => q.kind !== 'They answered you').length;
+  }
+  const e = employeeHome(hub, uid);
+  return e.requests.length + e.toConfirm.length + e.files.length + e.removals.length + e.errors.length + e.reminders.length + e.alerts.length;
 }

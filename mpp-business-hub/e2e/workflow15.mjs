@@ -16,7 +16,7 @@ const shot = (n, full = true) => p.screenshot({ path: OUT + n + '.png', fullPage
 const hub = (fn, ...a) => p.evaluate(([f, args]) => { const h = window.__hub; return eval('(' + f + ')')(h, ...args); }, [fn.toString(), a]);
 
 await p.goto(U + '/login'); await p.evaluate(() => localStorage.clear()); await p.reload();
-await p.getByRole('button', { name: /Erika/ }).first().click(); await p.waitForSelector('h2:has-text("Notifications")');
+await p.getByRole('button', { name: /Erika/ }).first().click(); await p.waitForSelector('h1:has-text("Hi ")');
 
 console.log('\n[3/4] A stale tracker plus detected activity becomes a confirmation task');
 ok(await p.locator('text=Activity seen — status differs').count() === 1 && await p.locator('text=P-012').count() > 0, 'Home shows a notification: the tracker and the activity disagree on P-012 step 3');
@@ -51,7 +51,7 @@ ok(await rowB.locator('text=No version chosen yet').count() === 1, 'the other co
 await shot('w2-erika-files');
 
 console.log('\n[2] A step Erika says is done is done');
-await p.getByRole('button', { name: 'Update status' }).first().click(); await p.getByRole('button', { name: 'Completed', exact: true }).first().click(); await p.waitForTimeout(400);
+await p.getByRole('button', { name: 'Update status' }).first().click(); if (await p.getByRole('button', { name: 'In progress', exact: true }).first().isEnabled()) { await p.getByRole('button', { name: 'In progress', exact: true }).first().click(); await p.waitForTimeout(300); await p.getByRole('button', { name: 'Update status' }).first().click(); } await p.getByRole('button', { name: 'Completed', exact: true }).first().click(); await p.waitForTimeout(400);
 await go('/projects/prj-012');
 ok(await p.locator('text=3 of 4 steps done').count() > 0, 'the project page says “3 of 4 steps done”');
 await go('/projects'); await p.waitForSelector('.prow');
@@ -59,12 +59,13 @@ ok(await p.locator('.prow:has-text("P-012") >> text=3 of 4 steps done').count() 
 ok(await hub((h) => h.state.steps.find((s) => s.id === 's-012-3').verifications.length) === 0, 'the app does not claim any outside check');
 
 console.log('\n[7 owner mobile] Dalia on a phone');
-await as('Dalia (owner)'); await p.setViewportSize({ width: 390, height: 820 }); await go('/home'); await p.waitForSelector('h2.group-title');
-const mob = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, heads: [...document.querySelectorAll('h2.group-title')].map((e) => e.textContent.replace(/\d+$/, '').trim()) }));
+await as('Dalia (owner)'); await p.setViewportSize({ width: 390, height: 820 }); await go('/home'); await p.waitForSelector('details.hgroup');
+const mob = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, heads: [...document.querySelectorAll('details.hgroup > summary .ttl')].map((e) => e.textContent.trim()) }));
 ok(mob.sw <= 392, 'no sideways scrolling on the phone');
 ok(mob.heads.length >= 2, 'phone sections: ' + mob.heads.join(' · '));
 ok(await p.locator('text=Verify result').count() === 0, 'Dalia is not given a checking chore for Erika’s finished step');
-ok(await p.getByRole('button', { name: 'Open' }).first().isVisible(), 'an AI item on the phone has its Open button (nothing hidden)');
+await p.locator('summary:has-text("AI project recommendations")').click(); await p.locator('summary:has-text("Cost and time savers: computer")').click().catch(() => {}); await p.locator('details.hgroup.sub > summary').first().click();
+ok(await p.getByRole('button', { name: 'Open' }).first().isVisible(), 'an AI item on the phone has its Open button once its group is open');
 await shot('w3-owner-mobile');
 await p.setViewportSize({ width: 1280, height: 900 });
 
@@ -79,8 +80,8 @@ await go('/review'); await p.waitForSelector('text=Dalia asked for an update');
 ok(await p.locator('label:has-text("I need clarification")').count() === 1, 'the answers include “I need clarification”');
 await p.locator('label:has-text("In progress")').first().click(); await p.locator('textarea').first().fill('Half done.');
 await p.getByRole('button', { name: 'Send update to Dalia' }).click(); await p.waitForSelector('text=Update sent to Dalia');
-await as('Dalia (owner)'); await go('/notifications');
-ok(await p.locator('h3:has-text("answered your request")').count() === 1, 'Dalia has exactly one reply notification');
+await as('Dalia (owner)'); await go('/home'); await p.locator('summary:has-text("Team members")').click();
+ok(await p.locator('.mrow .t:has-text("answered your request")').count() === 1, 'Dalia has exactly one reply on Home');
 await go('/projects/prj-070'); ok(await p.locator('text=Answered').count() > 0, 'the request stage now says Answered');
 
 console.log('\n[9] Private data stays private');

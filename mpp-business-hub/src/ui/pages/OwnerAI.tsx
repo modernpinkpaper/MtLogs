@@ -307,12 +307,13 @@ function ApproveWizard({ f, onClose }: { f: OwnerFinding; onClose: () => void })
   const [folder, setFolder] = useState(true);
   const [tab, setTab] = useState<'plan' | 'who' | 'preview'>('plan');
   const [projKey, setProjKey] = useState('P-095');
+  const [note, setNote] = useState('');
   const people = hub.listUsers(uid).filter((u) => u.role === 'EMPLOYEE' && u.active);
   const preview = hub.employeeBriefPreview(uid, { title, employeeObjective: goal, steps });
   const overlap = f.projectMatch.type === 'POSSIBLE_DUPLICATE' || f.projectMatch.type === 'ALREADY_COVERED';
   const upd = (i: number, patch: Partial<PlanStepDraft>) => setSteps(steps.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const go = async () => {
-    const p = await act(() => hub.approveFindingAsProject(uid, f.id, { title, employeeObjective: goal, priority, deadlineYmd: due || null, key: projKey || undefined, steps, assignUids: assign, createWorkspace: folder, idempotencyKey: key.current }), assign.length ? 'Project created and assigned' : 'Project created. Nobody can see it until you assign it.');
+    const p = await act(() => hub.approveFindingAsProject(uid, f.id, { title, employeeObjective: goal, priority, deadlineYmd: due || null, key: projKey || undefined, steps, assignUids: assign, note, createWorkspace: folder, idempotencyKey: key.current }), assign.length ? 'Project created and assigned' : 'Project created. Nobody can see it until you assign it.');
     if (p) { onClose(); nav(`/projects/${p.id}`); }
   };
   return (
@@ -348,6 +349,7 @@ function ApproveWizard({ f, onClose }: { f: OwnerFinding; onClose: () => void })
               {people.map((u) => <label key={u.id} style={{ fontWeight: 500 }}><input type="checkbox" checked={assign.includes(u.id)} onChange={(e) => setAssign(e.target.checked ? [...assign, u.id] : assign.filter((x) => x !== u.id))} /> {u.name}</label>)}
               <label style={{ fontWeight: 500 }}><input type="checkbox" checked={assign.length === 0} onChange={() => setAssign([])} /> Leave unassigned for now</label>
             </fieldset>
+            <div><label htmlFor="ap-note">A note to the team (shows at the top of the project)</label><textarea id="ap-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="For example: Hey Erika! I need this by next week. Update the steps when you get a moment." style={{ minHeight: 70 }} /><p className="small muted" style={{ margin: '.2rem 0 0' }}>The reasons and data behind this idea stay with you. The team never sees them.</p></div>
             <label style={{ fontWeight: 500 }}><input type="checkbox" checked={folder} onChange={(e) => setFolder(e.target.checked)} /> Create the project folder now (practice: no real Google Drive is touched)</label>
             {folder && <div className="card flat small"><strong>The folder will have:</strong> “{projKey} — {title}” with 5 subfolders (Instructions &amp; SOPs · Working Documents &amp; Checklists · Images &amp; Input Files · Final Deliverables · Reports &amp; Archive), a shortcut to the shared Shopify SOP (the original stays where it is), and a note of where the script lives (it is not moved).</div>}
           </div>
@@ -355,6 +357,7 @@ function ApproveWizard({ f, onClose }: { f: OwnerFinding; onClose: () => void })
         {tab === 'preview' && (
           <div className="stack">
             <p className="small muted">This is everything the worker will see. It is built only from the fields on tab 1. Your numbers, notes and reasoning are not included.</p>
+            {note.trim() && <div className="card pink"><div className="eyebrow">Note from Dalia</div><p style={{ margin: '.2rem 0 0', whiteSpace: 'pre-wrap' }}>{note}</p></div>}
             <div className="card flat"><h3>{preview.title}</h3><p>{preview.objective}</p>
               <ol style={{ margin: '0 0 0 1.2rem' }}>{preview.steps.map((s) => <li key={s.number} style={{ marginBottom: 6 }}><strong>{s.title}</strong><div className="small">{s.instructions}</div>{s.why && <div className="small muted">Why: {s.why}</div>}{s.doneWhen && <div className="small muted">Done when: {s.doneWhen}</div>}</li>)}</ol></div>
           </div>

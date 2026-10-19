@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAct, useMe } from './hubContext';
 import { Modal } from './common';
+import { chicagoDate } from '../domain/time';
 import { SKU_COLUMNS, SKU_FAMILIES } from '../server/stepWork';
 import type { Project, Step } from '../domain/types';
 
@@ -110,41 +111,110 @@ export function LinkFileDialog({ step, onClose }: { step: Step; onClose: () => v
   );
 }
 
-const STATUS_OPTIONS: { to: 'IN_PROGRESS' | 'WAITING' | 'BLOCKED' | 'REPORTED_COMPLETE' | 'NOT_APPLICABLE'; label: string }[] = [
-  { to: 'IN_PROGRESS', label: 'In progress' }, { to: 'WAITING', label: 'Waiting on something' }, { to: 'BLOCKED', label: 'Blocked' }, { to: 'REPORTED_COMPLETE', label: 'Completed' }, { to: 'NOT_APPLICABLE', label: 'Not needed' },
-];
-
-/** One "Update status" button. It opens every choice. The one that matches today's status is greyed out and cannot be clicked again. */
+/**
+ * The one status button. It opens four choices:
+ * In progress (to start, or to restart), Completed (once started), Archive (not needed any more, still shown in the list),
+ * and Blocked (needs a reason, and can have a day to look at it again). The choice that matches today is greyed out.
+ */
 export function StatusMenu({ step, compact }: { step: Step; compact?: boolean }) {
   const { hub, uid } = useMe();
   const act = useAct();
   const [open, setOpen] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState('');
-  const [asking, setAsking] = useState<null | 'BLOCKED' | 'WAITING'>(null);
+  const [remind, setRemind] = useState('');
   const done = step.status === 'REPORTED_COMPLETE' || step.status === 'VERIFIED_COMPLETE';
-  const isCurrent = (to: string) => step.status === to || (to === 'REPORTED_COMPLETE' && done);
-  const go = async (to: (typeof STATUS_OPTIONS)[number]['to'], why = '') => {
-    const r = await act(() => hub.transitionStep(uid, step.id, to, { reason: why }), `Saved: ${STATUS_OPTIONS.find((o) => o.to === to)!.label}`);
-    if (r) { setOpen(false); setAsking(null); setReason(''); }
+  const archived = step.status === 'NOT_APPLICABLE';
+  const started = step.status !== 'NOT_STARTED';
+  const go = async (to: 'IN_PROGRESS' | 'REPORTED_COMPLETE' | 'NOT_APPLICABLE' | 'BLOCKED', msg: string, extra: { reason?: string; remindOn?: string | null } = {}) => {
+    const r = await act(() => hub.transitionStep(uid, step.id, to, extra), msg);
+    if (r) { setOpen(false); setAsking(false); setReason(''); setRemind(''); }
   };
+  const btn = compact ? 'pill-btn' : '';
   return (
     <div className="stack" style={{ gap: 6 }}>
-      <div><button className={compact ? 'pill-btn' : 'primary'} aria-expanded={open} onClick={() => { setOpen(!open); setAsking(null); }}>Update status</button></div>
+      <div><button className={compact ? 'pill-btn' : 'primary'} aria-expanded={open} onClick={() => { setOpen(!open); setAsking(false); }}>Update status</button></div>
       {open && (
         <div className="stack" style={{ gap: 6 }} role="group" aria-label="Choose a status">
           <div className="row" style={{ gap: 6 }}>
-            {STATUS_OPTIONS.map((o) => (
-              <button key={o.to} className={compact ? 'pill-btn' : ''} disabled={isCurrent(o.to)} aria-pressed={isCurrent(o.to)} title={isCurrent(o.to) ? 'This is the status now. Pick another one to change it.' : undefined}
-                onClick={() => (o.to === 'BLOCKED' || o.to === 'WAITING' ? setAsking(o.to) : void go(o.to))}>{o.label}</button>))}
+            <button className={btn} disabled={step.status === 'IN_PROGRESS'} aria-pressed={step.status === 'IN_PROGRESS'} onClick={() => void go('IN_PROGRESS', 'Saved: In progress')}>In progress</button>
+            <button className={btn} disabled={!started || done || archived} aria-pressed={done} title={!started ? 'Start the step first.' : undefined} onClick={() => void go('REPORTED_COMPLETE', 'Saved: Completed')}>Completed</button>
+            <button className={btn} disabled={archived} aria-pressed={archived} title="Not needed any more. It stays in the list." onClick={() => { if (confirm('Archive this step? It stays in the list, marked as archived.')) void go('NOT_APPLICABLE', 'Archived'); }}>Archive</button>
+            <button className={btn} disabled={step.status === 'BLOCKED'} aria-pressed={step.status === 'BLOCKED'} onClick={() => setAsking(true)}>Blocked</button>
           </div>
           {asking && (
-            <form className="row" onSubmit={(e) => { e.preventDefault(); void go(asking, reason); }}>
-              <input type="text" aria-label="Reason" placeholder={asking === 'BLOCKED' ? 'What is in the way? (needed)' : 'What are you waiting on?'} value={reason} onChange={(e) => setReason(e.target.value)} style={{ flex: 1 }} autoFocus />
-              <button className="primary" type="submit" disabled={asking === 'BLOCKED' && !reason.trim()}>Save</button>
+            <form className="stack" style={{ gap: 6 }} onSubmit={(e) => { e.preventDefault(); void go('BLOCKED', 'Saved: Blocked', { reason, remindOn: remind || null }); }}>
+              <input type="text" aria-label="Reason" placeholder="What is in the way? (needed)" value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
+              <label className="row" style={{ margin: 0, fontWeight: 500, gap: 8 }}>Look at it again on (if you want) <input type="date" aria-label="Look at it again on" value={remind} min={chicagoDate(hub.now)} onChange={(e) => setRemind(e.target.value)} style={{ width: 'auto' }} /></label>
+              {remind && <span className="small muted">On that day it shows up on your Home so you remember to come back.</span>}
+              <div><button className="primary" type="submit" disabled={!reason.trim()}>Save</button></div>
             </form>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+/** Give a whole project, or one step, to someone else. Dalia only. */
+export function ReassignDialog({ project, step, onClose }: { project: Project; step?: Step; onClose: () => void }) {
+  const { hub, uid } = useMe();
+  const act = useAct();
+  const team = hub.listUsers(uid).filter((u) => u.role === 'EMPLOYEE' && u.active);
+  const [from, setFrom] = useState<string>(project.memberUids[0] ?? '');
+  const [to, setTo] = useState<string[]>([]);
+  const steps = hub.projectSteps(uid, project.id);
+  const doneCount = steps.filter((s) => ['REPORTED_COMPLETE', 'VERIFIED_COMPLETE', 'NOT_APPLICABLE'].includes(s.status)).length;
+  return (
+    <Modal title={step ? 'Give this step to someone else' : 'Give this project to someone else'} onClose={onClose}>
+      <form className="stack" onSubmit={async (e) => { e.preventDefault(); const r = await act(() => (step ? hub.reassignStep(uid, step.id, to) : hub.reassignProject(uid, project.id, from || null, to)), 'Done. They have a notification.'); if (r) onClose(); }}>
+        {step ? <p className="small muted" style={{ margin: 0 }}>They can see the whole project, but they can change only their own steps. Nobody else can change this step after you give it. Now it is {step.assignedUids.map((a) => hub.userName(a)).join(', ') || 'not assigned'}.</p>
+          : <>
+            <p className="small muted" style={{ margin: 0 }}>Steps that are not done move to the new person. {doneCount} step{doneCount === 1 ? ' is' : 's are'} already done. They stay done and keep the name of who did them. The new person sees them as done.</p>
+            <div><label htmlFor="rp-from">Take it from</label><select id="rp-from" value={from} onChange={(e) => setFrom(e.target.value)}><option value="">Nobody (just add)</option>{project.memberUids.map((m) => <option key={m} value={m}>{hub.userName(m)}</option>)}</select></div></>}
+        <fieldset style={{ border: 'none', padding: 0 }}><legend style={{ fontWeight: 600 }}>Give it to</legend>
+          {team.filter((u) => u.id !== from).map((u) => <label key={u.id} style={{ fontWeight: 500 }}><input type="checkbox" checked={to.includes(u.id)} onChange={(e) => setTo(e.target.checked ? [...to, u.id] : to.filter((x) => x !== u.id))} /> {u.name}</label>)}</fieldset>
+        <div className="row"><button className="primary" type="submit" disabled={!to.length}>Give it</button><button type="button" onClick={onClose}>Cancel</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Dalia’s note at the top of a project. */
+export function ProjectNoteDialog({ project, onClose }: { project: Project; onClose: () => void }) {
+  const { hub, uid } = useMe();
+  const act = useAct();
+  const [text, setText] = useState(project.ownerNote?.text ?? '');
+  return (
+    <Modal title="Note to the team" onClose={onClose}>
+      <form className="stack" onSubmit={async (e) => { e.preventDefault(); const r = await act(() => hub.setProjectNote(uid, project.id, text), 'Saved'); if (r) onClose(); }}>
+        <p className="small muted" style={{ margin: 0 }}>It shows at the top of the project to everyone on it. Leave it empty to take it away.</p>
+        <textarea aria-label="Note to the team" value={text} onChange={(e) => setText(e.target.value)} placeholder="For example: Hey Erika! I need this by next week. Update the steps when you get a moment." style={{ minHeight: 100 }} />
+        <div className="row"><button className="primary" type="submit">Save</button><button type="button" onClick={onClose}>Cancel</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Take a file off a step. The original file is never deleted. If the step is done and it is not the person’s own step, that person decides. */
+export function RemoveFileButton({ linkId, label, stepDone }: { linkId: string; label: string; stepDone: boolean }) {
+  const { hub, uid } = useMe();
+  const act = useAct();
+  const [open, setOpen] = useState(false);
+  const link = hub.state.resourceLinks.find((l) => l.id === linkId);
+  const waiting = !!link?.removalRequest;
+  return (
+    <>
+      {waiting ? <span className="small muted">Waiting for the person who did this step to say yes</span> : <button className="link small" aria-label={`Remove ${label} from this step`} onClick={() => setOpen(true)}>Remove from step</button>}
+      {open && (
+        <Modal title="Take this file off the step?" onClose={() => setOpen(false)}>
+          <div className="stack">
+            <p style={{ margin: 0 }}>“{label}” will be taken off this step. <strong>The file itself is not deleted.</strong> This is saved in the history.</p>
+            {stepDone && <p className="card warn small" style={{ margin: 0 }}>This step is already done. If it is not your step, the person who did it will be asked to confirm first.</p>}
+            <div className="row"><button className="primary" onClick={async () => { const r = await act(() => hub.removeFile(uid, linkId), 'Done'); if (r) setOpen(false); }}>Yes, take it off</button><button onClick={() => setOpen(false)}>Keep it</button></div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

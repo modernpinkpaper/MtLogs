@@ -19,7 +19,7 @@ export function Layout() {
   const counts = hub.counts(uid);
   const shift = hub.openShift(uid);
   const canLog = !owner && hub.canLogErrors(uid);
-  const myErrors = owner ? 0 : hub.errorsForPerson(uid).toReview.length;
+  const homeCount = hub.homeCount(uid);
   const hits = q.trim().length > 1 ? hub.searchAll(uid, q) : [];
   const urgentAi = owner ? hub.inboxSummary(uid).needsDecision : 0;
 
@@ -28,20 +28,18 @@ export function Layout() {
   // Five main places per role. Everything else lives under "More" (two taps at most).
   const primary: Item[] = owner
     ? [
-        { to: '/home', label: 'Home', icon: '⌂' },
+        { to: '/home', label: 'Home', icon: '⌂', badge: homeCount },
         { to: '/projects', label: 'Projects', icon: '▤', match: ['/projects'] },
         { to: '/owner/team', label: 'Team & Print', icon: '☺', match: ['/owner/team', '/owner/print-weekly', '/owner/other-work', '/owner/insights', '/print'] },
       ]
     : [
-        { to: '/home', label: 'Home', icon: '⌂', badge: counts.pendingCards + counts.unreadNotifications + myErrors },
+        { to: '/home', label: 'Home', icon: '⌂', badge: homeCount },
         { to: '/projects', label: 'Projects', icon: '▤', match: ['/projects'] },
         { to: '/clock', label: 'Clock', icon: '⏱' },
         { to: '/print/my-stats', label: 'My printing', icon: '🖨' },
         ...(canLog ? [{ to: '/errors', label: 'Errors', icon: '⚑' }] : []),
       ];
   const more: Item[] = [
-    { to: '/review', label: 'Review my work', icon: '✓', badge: counts.pendingCards },
-    { to: '/notifications', label: 'Notifications', icon: '🔔', badge: owner ? 0 : counts.unreadNotifications },
     ...(owner ? [{ to: '/owner/ai', label: 'AI recommendations (all)', icon: '✦', badge: urgentAi }, { to: '/owner/ai?tab=priorities', label: 'Priorities and sources', icon: '☰' }] : []),
     ...(owner ? [{ to: '/errors', label: 'Customer service errors', icon: '⚑' }] : []),
     { to: '/journal', label: 'History', icon: '✎' },
@@ -92,8 +90,8 @@ export function Layout() {
           </div>
           <span className="spacer" />
           {!owner && <Chip tone={shift ? 'ok' : 'gray'} glyph={shift ? '●' : '○'}>{shift ? `Clocked in ${formatTime(shift.clockInAt)}` : 'Clocked out'}</Chip>}
-          <button className="bell ghost" onClick={() => nav('/notifications')} aria-label={`Notifications, ${counts.unreadNotifications} unread`}>
-            🔔{counts.unreadNotifications > 0 && <span className="badge" aria-hidden="true">{counts.unreadNotifications}</span>}
+          <button className="bell ghost" onClick={() => nav('/home')} aria-label={`Home, ${homeCount} waiting`}>
+            🔔{homeCount > 0 && <span className="badge" aria-hidden="true">{homeCount}</span>}
           </button>
           <label className="row" style={{ margin: 0, fontWeight: 500 }}>
                         <select aria-label="Switch demo user" style={{ width: 'auto' }} value={uid} onChange={(e) => { setUid(e.target.value); nav('/home'); }}>

@@ -61,17 +61,28 @@ export function PersonErrorCard({ e, onDone }: { e: ErrorRow; onDone?: () => voi
   const [note, setNote] = useState('');
   const snoozed = e.state === 'SNOOZED';
   return (
-    <div className="card pink stack" role="region" aria-label="An error in your log">
-      <div className="row between"><strong>An error was added to your log</strong>{snoozed && <Chip tone="gray" glyph="⏾">Snoozed until your next clock in</Chip>}</div>
-      <ErrorFacts e={e} />
-      <div><label htmlFor={`ack-${e.id}`}>Your note (needed)</label>
-        <textarea id={`ack-${e.id}`} value={note} onChange={(ev) => setNote(ev.target.value)} placeholder={SAMPLE} style={{ minHeight: 90 }} />
-        <p className="small muted" style={{ margin: '.2rem 0 0' }}>Say what you understood the error to be and what you can do to prevent it.</p></div>
-      <div className="row">
+    <article className="errcard" role="region" aria-label="An error in your log">
+      <header className="eh">
+        <div><div className="eyebrow">Error in your log</div><h3 style={{ margin: '.1rem 0 0' }}>Happened {formatDate(`${e.occurredOn}T12:00:00Z`)}</h3></div>
+        {snoozed ? <Chip tone="gray" glyph="⏾">Snoozed until your next clock in</Chip> : <Chip tone="warn" glyph="!">Needs your reply</Chip>}
+      </header>
+      <section className="es">
+        <h4>1 · What happened</h4>
+        <div className="ebox"><RichText text={e.description} /></div>
+        {e.links.length > 0 && <div className="small row" style={{ gap: 8 }}><span className="muted">Orders:</span>{e.links.map((l, i) => <a key={l} className="pill-link" href={l} target="_blank" rel="noreferrer">Order {i + 1} ↗</a>)}</div>}
+        <div className="small muted">Logged by {e.createdByName} · {formatDateTime(e.createdAt)}</div>
+        {e.ownerAck?.note && <blockquote className="equote"><strong>Note from {hub.userName(e.ownerAck.byUid)}</strong><br />{e.ownerAck.note}</blockquote>}
+      </section>
+      <section className="es">
+        <h4>2 · Your reply</h4>
+        <label htmlFor={`ack-${e.id}`} className="small muted" style={{ fontWeight: 500 }}>Say what you understood the error to be, and what you can do to prevent it.</label>
+        <textarea id={`ack-${e.id}`} aria-label="Your note (needed)" value={note} onChange={(ev) => setNote(ev.target.value)} placeholder={SAMPLE} style={{ minHeight: 90 }} />
+      </section>
+      <footer className="ef">
         <button className="primary" disabled={note.trim().length < 15} onClick={async () => { const r = await act(() => hub.personAcknowledgeError(uid, e.id, note), 'Acknowledged. Dalia was told.'); if (r) onDone?.(); }}>I read it. Acknowledge</button>
-        {!snoozed && <button onClick={async () => { const r = await act(() => hub.snoozeError(uid, e.id), 'Snoozed. It comes back when you clock in next.'); if (r) onDone?.(); }}>Snooze until my next clock in</button>}
-      </div>
-    </div>
+        {!snoozed && <button className="quiet" onClick={async () => { const r = await act(() => hub.snoozeError(uid, e.id), 'Snoozed. It comes back when you clock in next.'); if (r) onDone?.(); }}>Snooze until my next clock in</button>}
+      </footer>
+    </article>
   );
 }
 

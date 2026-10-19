@@ -3,7 +3,7 @@ import type {
   ResourceLink, ResourceRole, ResponseChoice, ReviewCard, ReviewCorrection, ReviewDecision, ReviewOutcome, Shift, Step, StepStatus, UpdateRequest, UpdateResponse,
   User, VerificationState, WorkAssignment,
 } from '../domain/types';
-import { addMinutes, chicagoDate, chicagoToUtc, formatDate, minutesBetween, nextBusinessMorning } from '../domain/time';
+import { addMinutes, chicagoDate, chicagoToUtc, formatDate, isValidLocalDate, minutesBetween, nextBusinessMorning } from '../domain/time';
 import { buildSeedState, NOW } from './seed';
 import { buildRealState, type RealTracker, type RealLogs, type RealFinding } from './realSeed';
 import { REAL_TRACKER, REAL_LOGS, REAL_FINDINGS, REAL_SALES, REAL_MODE } from './realLoader';
@@ -58,14 +58,14 @@ export const CHOICE_LABEL: Record<ResponseChoice, string> = {
 };
 
 const TRANSITIONS: Record<StepStatus, StepStatus[]> = {
-  NOT_STARTED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'],
+  NOT_STARTED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'BLOCKED', 'NOT_APPLICABLE', 'CANCELLED'],
   IN_PROGRESS: ['BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'],
-  BLOCKED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'CANCELLED'],
-  WAITING: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'CANCELLED'],
-  REPORTED_COMPLETE: ['VERIFIED_COMPLETE', 'REOPENED', 'IN_PROGRESS', 'REPORTED_COMPLETE'],
+  BLOCKED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'],
+  WAITING: ['IN_PROGRESS', 'BLOCKED', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'],
+  REPORTED_COMPLETE: ['VERIFIED_COMPLETE', 'REOPENED', 'IN_PROGRESS', 'BLOCKED', 'NOT_APPLICABLE', 'REPORTED_COMPLETE'],
   VERIFIED_COMPLETE: ['REOPENED', 'REPORTED_COMPLETE'],
   CANCELLED: ['REOPENED'],
-  NOT_APPLICABLE: ['REOPENED', 'REPORTED_COMPLETE'],
+  NOT_APPLICABLE: ['REOPENED', 'IN_PROGRESS', 'REPORTED_COMPLETE'],
   REOPENED: ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE'],
 };
 const EMPLOYEE_TARGETS: StepStatus[] = ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'];
@@ -165,7 +165,10 @@ export class HubServer {
   }
   workStepFor(uid: string, stepId: string) {
     const r = this.stepFor(uid, stepId);
-    if (!this.canWorkOnProject(this.user(uid), r.project)) throw new PermissionDenied();
+    const u = this.user(uid);
+    if (!this.canWorkOnProject(u, r.project)) throw new PermissionDenied();
+    // A step belongs to the person it is assigned to. Others on the project can read it but not change it. Dalia can change any step.
+    if (u.role !== 'OWNER' && !r.step.assignedUids.includes(uid)) throw new PermissionDenied();
     return r;
   }
 
@@ -376,7 +379,7 @@ export class HubServer {
   }
 
   // ------------------------------------------------------------------ step state machine
-  transitionStep(uid: string, stepId: string, to: StepStatus, opts: { reason?: string; ownerApproval?: boolean } = {}): Step {
+  transitionStep(uid: string, stepId: string, to: StepStatus, opts: { reason?: string; ownerApproval?: boolean; remindOn?: string | null } = {}): Step {
     const { step, project } = this.workStepFor(uid, stepId);
     const u = this.user(uid);
     const from = step.status;
@@ -401,7 +404,11 @@ export class HubServer {
         verificationSource = hasIndependent ? 'INDEPENDENT' : u.role === 'OWNER' ? 'OWNER_APPROVED' : 'EMPLOYEE_CONFIRMED';
       }
     }
-    return this.commit(() => this.applyTransition(step, project, to, uid, opts.reason ?? '', verificationSource));
+    if (to === 'BLOCKED' && opts.remindOn) {
+      if (!isValidLocalDate(opts.remindOn)) throw new HubError('INVALID_DATE', 'Please pick a real date to look at this again.');
+      if (opts.remindOn < chicagoDate(this.state.now)) throw new HubError('INVALID_DATE', 'The reminder date cannot be in the past.');
+    }
+    return this.commit(() => { const st = this.applyTransition(step, project, to, uid, opts.reason ?? '', verificationSource); st.remindOn = to === 'BLOCKED' ? opts.remindOn || null : null; return st; });
   }
 
   applyTransition(step: Step, project: Project, to: StepStatus, actorUid: string | null, reason: string, verificationSource?: Step['verificationSource'], evidence: string[] = []): Step {
@@ -608,6 +615,8 @@ export class HubServer {
         if (req) {
           const answered = new Set(this.state.updateResponses.filter((r) => r.requestId === req!.id).map((r) => r.fromUid));
           req.state = req.recipientUids.every((r) => answered.has(r)) ? 'RESPONDED' : 'PARTIALLY_RESPONDED';
+          // The request is answered, so the alert about it is done. It stays in History.
+          for (const n of this.state.notifications) if (n.recipientUid === uid && n.sourceEntityId === req.id && ['OWNER_UPDATE_REQUEST', 'FOLLOW_UP'].includes(n.type) && !n.acknowledgedAt) { n.readAt ??= this.state.now; n.acknowledgedAt = this.state.now; n.state = 'ACKNOWLEDGED'; }
           for (const c of this.state.reviewCards.filter((c) => c.updateRequestId === req!.id && c.recipientUid === uid && c.status !== 'SUBMITTED')) {
             c.status = 'SUBMITTED'; c.lastUpdatedAt = this.state.now;
             if (shift) shift.reviewSessions.push({ startedAt: c.reviewStartedAt ?? this.state.now, submittedAt: this.state.now, cardId: c.id });
@@ -1905,6 +1914,9 @@ export class HubServer {
   renameStep(uid: string, stepId: string, title: string) { return SW.renameStep(this, uid, stepId, title); }
   // ---- v1.9 ----
   ownerHome(uid: string) { return OH.ownerHome(this, uid); }
+  employeeHome(uid: string) { return OH.employeeHome(this, uid); }
+  homeCount(uid: string) { return OH.homeCount(this, uid); }
+  historyExtras(uid: string) { return OH.historyExtras(this, uid); }
   dismissWithFeedback(uid: string, findingId: string, input: Parameters<typeof OH.dismissWithFeedback>[3]) { return OH.dismissWithFeedback(this, uid, findingId, input); }
   feedbackList(uid: string) { return OH.feedbackList(this, uid); }
   undoFeedback(uid: string, id: string) { return OH.undoFeedback(this, uid, id); }
@@ -1922,6 +1934,14 @@ export class HubServer {
   dismissErrorHint(uid: string, key: string) { return EL.dismissErrorHint(this, uid, key); }
   printSummary(uid: string, forUid: string = uid, ymd?: string) { return PRS.printSummary(this, uid, forUid, ymd); }
   addDayNote(uid: string, ymd: string, text: string) { return PRS.addDayNote(this, uid, ymd, text); }
+  setProjectNote(uid: string, projectId: string, text: string) { return MG.setProjectNote(this, uid, projectId, text); }
+  shareFindingWithTeam(uid: string, id: string, toUids: string[], note: string) { return MG.shareFindingWithTeam(this, uid, id, toUids, note); }
+  reassignProject(uid: string, projectId: string, fromUid: string | null, toUids: string[]) { return SW.reassignProject(this, uid, projectId, fromUid, toUids); }
+  reassignStep(uid: string, stepId: string, toUids: string[]) { return SW.reassignStep(this, uid, stepId, toUids); }
+  removeFile(uid: string, linkId: string) { return SW.removeFile(this, uid, linkId); }
+  pendingFileRemovals(uid: string) { return SW.pendingFileRemovals(this, uid); }
+  answerFileRemoval(uid: string, linkId: string, confirm: boolean) { return SW.answerFileRemoval(this, uid, linkId, confirm); }
+  remindersDue(uid: string) { return SW.remindersDue(this, uid); }
   setStepDescription(uid: string, stepId: string, text: string) { return SW.setStepDescription(this, uid, stepId, text); }
   renameProject(uid: string, projectId: string, title: string) { return SW.renameProject(this, uid, projectId, title); }
   reorderSteps(uid: string, projectId: string, parentStepId: string | null, orderedIds: string[]) { return SW.reorderSteps(this, uid, projectId, parentStepId, orderedIds); }

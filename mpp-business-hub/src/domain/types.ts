@@ -79,6 +79,8 @@ export interface PilotCheckpoint {
 
 export interface Project {
   id: string;
+  /** v1.10: a note from Dalia shown at the top of the project to the people on it. */
+  ownerNote?: { text: string; at: string; byUid: string };
   key: string; // P-012
   title: string;
   /** Short everyday name for alerts and lists, like "Shopify listings". */
@@ -142,6 +144,8 @@ export interface Step {
   /** Blocker reason retained alongside last active state. */
   blockerReason: string | null;
   assignedUids: string[];
+  /** v1.10: when a step is blocked, the day to look at it again. */
+  remindOn?: string | null;
   dueAt: string | null;
   impact: 'ROUTINE' | 'HIGH';
   /** Dalia can choose to check a specific step herself. Off by default: when someone says it is done, it is done. */
@@ -245,6 +249,10 @@ export interface ResourceLink {
   stepId: string | null;
   role: ResourceRole;
   associationState: 'SUGGESTED' | 'CONFIRMED' | 'REJECTED';
+  /** v1.10: a file taken off a step. Nothing in Drive is deleted. Kept for the history. */
+  removed?: { at: string; byUid: string };
+  /** v1.10: someone asked to remove a file from a step that is already done. The person who did the step decides. */
+  removalRequest?: { at: string; byUid: string };
   suggestedBy: 'AI' | 'HUMAN' | 'RULE';
   explanation: string;
   evidenceRefs: string[];

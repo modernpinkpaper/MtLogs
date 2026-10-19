@@ -8,7 +8,7 @@ export function Chip({ tone = 'gray', glyph, children, title }: { tone?: Tone; g
 
 const STATUS: Record<StepStatus, [string, Tone, string]> = {
   NOT_STARTED: ['Not started', 'gray', '○'], IN_PROGRESS: ['In progress', 'info', '◔'], BLOCKED: ['Blocked', 'bad', '⛔'], WAITING: ['Waiting', 'warn', '⏸'],
-  REPORTED_COMPLETE: ['Done · reported by employee', 'ok', '✔'], VERIFIED_COMPLETE: ['Done · checked', 'ok', '✔'], CANCELLED: ['Canceled', 'gray', '✕'], NOT_APPLICABLE: ['Not needed', 'gray', '–'], REOPENED: ['Reopened', 'warn', '↺'],
+  REPORTED_COMPLETE: ['Done · reported by employee', 'ok', '✔'], VERIFIED_COMPLETE: ['Done · checked', 'ok', '✔'], CANCELLED: ['Canceled', 'gray', '✕'], NOT_APPLICABLE: ['Archived', 'gray', '–'], REOPENED: ['Reopened', 'warn', '↺'],
 };
 /** The official status of a step, in plain words. */
 export function StatusChip({ status, hold }: { status: StepStatus; hold?: boolean }) {

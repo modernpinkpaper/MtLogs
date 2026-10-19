@@ -4,6 +4,7 @@ import { useAct, useMe } from '../hubContext';
 import { LogTaskDialog } from '../dialogs';
 import { Chip, Empty, Modal } from '../common';
 import { PersonErrorCard } from '../errorUi';
+import { Group } from './OwnerOverview';
 import { shortProjectName } from '../../domain/reviewKinds';
 import { formatDateTime } from '../../domain/time';
 import { stepLabels } from '../../domain/stepLabels';
@@ -22,14 +23,9 @@ export function EmployeeHome() {
   const shift = hub.openShift(uid);
   const firstName = me.name.split(' ')[0];
 
-  const cards = hub.outstandingCards(uid);
-  const requests = cards.filter((c) => c.cardType === 'OWNER_REQUEST');
-  const toConfirm = cards.filter((c) => c.cardType !== 'OWNER_REQUEST');
-  const files = hub.pendingFileSuggestions(uid);
-  const notes = hub.listNotifications(uid).filter((n) => !n.readAt && !n.acknowledgedAt && (!n.snoozedUntil || n.snoozedUntil <= hub.now) && !['OWNER_UPDATE_REQUEST', 'FOLLOW_UP', 'ERROR_FOR_YOU'].includes(n.type)).slice(0, 4);
-  const errs = hub.errorsForPerson(uid);
-  const total = requests.length + toConfirm.length + files.length + errs.toReview.length + errs.snoozed.length;
-
+  const h = hub.employeeHome(uid);
+  const { requests, toConfirm, files, removals, errors, reminders, alerts } = h;
+  const total = hub.homeCount(uid);
   const saved = hub.myWorkLog(uid);
   const reqBy = (id: string | null) => (id ? hub.userName(hub.getRequest(uid, id)?.requestedByUid ?? null) : 'Dalia');
   const moveLink = moving ? files.find((f) => f.link.id === moving) : null;
@@ -46,34 +42,48 @@ export function EmployeeHome() {
         </span>
       </div>
 
-      <section aria-labelledby="notif" className="stack">
-        <h2 id="notif" className="group-title" style={{ marginBottom: 0 }}>Notifications <span className="count">{total + notes.length}</span></h2>
-        {total + notes.length === 0 && <Empty>Nothing needs you right now.</Empty>}
-        {[...errs.toReview, ...errs.snoozed].map((e) => <PersonErrorCard key={e.id} e={e} />)}
+      <div>
+        <p style={{ margin: 0 }} className="muted">{total === 0 ? 'Inbox zero. Nothing needs you right now.' : `${total} thing${total === 1 ? '' : 's'} to clear. Everything that needs you is here, and only here.`}</p>
+      </div>
+      {total === 0 && <Empty>You are all caught up.</Empty>}
+
+      <Group id="e-req" title="Dalia asked you" hint="Answer when you can" count={requests.length}>
         {requests.map((c) => (
           <div key={c.id} className="notice">
-            <span><strong>{reqBy(c.updateRequestId)} asked you for an update</strong>{c.projectId ? ` on ${hub.getProject(uid, c.projectId).key}` : ''}.</span>
+            <span><strong>{reqBy(c.updateRequestId)} asked you for an update</strong>{c.projectId ? ` on ${hub.getProject(uid, c.projectId).key}` : ''}.{c.explanatoryText ? <span className="muted"> “{c.explanatoryText}”</span> : null}</span>
             <Link to={`/review?card=${c.id}`}><button className="primary">Answer</button></Link>
           </div>
         ))}
-        {toConfirm.length > 0 && (
-          <div className="card list" aria-label="Things to confirm">
-            <div className="lhead"><strong>The AI saw activity. Please confirm it.</strong> <span className="small muted">About 1 to 3 minutes. It is paid time.</span></div>
-            {toConfirm.slice(0, 6).map((c) => {
-              const p = c.projectId ? hub.getProject(uid, c.projectId) : null;
-              const step = c.stepId ? hub.getStep(uid, c.stepId) : null;
-              const lab = step ? stepLabels(hub.projectSteps(uid, step.projectId)).get(step.id) : null;
-              return (
-                <Link key={c.id} to={`/review?card=${c.id}`} className="lline">
-                  <span className="t">{c.title}{p && <span className="small muted"> · {p.key}{lab ? ` · Step ${lab}` : ''}</span>}</span>
-                  <span className="small muted when">{c.dueAt ? `Due ${formatDateTime(c.dueAt)}` : ''}</span>
-                  <Chip tone="pink">Confirm</Chip>
-                </Link>
-              );
-            })}
-            {toConfirm.length > 6 && <div className="lline static"><Link to="/review">See all {toConfirm.length}</Link></div>}
+      </Group>
+
+      <Group id="e-confirm" title="Confirm what the AI saw" hint="About 1 to 3 minutes. It is paid time." count={toConfirm.length}>
+        <div className="card list" aria-label="Things to confirm">
+          {toConfirm.map((c) => {
+            const p = c.projectId ? hub.getProject(uid, c.projectId) : null;
+            const step = c.stepId ? hub.getStep(uid, c.stepId) : null;
+            const lab = step ? stepLabels(hub.projectSteps(uid, step.projectId)).get(step.id) : null;
+            return (
+              <Link key={c.id} to={`/review?card=${c.id}`} className="lline">
+                <span className="t">{c.title}{p && <span className="small muted"> · {p.key}{lab ? ` · Step ${lab}` : ''}</span>}</span>
+                <span className="small muted when">{c.dueAt ? `Due ${formatDateTime(c.dueAt)}` : ''}</span>
+                <Chip tone="pink">Confirm</Chip>
+              </Link>
+            );
+          })}
+        </div>
+      </Group>
+
+      <Group id="e-files" title="Files" hint="Files the AI found, and files someone wants to take off a finished step" count={files.length + removals.length}>
+        {removals.map(({ link, resource, project, step, byName }) => (
+          <div key={link.id} className="card stack" aria-label="A file someone wants to remove">
+            <div><strong>{byName} wants to take “{resource.label}” off {project.key}, step {stepLabels(hub.projectSteps(uid, project.id)).get(step.id)}.</strong>
+              <div className="small muted">That step is done. The file itself is not deleted. You decide.</div></div>
+            <div className="row">
+              <button className="primary" onClick={() => act(() => hub.answerFileRemoval(uid, link.id, true), 'Taken off the step')}>Yes, take it off</button>
+              <button onClick={() => act(() => hub.answerFileRemoval(uid, link.id, false), 'Kept on the step')}>Keep it</button>
+            </div>
           </div>
-        )}
+        ))}
         {files.map(({ link, resource, project, step }) => {
           const lab = step ? stepLabels(hub.projectSteps(uid, project.id)).get(step.id) : null;
           return (
@@ -88,17 +98,23 @@ export function EmployeeHome() {
             </div>
           );
         })}
-        {notes.length > 0 && (
-          <div className="card list" aria-label="Other notifications">
-            {notes.map((n) => (
-              <button key={n.id} className="lline" onClick={async () => { await act(() => hub.markRead(uid, n.id)); nav(n.deepLink); }}>
-                <span className="t">{n.title}<span className="small muted"> · {n.preview}</span></span><span className="small muted when">{formatDateTime(n.createdAt)}</span>
-              </button>
-            ))}
-            <div className="lline static"><Link to="/notifications">See all notifications</Link></div>
-          </div>
-        )}
-      </section>
+      </Group>
+
+      <Group id="e-errors" title="Errors in your log" hint="Read, then acknowledge with a note. You can snooze until your next clock in." count={errors.length}>
+        {errors.map((e) => <PersonErrorCard key={e.id} e={e} />)}
+      </Group>
+
+      <Group id="e-remind" title="Reminders" hint="Blocked steps you wanted to look at again" count={reminders.length}>
+        <div className="card list">{reminders.map((r) => (
+          <div key={r.step.id} className="lline static"><span className="t">{r.project.key} · Step {r.label}: {r.step.title}<span className="small muted"> · blocked: {r.step.blockerReason}</span></span>
+            <Link to={`/projects/${r.project.id}/steps/${r.step.id}`}><button>Look at it</button></Link></div>))}</div>
+      </Group>
+
+      <Group id="e-alerts" title="Other alerts" count={alerts.length}>
+        <div className="card list">{alerts.map((n) => (
+          <div key={n.id} className="mrow"><div className="t">{n.title}</div><div className="small muted">{n.preview}</div>
+            <div className="row" style={{ marginTop: 6 }}><button onClick={async () => { await act(() => hub.markRead(uid, n.id)); nav(n.deepLink); }}>Open</button><button onClick={() => act(() => hub.acknowledge(uid, n.id), 'Cleared. It stays in History.')}>Got it</button></div></div>))}</div>
+      </Group>
 
       {saved.length > 0 && (
         <details className="soft">

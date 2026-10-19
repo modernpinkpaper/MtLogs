@@ -6,7 +6,7 @@ import { JournalList, ResourceCard, StepResourceRow } from '../parts';
 import { JournalFilters } from './Journal';
 import { RequestUpdateDialog, SendUpdateDialog } from '../dialogs';
 import { ProjectInfo } from '../projectRef';
-import { AddStepsDialog, EditableText, StatusMenu, LinkFileDialog, NewFileDialog } from '../stepTools';
+import { AddStepsDialog, EditableText, ProjectNoteDialog, ReassignDialog, RemoveFileButton, StatusMenu, LinkFileDialog, NewFileDialog } from '../stepTools';
 import { ChangeScheduleDialog, PauseBanner, PauseDialog, PilotPanel, PilotSetupDialog, ResumeDialog, SuggestDialog } from '../pauseUi';
 import { deadlineInfo, nextStep, notReadyReason, pauseLine, progressCounts, projectWorkStatus } from '../../domain/projectStatus';
 import { formatDate, formatDateTime } from '../../domain/time';
@@ -22,7 +22,7 @@ export function ProjectDetail() {
   const nav = useNavigate();
   const tab = (sp.get('tab') as Tab) || 'overview';
   const setTab = (t: Tab) => { const n = new URLSearchParams(sp); n.set('tab', t); setSp(n, { replace: true }); };
-  const [dlg, setDlg] = useState<null | 'request' | 'update' | 'pause' | 'resume' | 'schedule' | 'suggestPause' | 'suggestResume' | 'pilot' | 'assign' | 'deadline'>(sp.get('assign') && me.role === 'OWNER' ? 'assign' : null);
+  const [dlg, setDlg] = useState<null | 'request' | 'update' | 'pause' | 'resume' | 'schedule' | 'suggestPause' | 'suggestResume' | 'pilot' | 'assign' | 'deadline' | 'giveProject' | 'note'>(sp.get('assign') && me.role === 'OWNER' ? 'assign' : null);
   const [menu, setMenu] = useState(false);
   const owner = me.role === 'OWNER';
 
@@ -82,6 +82,8 @@ export function ProjectDetail() {
               {menu && (
                 <div role="menu" onClick={() => setMenu(false)}>
                   {owner && !project.pilot?.enabled && <button role="menuitem" onClick={() => setDlg('pilot')}>Set up a limited test</button>}
+                  {owner && project.visibility !== 'OWNER_PRIVATE' && <button role="menuitem" onClick={() => setDlg('giveProject')}>Give this project to someone else</button>}
+                  {owner && <button role="menuitem" onClick={() => setDlg('note')}>{project.ownerNote ? 'Change my note to the team' : 'Write a note to the team'}</button>}
                   {owner && <button role="menuitem" onClick={() => hub.setPinned(uid, project.id, !project.pinned)}>{project.pinned ? 'Unpin from the top' : 'Pin to the top'}</button>}
                   {canControl && <button role="menuitem" onClick={() => setDlg('deadline')}>Change the deadline</button>}
                   {unassigned || (owner && project.visibility !== 'OWNER_PRIVATE') ? <button role="menuitem" onClick={() => setDlg('assign')}>{project.memberUids.length ? 'Add people' : 'Choose who works on it'}</button> : null}
@@ -117,6 +119,8 @@ export function ProjectDetail() {
         )}
       </header>
 
+      {project.ownerNote && !owner && <div className="card pink" role="note" aria-label="Note from Dalia"><div className="eyebrow">Note from Dalia</div><p style={{ margin: '.2rem 0 0', whiteSpace: 'pre-wrap' }}>{project.ownerNote.text}</p></div>}
+      {project.ownerNote && owner && <div className="card flat small" role="note"><strong>Your note to the team:</strong> {project.ownerNote.text}</div>}
       {paused && <PauseBanner project={project} onResume={() => setDlg('resume')} onChange={() => setDlg('schedule')} onSuggestResume={() => setDlg('suggestResume')} />}
       {unassigned && <div className="banner warn" role="status"><strong>Approved, but nobody is assigned.</strong> No employee can see this project yet. <button className="primary" onClick={() => setDlg('assign')} style={{ marginLeft: 8 }}>Choose who works on it</button></div>}
       {project.pilot?.enabled && <PilotPanel project={project} />}
@@ -181,6 +185,8 @@ export function ProjectDetail() {
       {dlg === 'suggestResume' && <SuggestDialog project={project} mode="resume" onClose={() => setDlg(null)} />}
       {dlg === 'pilot' && <PilotSetupDialog project={project} onClose={() => setDlg(null)} />}
       {dlg === 'assign' && <AssignDialog project={project} onClose={() => { setDlg(null); const n = new URLSearchParams(sp); n.delete('assign'); setSp(n, { replace: true }); }} />}
+      {dlg === 'giveProject' && <ReassignDialog project={project} onClose={() => setDlg(null)} />}
+      {dlg === 'note' && <ProjectNoteDialog project={project} onClose={() => setDlg(null)} />}
       {dlg === 'deadline' && <DeadlineDialog project={project} onClose={() => setDlg(null)} />}
     </div>
   );
@@ -239,7 +245,7 @@ const NEXT: Partial<Record<StepStatus, StepStatus[]>> = {
 const ACTION_LABEL: Partial<Record<StepStatus, string>> = { IN_PROGRESS: 'Back to in progress', BLOCKED: 'Block this step', WAITING: 'Waiting on something', REPORTED_COMPLETE: 'Completed', NOT_APPLICABLE: 'Not needed', VERIFIED_COMPLETE: 'Mark as checked', REOPENED: 'Reopen' };
 
 /** The employee’s workplace: what to do, substeps, files, latest activity, and one way to report progress. */
-function StepPanel({ step, steps, labels, project, canWork, isNext, paused: projPaused, onTab }: { step: Step; steps: Step[]; labels: Map<string, string>; project: Project; canWork: boolean; isNext?: boolean; paused?: boolean; onTab: (t: Tab) => void }) {
+function StepPanel({ step, steps, labels, project, canWork: canWorkProject, isNext, paused: projPaused, onTab }: { step: Step; steps: Step[]; labels: Map<string, string>; project: Project; canWork: boolean; isNext?: boolean; paused?: boolean; onTab: (t: Tab) => void }) {
   const { hub, uid, me } = useMe();
   const act = useAct();
   const [sp] = useSearchParams();
@@ -247,8 +253,10 @@ function StepPanel({ step, steps, labels, project, canWork, isNext, paused: proj
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(step.instructions);
   const [reason, setReason] = useState('');
-  const [dlg, setDlg] = useState<null | 'help' | 'update' | 'request' | 'verify' | 'sheet' | 'hold' | 'newSheet' | 'newDoc' | 'link' | 'subs'>(null);
+  const [dlg, setDlg] = useState<null | 'help' | 'update' | 'request' | 'verify' | 'sheet' | 'hold' | 'newSheet' | 'newDoc' | 'link' | 'subs' | 'giveStep'>(null);
   const [fileMenu, setFileMenu] = useState(false);
+  // A step belongs to the person it is assigned to. Everyone else on the project can read it, not change it.
+  const canWork = canWorkProject && (me.role === 'OWNER' || step.assignedUids.includes(uid));
   const responseId = sp.get('response');
   const owner = me.role === 'OWNER';
   const paused = !!project.pause?.isPaused;
@@ -280,10 +288,9 @@ function StepPanel({ step, steps, labels, project, canWork, isNext, paused: proj
         {step.onHold && <p className="small" style={{ margin: '.3rem 0 0' }}>On hold{step.onHold.reason ? `: ${step.onHold.reason}` : ''}. The rest of the project keeps going.</p>}
       </div>
 
+      {canWorkProject && !canWork && <div className="card flat small" role="note">This step belongs to {step.assignedUids.map((a) => hub.userName(a)).join(', ') || 'nobody yet'}. You can read it, but only they can change it.</div>}
       <div className="row actions">
         {canWork && assigned && step.status !== 'CANCELLED' && <StatusMenu step={step} />}
-        {!owner && canWork && <button onClick={() => setDlg('update')}>Update progress</button>}
-        {!owner && canWork && <button onClick={() => setDlg('help')}>Ask for help</button>}
         {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setDlg('request')}>Ask for an update</button>}
       </div>
 
@@ -341,10 +348,10 @@ function StepPanel({ step, steps, labels, project, canWork, isNext, paused: proj
           return (
             <>
               {unapproved && <div className="smallnote" role="status" style={{ margin: '.4rem 0' }}><strong>{inputs.length} copies of this file exist and none is chosen yet.</strong> A name like “FINAL” does not decide it. Pick the one to use below. It is saved with who chose it and when.</div>}
-              {main.map(({ link, resource }) => <StepResourceRow key={link.id} resource={resource} role={link.role} roleLabel={ROLE_LABEL[link.role]} suggested={link.associationState === 'SUGGESTED'} siblings={link.role === 'INPUT' ? sib : []} />)}
+              {main.map(({ link, resource }) => <div key={link.id}><StepResourceRow resource={resource} role={link.role} roleLabel={ROLE_LABEL[link.role]} suggested={link.associationState === 'SUGGESTED'} siblings={link.role === 'INPUT' ? sib : []} />{canWork && link.associationState === 'CONFIRMED' && <div style={{ textAlign: 'right' }}><RemoveFileButton linkId={link.id} label={resource.label} stepDone={['REPORTED_COMPLETE', 'VERIFIED_COMPLETE', 'NOT_APPLICABLE'].includes(step.status)} /></div>}</div>)}
               {more.length > 0 && (
                 <details className="soft"><summary>More files ({more.length})</summary>
-                  {more.map(({ link, resource }) => <StepResourceRow key={link.id} resource={resource} role={link.role} roleLabel={ROLE_LABEL[link.role]} />)}
+                  {more.map(({ link, resource }) => <div key={link.id}><StepResourceRow resource={resource} role={link.role} roleLabel={ROLE_LABEL[link.role]} />{canWork && link.associationState === 'CONFIRMED' && <div style={{ textAlign: 'right' }}><RemoveFileButton linkId={link.id} label={resource.label} stepDone={['REPORTED_COMPLETE', 'VERIFIED_COMPLETE', 'NOT_APPLICABLE'].includes(step.status)} /></div>}</div>)}
                 </details>
               )}
             </>
@@ -362,13 +369,8 @@ function StepPanel({ step, steps, labels, project, canWork, isNext, paused: proj
         <details>
           <summary className="small">More</summary>
           <div className="stack" style={{ marginTop: 8 }}>
-                        {choices.length === 0 ? <span className="muted small">No status changes are available to you right now.</span> : (
-              <>
-                <input type="text" aria-label="Reason or note" placeholder="Why? (needed if blocked)" value={reason} onChange={(e) => setReason(e.target.value)} />
-                <div className="row">{choices.map((t) => <button key={t} onClick={() => move(t)}>{ACTION_LABEL[t] ?? statusLabel(t)}</button>)}
-                  {owner && step.status === 'REPORTED_COMPLETE' && step.requiresCheck && !step.verifications.some((v) => v.result === 'CONFIRMED') && <button className="danger" onClick={() => move('VERIFIED_COMPLETE', true)}>Mark it checked myself</button>}</div>
-              </>
-            )}
+            {owner && step.status === 'REPORTED_COMPLETE' && step.requiresCheck && !step.verifications.some((v) => v.result === 'CONFIRMED') && <div><button className="danger" onClick={() => move('VERIFIED_COMPLETE', true)}>Mark it checked myself</button></div>}
+            {owner && project.visibility !== 'OWNER_PRIVATE' && <div><button onClick={() => setDlg('giveStep')}>Give this step to someone else</button></div>}
             {canWork && assigned && !owner && <div className="row">
               {step.onHold ? <button onClick={() => act(() => hub.releaseStep(uid, step.id), 'Step is active again')}>Take this step off pause</button> : <button onClick={() => setDlg('hold')}>Pause this step</button>}</div>}
             {owner && <div className="row">
@@ -389,6 +391,7 @@ function StepPanel({ step, steps, labels, project, canWork, isNext, paused: proj
       {dlg === 'verify' && <VerifyDialog step={step} onClose={() => setDlg(null)} />}
       {dlg === 'sheet' && <SheetDialog project={project} step={step} onClose={() => setDlg(null)} />}
       {dlg === 'hold' && <HoldDialog step={step} label={labels.get(step.id) ?? ''} onClose={() => setDlg(null)} />}
+      {dlg === 'giveStep' && <ReassignDialog project={project} step={step} onClose={() => setDlg(null)} />}
       {dlg === 'newSheet' && <NewFileDialog project={project} step={step} kind="SHEET" onClose={() => setDlg(null)} />}
       {dlg === 'newDoc' && <NewFileDialog project={project} step={step} kind="DOC" onClose={() => setDlg(null)} />}
       {dlg === 'link' && <LinkFileDialog step={step} onClose={() => setDlg(null)} />}

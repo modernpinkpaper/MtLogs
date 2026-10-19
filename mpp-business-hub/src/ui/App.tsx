@@ -37,7 +37,7 @@ export function App() {
             <Route path="/projects/:projectId" element={<ProjectDetail />} />
             <Route path="/projects/:projectId/steps/:stepId" element={<ProjectDetail />} />
             <Route path="/review" element={<Review />} />
-            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/notifications" element={<Navigate to="/home" replace />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/resources" element={<Resources />} />
             <Route path="/errors" element={<Errors />} />

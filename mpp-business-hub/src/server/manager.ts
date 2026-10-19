@@ -219,6 +219,8 @@ export function processFindingSchedules(hub: HubServer) {
 export interface ApproveInput {
   title: string; employeeObjective: string; priority?: Project['priority']; deadlineYmd?: string | null; key?: string;
   steps: PlanStepDraft[]; assignUids?: string[]; createWorkspace?: boolean; idempotencyKey: string;
+  /** A note from Dalia shown at the top of the project to the people on it. */
+  note?: string;
 }
 
 /** What a worker would see: only these fields. Used for the preview and for the real brief. */
@@ -250,6 +252,7 @@ export function approveFindingAsProject(hub: HubServer, uid: string, findingId: 
     const project = hub.commit(() => {
       const p = hub.createProject(uid, { title: input.title, objective: input.employeeObjective, memberUids: [], visibility: 'ASSIGNED_ONLY', priority: input.priority ?? 'NORMAL', key: input.key });
       p.origin = 'AI_RECOMMENDATION';
+      if (input.note?.trim()) p.ownerNote = { text: input.note.trim(), at: hub.state.now, byUid: uid };
       // The employee brief is built here from sanitized fields only. No finding id, no numbers, no strategy.
       p.employeeBrief = `${input.employeeObjective}\n\nSteps: ${input.steps.map((s, i) => `${i + 1}. ${s.title}`).join('; ')}`;
       if (input.deadlineYmd) p.deadlineAt = chicagoToUtc(input.deadlineYmd, '17:00');
@@ -334,3 +337,30 @@ export function outcomeTracker(hub: HubServer, uid: string) {
 /** What an employee can ever see of this feature: nothing. Used by tests to prove it. */
 export function assertNotEmployee(hub: HubServer, uid: string) { if (hub.user(uid).role !== 'OWNER') throw new PermissionDenied(); }
 export const fmtLocal = formatLocalDate;
+
+/** The note at the top of a project. Only Dalia writes it. The people on the project read it. */
+export function setProjectNote(hub: HubServer, uid: string, projectId: string, text: string) {
+  owner(hub, uid); const p = hub.projectFor(uid, projectId);
+  return hub.commit(() => {
+    const before = p.ownerNote?.text ?? null; const t = text.trim();
+    p.ownerNote = t ? { text: t, at: hub.state.now, byUid: uid } : undefined;
+    hub.audit({ entityType: 'project', entityId: p.id, action: 'OWNER_NOTE', before, after: t || null, actorUid: uid, actorLabel: hub.userName(uid), reason: 'Owner note changed', evidenceRefs: [], projectId: p.id });
+    return p;
+  });
+}
+
+/**
+ * Send an idea to people Dalia picks, with a note. They get the plain idea and the steps. They never get the reasons, numbers or data behind it.
+ */
+export function shareFindingWithTeam(hub: HubServer, uid: string, findingId: string, toUids: string[], note: string) {
+  owner(hub, uid); const f = find(hub, findingId);
+  if (!toUids.length) throw new HubError('VALIDATION', 'Pick at least one person.');
+  for (const a of toUids) { const u = hub.state.users.find((x) => x.id === a); if (!u || !u.active || u.role !== 'EMPLOYEE') throw new HubError('VALIDATION', 'You can only send this to people who work here.'); }
+  const idea = f.plan?.employeeObjective || f.plan?.title || 'An idea to look at.';
+  const steps = f.plan?.steps.map((s, i) => `${i + 1}. ${s.title}`).join('  ') ?? '';
+  return hub.commit(() => {
+    for (const a of toUids) hub.notify({ recipientUid: a, senderUid: uid, type: 'DIRECT_MENTION', title: `${hub.userName(uid)} sent you an idea: ${f.plan?.title ?? f.title}`, preview: `${note.trim() ? note.trim() + ' — ' : ''}${idea}${steps ? ` Steps: ${steps}` : ''}`.slice(0, 600), projectId: null, sourceEntityId: f.id, deepLink: '/home', key: `share:${f.id}:${a}:${hub.state.now}` });
+    decide(hub, uid, f, 'SENT_TO_TEAM', `Sent to ${toUids.map((a) => hub.userName(a)).join(', ')}${note.trim() ? `: ${note.trim()}` : ''}`);
+    return f;
+  });
+}

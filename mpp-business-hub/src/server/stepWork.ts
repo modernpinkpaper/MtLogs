@@ -2,6 +2,7 @@ import type { HubServer } from './hub';
 import type { Project, Resource, ResourceLink, Step } from '../domain/types';
 import { stepLabel, stepLabels } from '../domain/stepLabels';
 import { HubError, PermissionDenied } from './errors';
+import { chicagoDate } from '../domain/time';
 
 // Day-to-day work on a project: adding, naming and ordering steps, making and linking files, and checking recent activity.
 // People on a project may do all of this. Every change is written to the audit trail and the project history, and none of it can be deleted.
@@ -53,6 +54,8 @@ export function addSteps(hub: HubServer, uid: string, projectId: string, count: 
   const parent = parentStepId ? hub.state.steps.find((s) => s.id === parentStepId && s.projectId === projectId) : null;
   if (parentStepId && !parent) throw new PermissionDenied();
   const u = hub.user(uid);
+  // Sub steps go under a step the person owns. Someone else’s step is theirs to change.
+  if (parent && u.role !== 'OWNER' && !parent.assignedUids.includes(uid)) throw new PermissionDenied();
   return hub.commit(() => {
     const made: Step[] = [];
     for (let i = 0; i < count; i++) {
@@ -194,6 +197,9 @@ export function linkExistingFile(hub: HubServer, uid: string, stepId: string, in
       visibility: project.visibility === 'OWNER_PRIVATE' ? 'OWNER_PRIVATE' : 'PROJECT_SCOPED', ownerUid: project.ownerUid, skuFamilies: [], provenance: hub.user(uid).role === 'OWNER' ? 'OWNER_APPROVED' : 'EMPLOYEE_CONFIRMED', approvedVersion: null, suggestedVersion: null, supersededById: null, checklistSummary: null, createdInApp: false,
     };
     addFileLink(hub, uid, project, step, res, 'Linked by a person from the step page.');
+    // The file stays where it is. If the project has a folder, a shortcut to it goes in the folder (practice).
+    const ws = hub.state.workspaces[project.id];
+    if (ws?.state === 'READY') { ws.shortcuts.push({ id: `sc-${id}`, name: name, parentId: ws.folderId ?? '', targetId: `ext-${id}`, targetResourceId: id }); ws.log.push({ at: hub.state.now, op: 'shortcut', detail: `Shortcut to “${name}” added to the project folder. The original was not moved (simulated).` }); }
     hub.audit({ entityType: 'resource', entityId: id, action: 'LINK_EXISTING_FILE', before: null, after: { url, name }, actorUid: uid, actorLabel: hub.userName(uid), reason: 'File linked to a step', evidenceRefs: [], projectId: project.id });
     hub.addJournal({ projectId: project.id, stepIds: [step.id], type: 'RESOURCE', actorUid: uid, title: 'File linked', summary: `“${name}” was linked to step ${stepLabel(hub.state.steps, step)}.`, verificationState: 'EMPLOYEE_CONFIRMED', relatedResourceIds: [id] });
     return res;
@@ -290,4 +296,118 @@ export function lastConfirmed(hub: HubServer, uid: string, projectId: string): {
     consider(s.lastConfirmedAt, s.id, `Step ${l}: ${s.title}`);
   }
   return best;
+}
+
+
+// ------------------------------------------------------------------ reassigning
+const people = (hub: HubServer, uids: string[]) => { for (const a of uids) { const u = hub.state.users.find((x) => x.id === a); if (!u || !u.active || u.role !== 'EMPLOYEE') throw new HubError('VALIDATION', 'You can only assign people who work here.'); } };
+const DONE = ['REPORTED_COMPLETE', 'VERIFIED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'];
+
+/**
+ * Give a project to someone else. Steps already done keep the name of who did them, and the new person sees them as done.
+ * Steps that are not done move to the new person. The old person loses access. Dalia only.
+ */
+export function reassignProject(hub: HubServer, uid: string, projectId: string, fromUid: string | null, toUids: string[]): { moved: number; alreadyDone: number } {
+  hub.requireOwner(uid);
+  const p = hub.projectFor(uid, projectId);
+  if (p.visibility === 'OWNER_PRIVATE') throw new HubError('PRIVATE_PROJECT', 'A private project cannot be assigned.');
+  if (!toUids.length) throw new HubError('VALIDATION', 'Pick who should take it.');
+  people(hub, toUids);
+  if (fromUid && !p.memberUids.includes(fromUid)) throw new HubError('VALIDATION', 'That person is not on this project.');
+  return hub.commit(() => {
+    const steps = hub.state.steps.filter((x) => x.projectId === p.id);
+    let moved = 0; const alreadyDone = steps.filter((x) => DONE.includes(x.status)).length;
+    for (const st of steps) {
+      if (DONE.includes(st.status)) continue;
+      if (fromUid ? st.assignedUids.includes(fromUid) || !st.assignedUids.length : true) { st.assignedUids = [...new Set([...st.assignedUids.filter((x) => x !== fromUid), ...toUids])]; moved++; }
+    }
+    const before = [...p.memberUids];
+    p.memberUids = [...new Set([...p.memberUids.filter((m) => m !== fromUid), ...toUids])];
+    p.sharedWithUids = p.sharedWithUids.filter((x) => x !== fromUid);
+    hub.audit({ entityType: 'project', entityId: p.id, action: 'REASSIGN', before, after: p.memberUids, actorUid: uid, actorLabel: hub.userName(uid), reason: fromUid ? `Moved from ${hub.userName(fromUid)}` : 'Assigned', evidenceRefs: [], projectId: p.id });
+    hub.addJournal({ projectId: p.id, type: 'ACCESS', actorUid: uid, title: `${fromUid ? `Moved from ${hub.userName(fromUid)} to` : 'Assigned to'} ${toUids.map((a) => hub.userName(a)).join(', ')}`, summary: `${moved} step${moved === 1 ? '' : 's'} moved. ${alreadyDone} already done stay done.`, verificationState: 'OFFICIAL' });
+    for (const a of toUids) hub.notify({ recipientUid: a, senderUid: uid, type: 'PROJECT_ASSIGNED', title: `You were given ${p.key} “${p.title.slice(0, 60)}”`, preview: `${alreadyDone} step${alreadyDone === 1 ? ' is' : 's are'} already done. ${moved} ${moved === 1 ? 'is' : 'are'} yours.`, projectId: p.id, sourceEntityId: p.id, deepLink: `/projects/${p.id}`, key: `reassign:${p.id}:${a}:${hub.state.now}` });
+    if (fromUid) hub.notify({ recipientUid: fromUid, senderUid: uid, type: 'PROJECT_ASSIGNED', title: `${p.key} was given to someone else`, preview: 'You do not need to do anything. Your finished steps stay credited to you.', projectId: null, sourceEntityId: p.id, deepLink: '/home', key: `reassign-from:${p.id}:${fromUid}:${hub.state.now}` });
+    return { moved, alreadyDone };
+  });
+}
+
+/** Give one step to someone else. They can see the whole project, but they can change only their own steps. Nobody else can change theirs. */
+export function reassignStep(hub: HubServer, uid: string, stepId: string, toUids: string[]): Step {
+  hub.requireOwner(uid);
+  const { step, project } = hub.stepFor(uid, stepId);
+  if (project.visibility === 'OWNER_PRIVATE') throw new HubError('PRIVATE_PROJECT', 'A private project cannot be assigned.');
+  if (!toUids.length) throw new HubError('VALIDATION', 'Pick who should take it.');
+  people(hub, toUids);
+  return hub.commit(() => {
+    const before = [...step.assignedUids];
+    step.assignedUids = [...toUids];
+    for (const a of toUids) if (!project.memberUids.includes(a)) project.memberUids.push(a);
+    const label = stepLabel(hub.state.steps, step);
+    hub.audit({ entityType: 'step', entityId: step.id, action: 'REASSIGN', before, after: step.assignedUids, actorUid: uid, actorLabel: hub.userName(uid), reason: 'Step given to someone else', evidenceRefs: [], projectId: project.id });
+    hub.addJournal({ projectId: project.id, stepIds: [step.id], type: 'ACCESS', actorUid: uid, title: `Step ${label} given to ${toUids.map((a) => hub.userName(a)).join(', ')}`, summary: `It was ${before.map((a) => hub.userName(a)).join(', ') || 'unassigned'}’s. Now only the new person can change it.`, verificationState: 'OFFICIAL' });
+    for (const a of toUids) if (!before.includes(a)) hub.notify({ recipientUid: a, senderUid: uid, type: 'PROJECT_ASSIGNED', title: `You were given step ${label} of ${project.key}`, preview: `“${step.title}”. You can see the rest of the project, but you can change only your own steps.`, projectId: project.id, stepId: step.id, sourceEntityId: step.id, deepLink: `/projects/${project.id}/steps/${step.id}`, key: `restep:${step.id}:${a}:${hub.state.now}` });
+    return step;
+  });
+}
+
+// ------------------------------------------------------------------ taking a file off a step
+/**
+ * Remove a file from a step. Nothing in Drive is deleted: the link is taken off and the file is kept in the history.
+ * If the step is already done and someone other than the person who did it asks, that person gets to say yes or no first.
+ */
+export function removeFile(hub: HubServer, uid: string, linkId: string): { removed: boolean; waitingFor: string[] } {
+  const link = hub.state.resourceLinks.find((l) => l.id === linkId && l.associationState !== 'REJECTED');
+  if (!link || !link.stepId) throw new PermissionDenied();
+  const { step, project } = hub.workStepFor(uid, link.stepId);
+  const res = hub.state.resources.find((r) => r.id === link.resourceId)!;
+  const u = hub.user(uid);
+  const isDone = DONE.includes(step.status);
+  const theirs = step.assignedUids.includes(uid);
+  return hub.commit(() => {
+    if (isDone && !theirs && step.assignedUids.length) {
+      link.removalRequest = { at: hub.state.now, byUid: uid };
+      for (const a of step.assignedUids) hub.notify({ recipientUid: a, senderUid: uid, type: 'APPROVAL_REQUEST', title: `${u.name} wants to take a file off a finished step`, preview: `“${res.label}” on ${project.key}, step ${stepLabel(hub.state.steps, step)}. Say yes or keep it.`, projectId: project.id, stepId: step.id, sourceEntityId: link.id, deepLink: '/home', key: `rmreq:${link.id}:${hub.state.now}` });
+      hub.audit({ entityType: 'resourceLink', entityId: link.id, action: 'REMOVAL_REQUESTED', before: null, after: { by: uid }, actorUid: uid, actorLabel: u.name, reason: 'Asked to remove a file from a finished step', evidenceRefs: [], projectId: project.id });
+      return { removed: false, waitingFor: step.assignedUids };
+    }
+    doRemove(hub, uid, link, res.label, step, project.id);
+    return { removed: true, waitingFor: [] };
+  });
+}
+function doRemove(hub: HubServer, uid: string, link: ResourceLink, label: string, step: Step, projectId: string) {
+  link.associationState = 'REJECTED'; link.removed = { at: hub.state.now, byUid: uid }; link.removalRequest = undefined;
+  hub.audit({ entityType: 'resourceLink', entityId: link.id, action: 'REMOVE_FILE', before: { state: 'CONFIRMED' }, after: { state: 'REJECTED' }, actorUid: uid, actorLabel: hub.userName(uid), reason: 'File taken off the step. The original file was not deleted.', evidenceRefs: [], projectId });
+  hub.addJournal({ projectId, stepIds: [step.id], type: 'RESOURCE', actorUid: uid, title: 'File taken off the step', summary: `“${label}” was taken off step ${stepLabel(hub.state.steps, step)}. The original file was not deleted.`, verificationState: 'OFFICIAL', relatedResourceIds: [link.resourceId] });
+}
+export function pendingFileRemovals(hub: HubServer, uid: string) {
+  return hub.state.resourceLinks.filter((l) => l.removalRequest && l.associationState !== 'REJECTED' && l.stepId).flatMap((link) => {
+    const step = hub.state.steps.find((s) => s.id === link.stepId)!; const project = hub.state.projects.find((p) => p.id === link.projectId)!;
+    if (!step.assignedUids.includes(uid)) return [];
+    const resource = hub.state.resources.find((r) => r.id === link.resourceId)!;
+    return [{ link, resource, step, project, byName: hub.userName(link.removalRequest!.byUid) }];
+  });
+}
+export function answerFileRemoval(hub: HubServer, uid: string, linkId: string, confirm: boolean): void {
+  const link = hub.state.resourceLinks.find((l) => l.id === linkId && l.removalRequest);
+  if (!link || !link.stepId) throw new PermissionDenied();
+  const step = hub.state.steps.find((s) => s.id === link.stepId)!;
+  if (!step.assignedUids.includes(uid)) throw new PermissionDenied();
+  const res = hub.state.resources.find((r) => r.id === link.resourceId)!; const by = link.removalRequest!.byUid;
+  hub.commit(() => {
+    if (confirm) doRemove(hub, uid, link, res.label, step, link.projectId);
+    else { link.removalRequest = undefined; hub.audit({ entityType: 'resourceLink', entityId: link.id, action: 'REMOVAL_DECLINED', before: null, after: null, actorUid: uid, actorLabel: hub.userName(uid), reason: 'The person who did the step kept the file', evidenceRefs: [], projectId: link.projectId }); }
+    for (const n of hub.state.notifications) if (n.sourceEntityId === link.id && n.type === 'APPROVAL_REQUEST' && n.recipientUid === uid && !n.acknowledgedAt) { n.acknowledgedAt = hub.state.now; n.readAt ??= hub.state.now; n.state = 'ACKNOWLEDGED'; }
+    hub.notify({ recipientUid: by, senderUid: uid, type: 'EMPLOYEE_UPDATE', title: `${hub.userName(uid)} ${confirm ? 'agreed to take' : 'kept'} “${res.label}” ${confirm ? 'off' : 'on'} the step`, preview: confirm ? 'The file was taken off. The original was not deleted.' : 'The file stays on the step.', projectId: link.projectId, stepId: step.id, sourceEntityId: `${link.id}:${confirm}`, deepLink: `/projects/${link.projectId}/steps/${step.id}`, key: `rmans:${link.id}:${hub.state.now}` });
+  });
+}
+
+// ------------------------------------------------------------------ reminders for blocked steps
+/** Blocked steps whose reminder day has come. The person assigned (and Dalia) look at them again. Worked out when read, nothing is sent. */
+export function remindersDue(hub: HubServer, uid: string) {
+  const today = chicagoDate(hub.state.now); const u = hub.user(uid);
+  return hub.state.steps.filter((s) => s.status === 'BLOCKED' && s.remindOn && s.remindOn <= today && (s.assignedUids.includes(uid) || u.role === 'OWNER')).flatMap((step) => {
+    const project = hub.state.projects.find((p) => p.id === step.projectId); if (!project || project.pause?.isPaused || project.closedAt || project.canceledAt) return [];
+    return [{ step, project, label: stepLabel(hub.state.steps, step) }];
+  });
 }

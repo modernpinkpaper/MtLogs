@@ -33,7 +33,8 @@ await p.getByRole('button', { name: 'Send update to Dalia' }).click();
 await p.waitForSelector('text=Update sent to Dalia');
 // 3. Dalia gets an in-app notification that links to the exact step and answer
 await p.selectOption('select[aria-label="Switch demo user"]', { label: 'Dalia (owner)' });
-await p.goto(U + '/notifications');
+await p.goto(U + '/home');
+await p.locator('summary:has-text("Team members")').click();
 await p.waitForSelector('text=answered your request');
 await shot('s4-dalia-notif');
 await p.getByRole('button', { name: /Open|Read/ }).first().click();

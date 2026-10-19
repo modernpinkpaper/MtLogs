@@ -54,7 +54,7 @@ describe('C. evidence vs official status', () => {
     const done = hub.transitionStep(U.dalia, 's-070-4', 'VERIFIED_COMPLETE');
     expect(done.verificationSource).toBe('OWNER_APPROVED');
     expect(() => hub.transitionStep(U.erika, 's-070-5', 'VERIFIED_COMPLETE')).toThrowError(/cannot go from/);
-    expect(() => hub.transitionStep(U.erika, 's-070-5', 'BLOCKED')).toThrowError(/cannot go from/);
+    expect(() => hub.transitionStep(U.erika, 's-070-5', 'REOPENED')).toThrowError(/cannot go from/);
     const aud = hub.getAudit(U.dalia, 'prj-070').filter((a) => a.entityId === 's-070-4' && a.action === 'TRANSITION');
     expect(aud).toHaveLength(3);
     expect(aud[0].after).toMatchObject({ status: 'VERIFIED_COMPLETE', verificationSource: 'OWNER_APPROVED' });

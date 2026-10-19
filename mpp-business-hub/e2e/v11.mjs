@@ -63,8 +63,8 @@ await p.locator('input[aria-label="Search"]').fill('FBA_TY001'); await p.waitFor
 // ---- v1.2 design checks (calm screens, one clear action) ----
 await p.fill('input[aria-label="Search"]', '');
 await as('Erika'); await go('/home');
-await p.waitForSelector('h2:has-text("Notifications")');
-ok(await p.locator('h2:has-text("Notifications")').count() >= 1, 'Home shows a Notifications section first');
+await p.waitForSelector('h1:has-text("Hi ")');
+ok(await p.locator('h1:has-text("Hi ")').count() >= 1, 'Home is the first page');
 ok(await p.locator('h2:has-text("Your projects")').count() === 0, 'employee Home has no project list');
 await go('/review'); await p.waitForSelector('text=What happened?');
 const yes = p.getByRole('button', { name: 'Send answer' }).first();
@@ -91,7 +91,7 @@ await go('/owner/ai/af-3'); await p.waitForSelector('text=Why we think so');
 ok(await prim() === 1, 'AI finding has exactly one primary button (' + await prim() + ')');
 await go('/owner/ai'); await p.waitForSelector('.lrow');
 ok(await prim() === 0, 'AI list has no primary buttons (rows are links) (' + await prim() + ')');
-await as('Erika'); await go('/home'); await p.waitForSelector('h2:has-text("Notifications")');
+await as('Erika'); await go('/home'); await p.waitForSelector('h1:has-text("Hi ")');
 ok(await prim() <= 1, 'Home has at most one primary button (' + await prim() + ')');
 await go('/review'); await p.waitForSelector('text=What happened?');
 ok(await prim() === 1, 'Review shows one primary button, on the first card (' + await prim() + ')');
@@ -155,7 +155,7 @@ await go('/projects'); await p.waitForSelector('.prow');
 ok(await p.locator('text=/' + pcs.team + ' team projects? active · ' + pcs.private + ' private/').count() > 0, 'Projects uses the same counts');
 // Home alert wording
 await go('/home'); await p.waitForSelector('h1:has-text("Home")');
-ok(await p.locator('h2:has-text("Needs your attention")').count() + await p.locator('h2:has-text("AI recommended projects")').count() > 0, 'Home is grouped into sections');
+ok(await p.locator('details.hgroup').count() > 0, 'Home is grouped into collapsed groups');
 ok(await p.locator('text=/w-pc04|missing sequence/').count() === 0, 'no raw diagnostics on Home');
 // mobile: next step first, files near, plan after
 await as('Erika'); await p.setViewportSize({ width: 390, height: 820 }); await go('/projects/prj-070/steps/s-070-2'); await p.waitForSelector('.frow');
