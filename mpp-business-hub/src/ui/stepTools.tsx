@@ -109,3 +109,42 @@ export function LinkFileDialog({ step, onClose }: { step: Step; onClose: () => v
     </Modal>
   );
 }
+
+const STATUS_OPTIONS: { to: 'IN_PROGRESS' | 'WAITING' | 'BLOCKED' | 'REPORTED_COMPLETE' | 'NOT_APPLICABLE'; label: string }[] = [
+  { to: 'IN_PROGRESS', label: 'In progress' }, { to: 'WAITING', label: 'Waiting on something' }, { to: 'BLOCKED', label: 'Blocked' }, { to: 'REPORTED_COMPLETE', label: 'Completed' }, { to: 'NOT_APPLICABLE', label: 'Not needed' },
+];
+
+/** One "Update status" button. It opens every choice. The one that matches today's status is greyed out and cannot be clicked again. */
+export function StatusMenu({ step, compact }: { step: Step; compact?: boolean }) {
+  const { hub, uid } = useMe();
+  const act = useAct();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [asking, setAsking] = useState<null | 'BLOCKED' | 'WAITING'>(null);
+  const done = step.status === 'REPORTED_COMPLETE' || step.status === 'VERIFIED_COMPLETE';
+  const isCurrent = (to: string) => step.status === to || (to === 'REPORTED_COMPLETE' && done);
+  const go = async (to: (typeof STATUS_OPTIONS)[number]['to'], why = '') => {
+    const r = await act(() => hub.transitionStep(uid, step.id, to, { reason: why }), `Saved: ${STATUS_OPTIONS.find((o) => o.to === to)!.label}`);
+    if (r) { setOpen(false); setAsking(null); setReason(''); }
+  };
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <div><button className={compact ? 'pill-btn' : 'primary'} aria-expanded={open} onClick={() => { setOpen(!open); setAsking(null); }}>Update status</button></div>
+      {open && (
+        <div className="stack" style={{ gap: 6 }} role="group" aria-label="Choose a status">
+          <div className="row" style={{ gap: 6 }}>
+            {STATUS_OPTIONS.map((o) => (
+              <button key={o.to} className={compact ? 'pill-btn' : ''} disabled={isCurrent(o.to)} aria-pressed={isCurrent(o.to)} title={isCurrent(o.to) ? 'This is the status now. Pick another one to change it.' : undefined}
+                onClick={() => (o.to === 'BLOCKED' || o.to === 'WAITING' ? setAsking(o.to) : void go(o.to))}>{o.label}</button>))}
+          </div>
+          {asking && (
+            <form className="row" onSubmit={(e) => { e.preventDefault(); void go(asking, reason); }}>
+              <input type="text" aria-label="Reason" placeholder={asking === 'BLOCKED' ? 'What is in the way? (needed)' : 'What are you waiting on?'} value={reason} onChange={(e) => setReason(e.target.value)} style={{ flex: 1 }} autoFocus />
+              <button className="primary" type="submit" disabled={asking === 'BLOCKED' && !reason.trim()}>Save</button>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

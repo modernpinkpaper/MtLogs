@@ -18,7 +18,7 @@ describe('1. Review cards ask about the real outcome, not only whether the AI sa
     expect(spec.question).toBe('Did you test the Shopify Lister today?');
     expect(spec.evidence).toMatch(/couldn.t confirm whether it created a listing/);
     expect(spec.choices.map((c) => c.label)).toEqual([
-      'Completed the test successfully', 'Tested it, but something went wrong', 'Still working on it', 'I didn’t work on this', 'The AI misunderstood what I was doing', 'I’m not sure / Answer later',
+      'Completed the test successfully', 'Tested it, but something went wrong', 'In progress', 'I didn’t work on this', 'The AI misunderstood what I was doing', 'I’m not sure / Answer later',
     ]);
     expect(plainToolName('MPP Shopify Lister (Tampermonkey)')).toBe('Shopify Lister');
   });

@@ -65,7 +65,7 @@ export function DemoOperations() {
 
       <section className="card stack"><h2>Shortcuts</h2>
         <div className="row">
-          <B fn={() => hub.demoSimulateReviewResponse()} ok="Erika answered “Still working on it”">Pretend Erika answers “Still working on it”</B>
+          <B fn={() => hub.demoSimulateReviewResponse()} ok="Erika answered “In progress”">Pretend Erika answers “In progress”</B>
           <button onClick={() => act(async () => { hub.clockOut('u-erika', newKey('demo-out')); }, 'Erika clocked out. Her cards are saved.')}>Pretend Erika clocks out</button>
           <button disabled={me.role !== 'OWNER'} onClick={() => act(() => hub.demoDiscoverSheet(uid), 'A new file was found, with suggested links')}>Find a new file (owner)</button>
           <B fn={() => hub.demoNewResourceVersion('r-seo-a')} ok="A newer “SEO Master” version was found. It is only a suggestion.">New version of “SEO Master”</B></div></section>

@@ -22,7 +22,7 @@ describe('B. owner update request round trip', () => {
 
     expect(hub.unreadCount(U.dalia)).toBe(before + 1);
     const note = hub.listNotifications(U.dalia).find((x) => x.type === 'EMPLOYEE_RESPONSE')!;
-    expect(note.title).toContain('Still working on it');
+    expect(note.title).toContain('In progress');
     expect(note.preview).toContain('investigating permissions');
     expect(note.deepLink).toContain('/projects/prj-012/steps/s-012-3');
     expect(note.deepLink).toContain('response=');

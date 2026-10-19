@@ -26,7 +26,7 @@ await p.getByRole('button', { name: 'Done', exact: true }).click();
 await p.selectOption('select[aria-label="Switch demo user"]', { label: 'Erika' });
 await p.goto(U + '/review');
 await p.waitForSelector('text=Dalia asked for an update');
-await p.locator('label:has-text("Still working on it")').first().click();
+await p.locator('label:has-text("In progress")').first().click();
 await p.locator('textarea').first().fill('Test attempted; investigating permissions');
 await shot('s3-erika-card');
 await p.getByRole('button', { name: 'Send update to Dalia' }).click();

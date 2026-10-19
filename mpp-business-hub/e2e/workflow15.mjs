@@ -51,7 +51,7 @@ ok(await rowB.locator('text=No version chosen yet').count() === 1, 'the other co
 await shot('w2-erika-files');
 
 console.log('\n[2] A step Erika says is done is done');
-await p.getByRole('button', { name: 'Completed' }).first().click(); await p.waitForTimeout(400);
+await p.getByRole('button', { name: 'Update status' }).first().click(); await p.getByRole('button', { name: 'Completed', exact: true }).first().click(); await p.waitForTimeout(400);
 await go('/projects/prj-012');
 ok(await p.locator('text=3 of 4 steps done').count() > 0, 'the project page says “3 of 4 steps done”');
 await go('/projects'); await p.waitForSelector('.prow');
@@ -77,7 +77,7 @@ await as('Erika'); await go('/home'); await go('/projects'); await go('/home');
 ok(await p.locator('text=Dalia asked you for an update').count() === 1, 'the request is still on Erika’s My Work after she navigated away');
 await go('/review'); await p.waitForSelector('text=Dalia asked for an update');
 ok(await p.locator('label:has-text("I need clarification")').count() === 1, 'the answers include “I need clarification”');
-await p.locator('label:has-text("Still working on it")').first().click(); await p.locator('textarea').first().fill('Half done.');
+await p.locator('label:has-text("In progress")').first().click(); await p.locator('textarea').first().fill('Half done.');
 await p.getByRole('button', { name: 'Send update to Dalia' }).click(); await p.waitForSelector('text=Update sent to Dalia');
 await as('Dalia (owner)'); await go('/notifications');
 ok(await p.locator('h3:has-text("answered your request")').count() === 1, 'Dalia has exactly one reply notification');

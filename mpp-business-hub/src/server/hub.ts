@@ -50,7 +50,7 @@ const freshState = () => (REAL_MODE ? buildRealState(buildSeedState(), REAL_TRAC
 export const DEMO_MODE = true as const;
 
 export const CHOICE_LABEL: Record<ResponseChoice, string> = {
-  COMPLETED: 'Completed', IN_PROGRESS: 'Still working on it', NOT_STARTED: 'Not started',
+  COMPLETED: 'Completed', IN_PROGRESS: 'In progress', NOT_STARTED: 'Not started',
   BLOCKED: 'Blocked — I need help', WAITING: 'Waiting for someone or something', NOT_APPLICABLE: 'No longer needed', NEED_CLARIFICATION: 'I need clarification',
 };
 

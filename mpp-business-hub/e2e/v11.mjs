@@ -102,7 +102,7 @@ ok(h1[0] > h1[1], 'page title is larger than section headings (' + h1.join(' vs 
 // ---- v1.4: outcome answers, actionable files, project info, mobile order, counts, small tasks ----
 await as('Erika'); await go('/review');
 await p.waitForSelector('text=Did you test the Shopify Lister today?');
-for (const t of ['Completed the test successfully', 'Tested it, but something went wrong', 'Still working on it', 'I didn’t work on this', 'The AI misunderstood what I was doing', 'I’m not sure / Answer later']) ok(await p.locator('label:has-text("' + t + '")').count() > 0, 'test card offers: ' + t);
+for (const t of ['Completed the test successfully', 'Tested it, but something went wrong', 'In progress', 'I didn’t work on this', 'The AI misunderstood what I was doing', 'I’m not sure / Answer later']) ok(await p.locator('label:has-text("' + t + '")').count() > 0, 'test card offers: ' + t);
 ok(await p.locator('text=Anything else we should know? (Optional)').count() > 0, 'optional note is offered');
 await p.getByRole('button', { name: 'View activity details' }).first().click();
 ok(await p.locator('.timeline li').count() >= 1, 'activity details show times and actions');
@@ -160,7 +160,7 @@ ok(await p.locator('text=Other items needing attention').count() > 0, '"Other it
 ok(await p.locator('text=/w-pc04|missing sequence/').count() === 0, 'no raw diagnostics on Home');
 // mobile: next step first, files near, plan after
 await as('Erika'); await p.setViewportSize({ width: 390, height: 820 }); await go('/projects/prj-070/steps/s-070-2'); await p.waitForSelector('.frow');
-const pos = await p.evaluate(() => { const top = (e) => e ? Math.round(e.getBoundingClientRect().top + scrollY) : 99999; return { panel: top(document.querySelector('section[aria-label^="Step"]')), btn: top([...document.querySelectorAll('button')].find((b) => /^(Begin|Completed)$/.test(b.textContent))), file: top(document.querySelector('.frow')), plan: top([...document.querySelectorAll('summary')].find((e) => /All steps/.test(e.textContent))), sw: document.documentElement.scrollWidth }; });
+const pos = await p.evaluate(() => { const top = (e) => e ? Math.round(e.getBoundingClientRect().top + scrollY) : 99999; return { panel: top(document.querySelector('section[aria-label^="Step"]')), btn: top([...document.querySelectorAll('button')].find((b) => /^Update status$/.test(b.textContent))), file: top(document.querySelector('.frow')), plan: top([...document.querySelectorAll('summary')].find((e) => /All steps/.test(e.textContent))), sw: document.documentElement.scrollWidth }; });
 ok(pos.btn < 900, 'mobile: the main action is within one screen (the AI check line and description added a little height) (' + pos.btn + ')');
 ok(pos.panel < pos.plan, 'mobile: the current step comes before the full plan (' + pos.panel + ' < ' + pos.plan + ')');
 ok(pos.file < pos.plan, 'mobile: files come before the full plan');

@@ -6,7 +6,7 @@ import { JournalList, ResourceCard, StepResourceRow } from '../parts';
 import { JournalFilters } from './Journal';
 import { RequestUpdateDialog, SendUpdateDialog } from '../dialogs';
 import { ProjectInfo } from '../projectRef';
-import { AddStepsDialog, EditableText, LinkFileDialog, NewFileDialog } from '../stepTools';
+import { AddStepsDialog, EditableText, StatusMenu, LinkFileDialog, NewFileDialog } from '../stepTools';
 import { ChangeScheduleDialog, PauseBanner, PauseDialog, PilotPanel, PilotSetupDialog, ResumeDialog, SuggestDialog } from '../pauseUi';
 import { deadlineInfo, nextStep, notReadyReason, pauseLine, progressCounts, projectWorkStatus } from '../../domain/projectStatus';
 import { formatDate, formatDateTime } from '../../domain/time';
@@ -258,7 +258,7 @@ function StepPanel({ step, steps, labels, project, canWork, isNext, paused: proj
   const assigned = step.assignedUids.includes(uid) || owner;
   const why = notReadyReason(step, steps, project);
   const canSignOff = !!step.employeeSignOffAllowed && step.impact === 'ROUTINE';
-  const choices = (NEXT[step.status] ?? []).filter((t) => t !== 'REPORTED_COMPLETE' && !(t === 'IN_PROGRESS' && step.status === 'NOT_STARTED')).filter((t) => owner || (assigned && ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'].includes(t)) || (assigned && t === 'VERIFIED_COMPLETE' && canSignOff));
+  const choices = (NEXT[step.status] ?? []).filter((t) => !['REPORTED_COMPLETE', 'IN_PROGRESS', 'BLOCKED', 'WAITING', 'NOT_APPLICABLE'].includes(t)).filter((t) => owner || (assigned && ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'].includes(t)) || (assigned && t === 'VERIFIED_COMPLETE' && canSignOff));
   const move = (to: StepStatus, ownerApproval = false) => act(() => hub.transitionStep(uid, step.id, to, { reason, ownerApproval }), `Saved: ${statusLabel(to)}`);
   const hasCard = hub.outstandingCards(uid).some((c) => c.stepId === step.id && c.cardType !== 'OWNER_REQUEST');
   const ws = hub.projectWorkspace(uid, project.id);
@@ -281,8 +281,7 @@ function StepPanel({ step, steps, labels, project, canWork, isNext, paused: proj
       </div>
 
       <div className="row actions">
-        {canWork && assigned && step.status === 'NOT_STARTED' && <button className="primary" onClick={() => move('IN_PROGRESS')}>Begin</button>}
-        {canWork && assigned && step.status !== 'CANCELLED' && <button className={step.status === 'NOT_STARTED' ? '' : 'primary'} onClick={() => move('REPORTED_COMPLETE')}>Completed</button>}
+        {canWork && assigned && step.status !== 'CANCELLED' && <StatusMenu step={step} />}
         {!owner && canWork && <button onClick={() => setDlg('update')}>Update progress</button>}
         {!owner && canWork && <button onClick={() => setDlg('help')}>Ask for help</button>}
         {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setDlg('request')}>Ask for an update</button>}
@@ -314,10 +313,7 @@ function StepPanel({ step, steps, labels, project, canWork, isNext, paused: proj
         {children.map((c) => (
           <div key={c.id} className="row between subrow">
             <span><span className="num">{labels.get(c.id)}</span> <EditableText value={c.title} canEdit={canWork} label={`sub step ${labels.get(c.id)} name`} onSave={async (v) => { try { hub.renameStep(uid, c.id, v); return true; } catch (e) { alert((e as Error).message); return false; } }} /> <StepState status={c.status} /></span>
-            {canWork && c.assignedUids.includes(uid) && <span className="row" style={{ gap: 6 }}>
-              {c.status === 'NOT_STARTED' && <button className="pill-btn" onClick={() => act(() => hub.transitionStep(uid, c.id, 'IN_PROGRESS', {}), 'Started')}>Begin</button>}
-              {c.status !== 'REPORTED_COMPLETE' && c.status !== 'VERIFIED_COMPLETE' && c.status !== 'CANCELLED' && <button className="pill-btn" onClick={() => act(() => hub.transitionStep(uid, c.id, 'REPORTED_COMPLETE', {}), 'Completed')}>Completed</button>}
-            </span>}
+            {canWork && c.assignedUids.includes(uid) && c.status !== 'CANCELLED' && <StatusMenu step={c} compact />}
           </div>))}
       </div>
 

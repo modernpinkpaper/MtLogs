@@ -58,7 +58,7 @@ export function reviewSpec(f: Finding, step: Step | null, tool?: string | null):
         kind, question: `Did you test ${toolName === 'the tool' ? 'the automation' : `the ${toolName}`} today?`,
         evidence: errors ? 'We detected a test attempt and a sign of an error. We can’t tell what happened.' : 'We detected a test attempt, but couldn’t confirm whether it created a listing.',
         detected: `We detected a ${toolName === 'the tool' ? 'tool' : toolName} test`,
-        choices: [{ outcome: 'DONE', label: 'Completed the test successfully' }, { outcome: 'PROBLEM', label: 'Tested it, but something went wrong' }, { outcome: 'WORKING', label: 'Still working on it' }, NOT_ME, MISREAD, NOT_SURE],
+        choices: [{ outcome: 'DONE', label: 'Completed the test successfully' }, { outcome: 'PROBLEM', label: 'Tested it, but something went wrong' }, { outcome: 'WORKING', label: 'In progress' }, NOT_ME, MISREAD, NOT_SURE],
         notePlaceholder: 'Example: The draft showed up in Shopify, but the price was empty.',
       };
     case 'AMAZON_UPLOAD': {
@@ -67,7 +67,7 @@ export function reviewSpec(f: Finding, step: Step | null, tool?: string | null):
         kind, question: `Did the ${sku} variation change go through successfully?`,
         evidence: `We saw ${f.refs.submissionRefs.length || 'some'} Amazon upload number${f.refs.submissionRefs.length === 1 ? '' : 's'}. The logs can’t show whether Amazon accepted the change.`,
         detected: 'We detected an Amazon upload',
-        choices: [{ outcome: 'DONE', label: 'I uploaded it, and Amazon accepted it' }, { outcome: 'DONE_PART', label: 'I uploaded it, but I haven’t seen the result yet' }, { outcome: 'PROBLEM', label: 'I uploaded it, but it did not go through' }, { outcome: 'WORKING', label: 'Still working on it' }, NOT_ME, MISREAD, NOT_SURE],
+        choices: [{ outcome: 'DONE', label: 'I uploaded it, and Amazon accepted it' }, { outcome: 'DONE_PART', label: 'I uploaded it, but I haven’t seen the result yet' }, { outcome: 'PROBLEM', label: 'I uploaded it, but it did not go through' }, { outcome: 'WORKING', label: 'In progress' }, NOT_ME, MISREAD, NOT_SURE],
         notePlaceholder: 'Example: Amazon showed “Action required” on the first try. I sent a fixed file.',
       };
     }
@@ -109,7 +109,7 @@ export function reviewSpec(f: Finding, step: Step | null, tool?: string | null):
         kind: 'GENERAL', question: step ? `Did you work on “${step.title.length > 60 ? step.title.slice(0, 58) + '…' : step.title}” today?` : 'Did you do this work?',
         evidence: firstSentence(f.inference),
         detected: 'We detected some work',
-        choices: [{ outcome: 'DONE', label: 'Finished my part' }, { outcome: 'DONE_PART', label: 'Made progress' }, { outcome: 'PROBLEM', label: 'Ran into a problem' }, { outcome: 'WORKING', label: 'Still working on it' }, NOT_ME, MISREAD, NOT_SURE],
+        choices: [{ outcome: 'DONE', label: 'Finished my part' }, { outcome: 'DONE_PART', label: 'Made progress' }, { outcome: 'PROBLEM', label: 'Ran into a problem' }, { outcome: 'WORKING', label: 'In progress' }, NOT_ME, MISREAD, NOT_SURE],
         notePlaceholder: 'Example: I finished the first batch. The rest is for tomorrow.',
       };
   }

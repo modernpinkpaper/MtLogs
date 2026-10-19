@@ -10,8 +10,8 @@ await p.goto(U + '/projects/prj-070/steps/s-070-2'); await p.waitForSelector('te
 ok(await p.locator('text=Who can see it').count() === 0 && await p.locator('text=How we count progress').count() === 0, 'removed "Who can see it" and "How we count progress"');
 ok(await p.locator('text=AI last checked your activity').count() + await p.locator('text=has not checked').count() > 0, 'AI last checked line is shown');
 ok(await p.getByRole('button', { name: 'Check my activity now' }).count() === 1, 'Check my activity now button');
-ok(await p.getByRole('button', { name: 'Begin' }).count() === 0, 'no Begin button once a step has started');
-ok(await p.getByRole('button', { name: 'Completed' }).count() >= 1, 'Completed is available');
+ok(await p.getByRole('button', { name: 'Begin' }).count() === 0, 'there is no Begin button any more');
+ok(await p.getByRole('button', { name: 'Update status' }).count() >= 1, 'one Update status button');
 // add 2 steps
 await p.getByRole('button', { name: 'Add steps' }).or(p.getByText('Add steps').first()).first().click();
 await p.getByLabel('How many steps?').fill('2'); await p.getByRole('button', { name: 'Add', exact: true }).click(); await p.waitForTimeout(500);
@@ -27,13 +27,16 @@ await p.getByRole('button', { name: 'Done', exact: true }).click();
 // reorder
 await p.getByRole('button', { name: 'Move 2 up' }).click(); await p.waitForTimeout(400);
 ok(await p.locator('.step:has-text("Build Amazon listing automation") .num').first().innerText() === '1', 'moving a step up renumbers it');
-// Begin on a blank step
+// Update status on a blank step
 await p.locator('.step:has-text("New step")').first().click(); await p.waitForTimeout(300);
-ok(await p.getByRole('button', { name: 'Begin' }).count() === 1, 'a not-started step shows Begin');
-await p.getByRole('button', { name: 'Begin' }).click(); await p.waitForTimeout(300);
-ok(await p.getByRole('button', { name: 'Begin' }).count() === 0, 'Begin goes away once started');
-await p.getByRole('button', { name: 'Completed' }).first().click(); await p.waitForSelector('text=/Marked done/');
-ok(true, 'Marked done date shown');
+await p.getByRole('button', { name: 'Update status' }).first().click();
+ok(await p.getByRole('button', { name: 'In progress', exact: true }).count() >= 1, 'In progress is the name for starting a step');
+await p.getByRole('button', { name: 'In progress', exact: true }).first().click(); await p.waitForTimeout(300);
+await p.getByRole('button', { name: 'Update status' }).first().click();
+ok(await p.getByRole('button', { name: 'In progress', exact: true }).first().isDisabled(), 'the current status is greyed out');
+await p.getByRole('button', { name: 'Completed', exact: true }).first().click(); await p.waitForSelector('text=/Marked done/');
+await p.getByRole('button', { name: 'Update status' }).first().click();
+ok(await p.getByRole('button', { name: 'Completed', exact: true }).first().isDisabled(), 'once completed, the Completed button is greyed out');
 ok(await p.locator('section[aria-label^="Step"] .row:not(.journal-item *) >> text=Employee confirmed').count() === 0, '"Employee confirmed" is gone from the step header');
 // All files grouped by step
 await p.goto(U + '/projects/prj-070?tab=files'); await p.waitForSelector('text=All files');
