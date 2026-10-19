@@ -1,3 +1,4 @@
+import { stepLabels } from './stepLabels';
 import type { Project, ProjectWorkStatus, Step } from './types';
 import { chicagoDate, formatLocalDate } from './time';
 
@@ -58,7 +59,7 @@ export function notReadyReason(step: Step, steps: Step[], project: Project, owne
   if (step.status === 'BLOCKED') return `Blocked: ${step.blockerReason ?? 'see the step'}.`;
   if (step.status === 'WAITING') return `Waiting: ${step.blockerReason ?? 'for someone or something'}.`;
   const open = step.dependencyIds.map((d) => steps.find((s) => s.id === d)).filter((s): s is Step => !!s && !TERMINAL.includes(s.status) && s.status !== 'REPORTED_COMPLETE');
-  if (open.length) return `Waiting for Step ${open.map((s) => s.sortOrder).join(', ')} to be finished first.`;
+  if (open.length) { const lab = stepLabels(steps.filter((x) => x.projectId === step.projectId)); return `Waiting for Step ${open.map((s) => lab.get(s.id) ?? s.sortOrder).join(', ')} to be finished first.`; }
   void ownerName;
   return null;
 }

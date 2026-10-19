@@ -7,11 +7,11 @@ import { RequestUpdateDialog } from '../dialogs';
 import { ResumeDialog } from '../pauseUi';
 import { pilotSummaryLine } from '../pauseUi';
 import { deadlineInfo, nextStep, pauseLine, progressCounts, projectWorkStatus } from '../../domain/projectStatus';
-import { formatDate } from '../../domain/time';
+import { formatDate, formatDateTime } from '../../domain/time';
 import type { Project, ProjectWorkStatus, Step } from '../../domain/types';
 
 type View = 'list' | 'board';
-type Sort = 'suggested' | 'due' | 'updated' | 'priority' | 'name';
+type Sort = 'suggested' | 'due' | 'updated' | 'priority' | 'name' | 'left';
 type Scope = 'all' | 'mine' | 'byPerson';
 interface Prefs { view: View; sort: Sort; scope: Scope }
 const DEFAULT: Prefs = { view: 'list', sort: 'suggested', scope: 'all' };
@@ -25,11 +25,11 @@ function usePrefs(uid: string): [Prefs, (p: Partial<Prefs>) => void] {
 }
 
 const SORTS: { id: Sort; label: string }[] = [
-  { id: 'suggested', label: 'Suggested order' }, { id: 'due', label: 'Due soonest' }, { id: 'updated', label: 'Recently updated' }, { id: 'priority', label: 'Priority' }, { id: 'name', label: 'Project name' },
+  { id: 'suggested', label: 'Suggested order' }, { id: 'due', label: 'Due soonest' }, { id: 'updated', label: 'Last change' }, { id: 'priority', label: 'Priority' }, { id: 'name', label: 'Name, A to Z' }, { id: 'left', label: 'Where I left off' },
 ];
 const PRI = { HIGH: 0, NORMAL: 1, LOW: 2 } as const;
 
-interface Row { p: Project; steps: Step[]; status: ProjectWorkStatus; attention: string | null; next: Step | null; needsResponse: boolean; verifyPending: boolean }
+interface Row { p: Project; steps: Step[]; status: ProjectWorkStatus; attention: string | null; next: Step | null; needsResponse: boolean; verifyPending: boolean; last: { at: string; stepId: string | null; text: string } | null }
 
 export function Projects() {
   const { hub, uid, me } = useMe();
@@ -60,7 +60,7 @@ export function Projects() {
     const steps = hub.projectSteps(uid, p.id);
     const hasReq = myCards.some((c) => c.cardType === 'OWNER_REQUEST' && c.projectId === p.id) || (owner && hub.state.updateRequests.some((r) => r.projectId === p.id && ['OPEN', 'PARTIALLY_RESPONDED'].includes(r.state)));
     const attention = owner ? attentionByProject.get(p.id) ?? (p.origin === 'AI_RECOMMENDATION' && !p.memberUids.length && !p.closedAt ? 'Choose who works on it' : null) : (myCards.some((c) => c.projectId === p.id && c.cardType === 'OWNER_REQUEST') ? 'Needs a response' : null);
-    return { p, steps, status: projectWorkStatus(p, steps), attention, next: nextStep(steps, p), needsResponse: hasReq, verifyPending: steps.some((s) => s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) };
+    return { p, steps, status: projectWorkStatus(p, steps), attention, next: nextStep(steps, p), last: hub.lastConfirmed(uid, p.id), needsResponse: hasReq, verifyPending: steps.some((s) => s.status === 'REPORTED_COMPLETE' && s.impact === 'HIGH' && !s.verifications.some((v) => v.result === 'CONFIRMED')) };
   });
 
   const today = hub.now;
@@ -84,6 +84,7 @@ export function Projects() {
       case 'updated': return b.p.updatedAt.localeCompare(a.p.updatedAt) || byKey;
       case 'priority': return PRI[a.p.priority] - PRI[b.p.priority] || (a.p.deadlineAt ?? '9').localeCompare(b.p.deadlineAt ?? '9') || byKey;
       case 'name': return a.p.title.localeCompare(b.p.title) || byKey;
+      case 'left': return (b.last?.at ?? '').localeCompare(a.last?.at ?? '') || byKey;
       default: // Suggested: pinned, then needs a response, then due soonest, then priority, then last update. Stable tie-break by number.
         return Number(b.p.pinned) - Number(a.p.pinned) || Number(!!b.attention) - Number(!!a.attention) || (a.p.deadlineAt ?? '9').localeCompare(b.p.deadlineAt ?? '9') || PRI[a.p.priority] - PRI[b.p.priority] || b.p.updatedAt.localeCompare(a.p.updatedAt) || byKey;
     }
@@ -179,7 +180,7 @@ export function Projects() {
   );
 }
 
-export function PCard({ r, compact, onAsk, onResume }: { r: { p: Project; steps: Step[]; status: ProjectWorkStatus; attention: string | null; next: Step | null }; compact?: boolean; onAsk: (id: string) => void; onResume: (p: Project) => void }) {
+export function PCard({ r, compact, mostRecent, onAsk, onResume }: { r: { p: Project; steps: Step[]; status: ProjectWorkStatus; attention: string | null; next: Step | null; last?: { at: string; stepId: string | null; text: string } | null }; compact?: boolean; mostRecent?: boolean; onAsk: (id: string) => void; onResume: (p: Project) => void }) {
   const { hub, uid, me } = useMe();
   const act = useAct();
   const nav = useNavigate();
@@ -195,7 +196,8 @@ export function PCard({ r, compact, onAsk, onResume }: { r: { p: Project; steps:
   else if (owner && p.origin === 'AI_RECOMMENDATION' && !p.memberUids.length && !p.closedAt) action = { label: 'Choose who works on it', go: () => nav(`/projects/${p.id}?assign=1`), primary: true };
   else if (!owner && attention === 'Needs a response') action = { label: 'Answer Dalia', go: () => nav('/review'), primary: true };
   void act; void onAsk;
-  const nextText = next && status !== 'COMPLETED' && status !== 'CANCELED' ? `${status === 'PAUSED' ? 'Next when resumed' : 'Next'}: Step ${next.sortOrder} “${next.title.length > 70 ? next.title.slice(0, 68) + '…' : next.title}”` : null;
+  const labels = hub.stepLabelsFor(uid, p.id);
+  const nextText = next && status !== 'COMPLETED' && status !== 'CANCELED' ? `${status === 'PAUSED' ? 'Next when resumed' : 'Next'}: Step ${labels.get(next.id)} “${next.title.length > 70 ? next.title.slice(0, 68) + '…' : next.title}”` : null;
   const when = status === 'PAUSED' ? pauseLine(p, owner) : di ? (compact && p.deadlineAt ? `Due ${formatDate(p.deadlineAt)}` : di.text) : null;
   return (
     <article className="prow" aria-label={`${p.key} ${p.title}`}>
@@ -203,6 +205,7 @@ export function PCard({ r, compact, onAsk, onResume }: { r: { p: Project; steps:
         <span className="t">{p.key} — {p.title}{p.pinned && <span title="Pinned" aria-label="Pinned"> 📌</span>}</span>
         {nextText && !compact && <span className="s">{nextText}</span>}
         <span className="m">{[people, when, pr.label, pilot].filter(Boolean).join(' · ')}</span>
+        {r.last && !compact && <span className="s small" style={{ color: 'var(--muted)' }}>{mostRecent && <Chip tone="info">Most recent</Chip>} Last confirmed activity: {formatDateTime(r.last.at)} · {r.last.text}</span>}
       </Link>
       <span className="end">
         <ProjectInfo projectId={p.id} label={p.key} />

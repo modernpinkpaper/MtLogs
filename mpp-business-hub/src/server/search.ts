@@ -1,3 +1,4 @@
+import { stepLabel } from '../domain/stepLabels';
 import type { HubServer } from './hub';
 
 export interface SearchHit { kind: 'Project' | 'Step' | 'File' | 'History' | 'Person' | 'Recommendation'; id: string; title: string; why: string; link: string; score: number }
@@ -23,8 +24,8 @@ export function searchAll(hub: HubServer, uid: string, q: string, limit = 12): S
   const steps = hub.state.steps.filter((s) => pids.has(s.projectId));
   for (const s of steps) {
     const p = projects.find((x) => x.id === s.projectId)!;
-    if (has(s.title)) hits.push({ kind: 'Step', id: s.id, title: `${p.key} · Step ${s.sortOrder}: ${s.title}`, why: 'Found in the step name', link: `/projects/${p.id}/steps/${s.id}`, score: 70 });
-    else if (has(s.instructions)) hits.push({ kind: 'Step', id: s.id, title: `${p.key} · Step ${s.sortOrder}: ${s.title}`, why: 'Found in the step instructions', link: `/projects/${p.id}/steps/${s.id}`, score: 45 });
+    if (has(s.title)) hits.push({ kind: 'Step', id: s.id, title: `${p.key} · Step ${stepLabel(steps, s)}: ${s.title}`, why: 'Found in the step name', link: `/projects/${p.id}/steps/${s.id}`, score: 70 });
+    else if (has(s.instructions)) hits.push({ kind: 'Step', id: s.id, title: `${p.key} · Step ${stepLabel(steps, s)}: ${s.title}`, why: 'Found in the step instructions', link: `/projects/${p.id}/steps/${s.id}`, score: 45 });
   }
   const lists = hub.listResources(uid);
   for (const { resource: r, links } of lists) {

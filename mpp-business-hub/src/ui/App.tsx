@@ -4,7 +4,7 @@ import { Layout } from './Layout';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Clock } from './pages/Clock';
-import { MyWork } from './pages/MyWork';
+import { EmployeeHome } from './pages/EmployeeHome';
 import { Projects } from './pages/Projects';
 import { ProjectDetail } from './pages/ProjectDetail';
 import { Review } from './pages/Review';
@@ -31,7 +31,7 @@ export function App() {
           <Route element={<Layout />}>
             <Route path="/home" element={<Home />} />
             <Route path="/clock" element={<Clock />} />
-            <Route path="/my-work" element={<MyWork />} />
+            <Route path="/my-work" element={<EmployeeHome />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:projectId" element={<ProjectDetail />} />
             <Route path="/projects/:projectId/steps/:stepId" element={<ProjectDetail />} />

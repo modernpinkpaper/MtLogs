@@ -1,4 +1,5 @@
 import type { HubServer } from './hub';
+import { stepLabel } from '../domain/stepLabels';
 import type { Project, ProjectPauseState, ResumeMode, Step, User } from '../domain/types';
 import { chicagoDate, chicagoToUtc, formatLocalDate, isValidLocalDate } from '../domain/time';
 import { nextStep, statusIgnoringPause } from '../domain/projectStatus';
@@ -111,7 +112,7 @@ function doResume(hub: HubServer, p: Project, byUid: string | null, note?: strin
     hub.addJournal({
       projectId: p.id, type: 'PROJECT_RESUMED', actorUid: byUid, actorType: byUid ? 'HUMAN' : 'SERVICE', actorLabel: byUid ? `Authenticated ${hub.userName(byUid)}` : 'Scheduled resume',
       title: byUid ? `Resumed by ${who}` : `Resumed automatically${scheduled ? ` (scheduled for ${formatLocalDate(scheduled)})` : ''}`,
-      summary: `${p.key} is active again. Nothing was reset: finished steps stay finished.${next ? ` Next step: Step ${next.sortOrder} “${next.title}”.` : ''}${note ? ` Note: ${note}` : ''}`, verificationState: 'OFFICIAL',
+      summary: `${p.key} is active again. Nothing was reset: finished steps stay finished.${next ? ` Next step: Step ${stepLabel(hub.state.steps, next)} “${next.title}”.` : ''}${note ? ` Note: ${note}` : ''}`, verificationState: 'OFFICIAL',
     });
     const owner = hub.state.users.find((u) => u.role === 'OWNER')!;
     const recipients = [...teamToNotify(hub, p), ...(byUid === owner.id ? [] : [owner])];
@@ -190,25 +191,30 @@ export function processSchedules(hub: HubServer): { resumed: string[]; reminded:
   return out;
 }
 
+/** Dalia, a manager, or the person the step is assigned to may put a step on hold or take it off hold. */
+function mayHoldStep(hub: HubServer, uid: string, step: Step, project: Project) {
+  const u = hub.user(uid);
+  return canControlProject(hub, u, project) || (step.assignedUids.includes(uid) && hub.canWorkOnProject(u, project));
+}
 export function holdStep(hub: HubServer, uid: string, stepId: string, reason: string | null): Step {
   const { step, project } = hub.stepFor(uid, stepId);
-  if (!canControlProject(hub, hub.user(uid), project)) throw new PermissionDenied();
+  if (!mayHoldStep(hub, uid, step, project)) throw new PermissionDenied();
   if (step.onHold) throw new HubError('ALREADY_PAUSED', 'This step is already on hold.');
   return hub.commit(() => {
     step.onHold = { at: hub.state.now, byUid: uid, reason: reason?.trim() || null };
     hub.audit({ entityType: 'step', entityId: step.id, action: 'STEP_HOLD', before: { status: step.status }, after: { onHold: true, status: step.status }, actorUid: uid, actorLabel: hub.userName(uid), reason: reason ?? 'Step put on hold', evidenceRefs: [], projectId: project.id });
-    hub.addJournal({ projectId: project.id, stepIds: [step.id], type: 'PROJECT_PAUSED', actorUid: uid, title: `Step ${step.sortOrder} put on hold`, summary: `“${step.title}” is on hold${reason ? `: ${reason}` : ''}. Its status stays “${step.status.replace(/_/g, ' ').toLowerCase()}”. The rest of the project keeps going.`, verificationState: 'OFFICIAL' });
+    hub.addJournal({ projectId: project.id, stepIds: [step.id], type: 'PROJECT_PAUSED', actorUid: uid, title: `Step ${stepLabel(hub.state.steps, step)} put on hold`, summary: `“${step.title}” is on hold${reason ? `: ${reason}` : ''}. Its status stays “${step.status.replace(/_/g, ' ').toLowerCase()}”. The rest of the project keeps going.`, verificationState: 'OFFICIAL' });
     return step;
   });
 }
 export function releaseStep(hub: HubServer, uid: string, stepId: string): Step {
   const { step, project } = hub.stepFor(uid, stepId);
-  if (!canControlProject(hub, hub.user(uid), project)) throw new PermissionDenied();
+  if (!mayHoldStep(hub, uid, step, project)) throw new PermissionDenied();
   if (!step.onHold) throw new HubError('NOT_PAUSED', 'This step is not on hold.');
   return hub.commit(() => {
     step.onHold = null;
     hub.audit({ entityType: 'step', entityId: step.id, action: 'STEP_RELEASE', before: { onHold: true }, after: { onHold: false }, actorUid: uid, actorLabel: hub.userName(uid), reason: 'Hold removed', evidenceRefs: [], projectId: project.id });
-    hub.addJournal({ projectId: project.id, stepIds: [step.id], type: 'PROJECT_RESUMED', actorUid: uid, title: `Step ${step.sortOrder} is active again`, summary: `“${step.title}” continues where it left off.`, verificationState: 'OFFICIAL' });
+    hub.addJournal({ projectId: project.id, stepIds: [step.id], type: 'PROJECT_RESUMED', actorUid: uid, title: `Step ${stepLabel(hub.state.steps, step)} is active again`, summary: `“${step.title}” continues where it left off.`, verificationState: 'OFFICIAL' });
     return step;
   });
 }

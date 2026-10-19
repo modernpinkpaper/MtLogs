@@ -70,7 +70,7 @@ export function RequestUpdateDialog({ projectId, stepId, onClose }: { projectId?
             <div><label htmlFor="rq-project">Project</label>
               <select id="rq-project" value={pid} onChange={(e) => { setPid(e.target.value); setSid(''); setPicked(null); }}>{projects.map((p) => <option key={p.id} value={p.id}>{p.key} — {p.title.slice(0, 50)}</option>)}</select></div>
             <div><label htmlFor="rq-step">Step (if you want)</label>
-              <select id="rq-step" value={sid} onChange={(e) => { setSid(e.target.value); setPicked(null); }}><option value="">The whole project</option>{steps.map((s) => <option key={s.id} value={s.id}>{s.sortOrder}. {s.title.slice(0, 60)}</option>)}</select></div>
+              <select id="rq-step" value={sid} onChange={(e) => { setSid(e.target.value); setPicked(null); }}><option value="">The whole project</option>{steps.map((s) => <option key={s.id} value={s.id}>{hub.stepLabelsFor(uid, s.projectId).get(s.id)}. {s.title.slice(0, 60)}</option>)}</select></div>
           </div>
           <fieldset style={{ border: 'none', padding: 0 }}><legend className="small" style={{ fontWeight: 600 }}>Who should answer?</legend>
             {eligible.length === 0 && <span className="muted small">No employee works on this project.</span>}
@@ -110,7 +110,7 @@ export function SendUpdateDialog({ projectId, stepId, onClose }: { projectId: st
     if (r) setDone(true);
   };
   return (
-    <Modal title={`Send Dalia an update${step ? ` on Step ${step.sortOrder}` : ''}`} onClose={onClose}>
+    <Modal title={`Send Dalia an update${step ? ` on Step ${hub.stepLabelsFor(uid, step.projectId).get(step.id)}` : ''}`} onClose={onClose}>
       {done ? (
         <div className="stack"><div className="card ok" role="status">Sent. Dalia has a new notification. Your update is saved in the history as “employee confirmed.”</div><button className="primary" onClick={onClose}>Done</button></div>
       ) : (
@@ -165,7 +165,7 @@ export function LogTaskDialog({ onClose }: { onClose: () => void }) {
             {myProjects.map((p) => (
               <optgroup key={p.id} label={`${p.key} — ${p.shortName ?? p.title.slice(0, 40)}`}>
                 <option value={`${p.id}|`}>Part of this project (no particular step)</option>
-                {hub.projectSteps(uid, p.id).filter((s) => !s.parentStepId).map((s) => <option key={s.id} value={`${p.id}|${s.id}`}>Step {s.sortOrder}: {s.title.slice(0, 60)}</option>)}
+                {hub.projectSteps(uid, p.id).filter((s) => !s.parentStepId).map((s) => <option key={s.id} value={`${p.id}|${s.id}`}>Step {hub.stepLabelsFor(uid, s.projectId).get(s.id)}: {s.title.slice(0, 60)}</option>)}
               </optgroup>))}
           </select></div>
         <div><label htmlFor="lt-note">Anything else? (optional)</label><textarea id="lt-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: Dalia noticed the price was wrong. I fixed it." /></div>

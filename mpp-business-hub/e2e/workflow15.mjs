@@ -16,13 +16,11 @@ const shot = (n, full = true) => p.screenshot({ path: OUT + n + '.png', fullPage
 const hub = (fn, ...a) => p.evaluate(([f, args]) => { const h = window.__hub; return eval('(' + f + ')')(h, ...args); }, [fn.toString(), a]);
 
 await p.goto(U + '/login'); await p.evaluate(() => localStorage.clear()); await p.reload();
-await p.getByRole('button', { name: /Erika/ }).first().click(); await p.waitForSelector('text=Do this next');
+await p.getByRole('button', { name: /Erika/ }).first().click(); await p.waitForSelector('text=Your projects');
 
 console.log('\n[3/4] A stale tracker plus detected activity becomes a confirmation task');
-ok(await p.locator('text=Confirm where “Use Shopify Lister Tampermonkey script to list the new SKUs” stands').count() === 1, 'the hero asks Erika to confirm where the step stands');
-ok(await p.locator('text=Tracker status:').count() > 0 && await p.locator('text=Activity detected:').count() > 0, 'tracker status and detected activity are labelled separately');
-ok(await p.locator('text=Why this is next:').count() > 0 && await p.locator('text=/before you start over/').count() > 0, 'it says why this is next');
-ok(await p.locator('button:has-text("Confirm progress")').count() === 1 && await p.locator('button:has-text("Open this step")').count() === 0, 'one clear action: Confirm progress (not “open this step” again)');
+ok(await p.locator('text=Activity seen — status differs').count() === 1 && await p.locator('text=P-012').count() > 0, 'Home shows a notification: the tracker and the activity disagree on P-012 step 3');
+ok(await p.locator('text=Confirm').count() >= 1, 'it has a clear Confirm action');
 await shot('w1-mywork-confirm');
 
 console.log('\n[10] Employee desktop layout');
@@ -53,7 +51,7 @@ ok(await rowB.locator('text=No version chosen yet').count() === 1, 'the other co
 await shot('w2-erika-files');
 
 console.log('\n[2] A step Erika says is done is done');
-await p.getByRole('button', { name: 'I finished this step' }).first().click(); await p.waitForTimeout(400);
+await p.getByRole('button', { name: 'Completed' }).first().click(); await p.waitForTimeout(400);
 await go('/projects/prj-012');
 ok(await p.locator('text=3 of 4 steps done').count() > 0, 'the project page says “3 of 4 steps done”');
 await go('/projects'); await p.waitForSelector('.prow');

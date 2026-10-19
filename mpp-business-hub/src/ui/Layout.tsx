@@ -34,15 +34,14 @@ export function Layout() {
         { to: '/notifications', label: 'Notifications', icon: '🔔', badge: counts.unreadNotifications },
       ]
     : [
-        { to: '/home', label: 'My Work', icon: '⌂' },
+        { to: '/home', label: 'Home', icon: '⌂', badge: counts.pendingCards + counts.unreadNotifications },
         { to: '/projects', label: 'Projects', icon: '▤', match: ['/projects'] },
-        { to: '/review', label: 'Review my work', icon: '✓', badge: counts.pendingCards },
-        { to: '/notifications', label: 'Notifications', icon: '🔔', badge: counts.unreadNotifications },
         { to: '/clock', label: 'Clock', icon: '⏱' },
         ...(area === 'PRINT' || area === 'MIXED' ? [{ to: '/print/my-stats', label: 'My printing', icon: '🖨' }] : []),
       ];
   const more: Item[] = [
-    ...(owner ? [{ to: '/review', label: 'Review my work', icon: '✓', badge: counts.pendingCards }] : []),
+    { to: '/review', label: 'Review my work', icon: '✓', badge: counts.pendingCards },
+    ...(owner ? [] : [{ to: '/notifications', label: 'Notifications', icon: '🔔', badge: counts.unreadNotifications }]),
     { to: '/journal', label: 'History', icon: '✎' },
     { to: '/resources', label: 'Files', icon: '⧉' },
     ...(owner ? [{ to: '/owner/data-intake', label: 'Computer activity & AI cost', icon: '⇩' }] : []),

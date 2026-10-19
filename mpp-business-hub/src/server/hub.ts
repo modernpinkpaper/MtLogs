@@ -21,7 +21,9 @@ import type { PauseInput } from './pause';
 import * as PL from './pilot';
 import * as MG from './manager';
 import * as INV from './investigation';
+import * as SW from './stepWork';
 import { CHECK_LIBRARY } from '../domain/catalog';
+import { stepLabels } from '../domain/stepLabels';
 import * as DR from './drive';
 import { searchAll } from './search';
 import { computeShiftStats, groupProblemEpisodes, fourStateMinutes, weeklyPrinterSummary } from './print';
@@ -55,12 +57,12 @@ export const CHOICE_LABEL: Record<ResponseChoice, string> = {
 const TRANSITIONS: Record<StepStatus, StepStatus[]> = {
   NOT_STARTED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'],
   IN_PROGRESS: ['BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'],
-  BLOCKED: ['IN_PROGRESS', 'CANCELLED'],
-  WAITING: ['IN_PROGRESS', 'CANCELLED'],
-  REPORTED_COMPLETE: ['VERIFIED_COMPLETE', 'REOPENED', 'IN_PROGRESS'],
-  VERIFIED_COMPLETE: ['REOPENED'],
+  BLOCKED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'CANCELLED'],
+  WAITING: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'CANCELLED'],
+  REPORTED_COMPLETE: ['VERIFIED_COMPLETE', 'REOPENED', 'IN_PROGRESS', 'REPORTED_COMPLETE'],
+  VERIFIED_COMPLETE: ['REOPENED', 'REPORTED_COMPLETE'],
   CANCELLED: ['REOPENED'],
-  NOT_APPLICABLE: ['REOPENED'],
+  NOT_APPLICABLE: ['REOPENED', 'REPORTED_COMPLETE'],
   REOPENED: ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE'],
 };
 const EMPLOYEE_TARGETS: StepStatus[] = ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'];
@@ -285,8 +287,10 @@ export class HubServer {
     const u = this.user(uid);
     // Plan changes by employees are limited to adding substeps under steps they are assigned to.
     if (u.role !== 'OWNER') {
+      // People on a project may add steps and sub steps. Anyone else may not. Every change is logged and nothing can be deleted.
+      if (!this.canWorkOnProject(u, project)) throw new PermissionDenied();
       const parent = input.parentStepId ? this.state.steps.find((s) => s.id === input.parentStepId) : null;
-      if (!parent || !parent.assignedUids.includes(uid) || parent.projectId !== projectId) throw new PermissionDenied();
+      if (input.parentStepId && (!parent || parent.projectId !== projectId)) throw new PermissionDenied();
     }
     if (!input.title.trim()) throw new HubError('VALIDATION', 'Please type a title for the step.');
     return this.commit(() => {
@@ -525,7 +529,7 @@ export class HubServer {
           parentRequestId: input.parentRequestId ?? null, createdAt: this.state.now, deliveryStatus: 'DELIVERED', idempotencyKey: input.idempotencyKey,
         };
         this.state.updateRequests.push(req);
-        const where = step ? `${project.key}, Step ${step.sortOrder} “${step.title}”` : project.key;
+        const where = step ? `${project.key}, Step ${stepLabels(this.state.steps.filter((x) => x.projectId === step.projectId)).get(step.id)} “${step.title}”` : project.key;
         for (const r of recipients) {
           const card: ReviewCard = {
             id: this.nid('card'), cardType: 'OWNER_REQUEST', recipientUid: r, projectId: project.id, stepId: step?.id ?? null, findingIds: [], updateRequestId: req.id,
@@ -610,7 +614,7 @@ export class HubServer {
           if (c && c.status !== 'SUBMITTED') { c.status = 'SUBMITTED'; c.lastUpdatedAt = this.state.now; }
         }
         if (step) this.applyHumanReport(step, project, input.choice, resp.note, uid);
-        const where = step ? `${project.key}, Step ${step.sortOrder} “${step.title}”` : project.key;
+        const where = step ? `${project.key}, Step ${stepLabels(this.state.steps.filter((x) => x.projectId === step.projectId)).get(step.id)} “${step.title}”` : project.key;
         const label = CHOICE_LABEL[input.choice];
         const unverifiedNote = input.choice === 'COMPLETED' ? '. Employee confirmed. Not checked in the source system yet.' : '';
         this.audit({ entityType: 'updateResponse', entityId: resp.id, action: 'SUBMIT', before: req ? { requestState: 'OPEN' } : null, after: { choice: resp.choice, requestId: req?.id ?? null }, actorUid: uid, actorLabel: this.userName(uid), reason: req ? 'Answered owner request' : 'Proactive update', evidenceRefs: resp.evidenceLinks, projectId: project.id });
@@ -1450,7 +1454,7 @@ export class HubServer {
       const who = nm(s.assignedUids[0]);
       const paused = !!p.pause?.isPaused;
       const stepLink = `/projects/${p.id}/steps/${s.id}`;
-      const tech = [`${p.key} · Step ${s.sortOrder}: ${s.title}`];
+      const tech = [`${p.key} · Step ${stepLabels(this.state.steps.filter((x) => x.projectId === s.projectId)).get(s.id)}: ${s.title}`];
       if (s.status === 'REPORTED_COMPLETE' && s.requiresCheck && !s.verifications.some((v) => v.result === 'CONFIRMED')) queue.push({ kind: 'Needs a check in the source system', label: `${p.key} — ${s.title} (says it is done, but it has not been checked in the source system)`, title: `${short} — Verify result`, why: `${who} says it is done. You asked to check this one.`, cta: 'Check the result', chip: 'Verify result', link: stepLink, weight: 80, technical: tech });
       if (s.status === 'BLOCKED' && !paused) queue.push({ kind: 'Blocked', label: `${p.key} — ${s.title}: ${s.blockerReason ?? ''}`, title: `${who} needs help with ${short.toLowerCase()}`, why: s.blockerReason ?? 'This step is blocked.', cta: 'See what is blocking it', chip: 'Needs help', link: stepLink, weight: 90, technical: tech });
       // Ordinary nags are quiet while a project is paused.
@@ -1892,6 +1896,21 @@ export class HubServer {
   addGoal(uid: string, title: string, description: string, priority: 'HIGH' | 'NORMAL' | 'LOW') { return MG.addGoal(this, uid, title, description, priority); }
   updateGoal(uid: string, id: string, patch: INV.GoalPatch) { return INV.patchGoal(this, uid, id, patch); }
   toggleSource(uid: string, id: string, on: boolean) { return INV.setSourceApproval(this, uid, id, on); }
+  // ---- v1.8 day-to-day work on a project (people on the project)
+  addSteps(uid: string, projectId: string, count: number, parentStepId: string | null = null) { return SW.addSteps(this, uid, projectId, count, parentStepId); }
+  renameStep(uid: string, stepId: string, title: string) { return SW.renameStep(this, uid, stepId, title); }
+  setStepDescription(uid: string, stepId: string, text: string) { return SW.setStepDescription(this, uid, stepId, text); }
+  renameProject(uid: string, projectId: string, title: string) { return SW.renameProject(this, uid, projectId, title); }
+  reorderSteps(uid: string, projectId: string, parentStepId: string | null, orderedIds: string[]) { return SW.reorderSteps(this, uid, projectId, parentStepId, orderedIds); }
+  createStepFile(uid: string, stepId: string, input: SW.NewFileInput) { return SW.createStepFile(this, uid, stepId, input); }
+  linkExistingFile(uid: string, stepId: string, input: { url: string; name: string; kind?: 'SHEET' | 'DOC' | 'OTHER' }) { return SW.linkExistingFile(this, uid, stepId, input); }
+  pendingFileSuggestions(uid: string) { return SW.pendingFileSuggestions(this, uid); }
+  answerFileSuggestion(uid: string, linkId: string, answer: Parameters<typeof SW.answerFileSuggestion>[3]) { return SW.answerFileSuggestion(this, uid, linkId, answer); }
+  activityCheckedAt(uid: string, projectId?: string) { return SW.activityCheckedAt(this, uid, projectId); }
+  checkMyActivity(uid: string, projectId: string) { return SW.checkMyActivity(this, uid, projectId); }
+  lastConfirmed(uid: string, projectId: string) { return SW.lastConfirmed(this, uid, projectId); }
+  stepLabelsFor(uid: string, projectId: string) { this.projectFor(uid, projectId); return stepLabels(this.state.steps.filter((s) => s.projectId === projectId)); }
+
   // ---- v1.7 investigation priorities and data sources (owner only)
   setSourceApproval(uid: string, id: string, on: boolean) { return INV.setSourceApproval(this, uid, id, on); }
   updateSource(uid: string, id: string, patch: INV.SourcePatch) { return INV.updateSource(this, uid, id, patch); }

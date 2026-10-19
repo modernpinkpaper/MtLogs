@@ -97,12 +97,14 @@ describe('D. resources, journal, audit', () => {
     expect(hub.listResources(U.arantza).map((r) => r.resource.id)).not.toContain('r-seo-a'); // P-012 not shared with Arantza
   });
 
-  it('projects keep their step hierarchy; employees can add substeps only under their own steps; progress is explicit counts', async () => {
+  it('projects keep their step hierarchy; people on a project can add steps; other employees cannot; progress is explicit counts', async () => {
     const hub = await newHub();
     expect(hub.projectSteps(U.dalia, 'prj-012').map((s) => s.sortOrder)).toEqual([1, 2, 3, 4]);
     const sub = hub.addStep(U.erika, 'prj-012', { title: 'Pick approved SEO copy', parentStepId: 's-012-3' });
     expect(sub.parentStepId).toBe('s-012-3');
-    expect(() => hub.addStep(U.erika, 'prj-012', { title: 'rogue top-level step' })).toThrow();
+    const top = hub.addStep(U.erika, 'prj-012', { title: 'A step Erika adds herself' });
+    expect(top.parentStepId).toBeNull();
+    expect(() => hub.addStep(U.arantza, 'prj-012', { title: 'rogue top-level step' })).toThrow();
     expect(() => hub.addStep(U.arantza, 'prj-012', { title: 'x', parentStepId: 's-012-3' })).toThrow();
     const created = hub.createProject(U.dalia, { title: 'New demo project', objective: 'o', memberUids: [U.arantza], visibility: 'ASSIGNED_ONLY' });
     expect(created.key).toMatch(/^P-\d{3}$/);

@@ -247,9 +247,14 @@ describe('Pause and resume', () => {
     expect(hub.getStep(U.dalia, 's-070-2')).toMatchObject({ status: 'IN_PROGRESS' });
     expect(hub.getStep(U.dalia, 's-070-2').onHold?.reason).toBe('Waiting on credentials');
     expect(hub.getProject(U.dalia, 'prj-070').pause).toBeNull();
-    expect(() => hub.holdStep(U.erika, 's-070-2', null)).toThrow(PermissionDenied);
+    expect(() => hub.holdStep(U.arantza, 's-070-2', null)).toThrow(PermissionDenied); // not on the project
     hub.releaseStep(U.dalia, 's-070-2');
     expect(hub.getStep(U.dalia, 's-070-2').onHold).toBeNull();
+    // the person the step is assigned to may hold and release it themselves
+    hub.holdStep(U.erika, 's-070-2', 'Waiting on a file');
+    expect(hub.getStep(U.erika, 's-070-2').onHold?.reason).toBe('Waiting on a file');
+    hub.releaseStep(U.erika, 's-070-2');
+    expect(hub.getStep(U.erika, 's-070-2').onHold).toBeNull();
   });
 
   it('finished projects are never auto-resumed; reopening is explicit and audited; a paused project cannot be closed', async () => {

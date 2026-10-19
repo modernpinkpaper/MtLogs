@@ -187,7 +187,7 @@ export function PilotSetupDialog({ project, onClose }: { project: Project; onClo
       <form className="stack" onSubmit={(e) => { e.preventDefault(); void go(); }}>
         <p className="small muted">Try the process on a small number first. After that, work stops and waits for your OK. Employees cannot go past the list.</p>
         <div className="grid cols-2">
-          <div><label htmlFor="pt-step">Which step?</label><select id="pt-step" value={stepId} onChange={(e) => setStepId(e.target.value)}><option value="">The whole project</option>{steps.map((s) => <option key={s.id} value={s.id}>Step {s.sortOrder}: {s.title.slice(0, 50)}</option>)}</select></div>
+          <div><label htmlFor="pt-step">Which step?</label><select id="pt-step" value={stepId} onChange={(e) => setStepId(e.target.value)}><option value="">The whole project</option>{steps.map((s) => <option key={s.id} value={s.id}>Step {hub.stepLabelsFor(uid, s.projectId).get(s.id)}: {s.title.slice(0, 50)}</option>)}</select></div>
           <div><label htmlFor="pt-count">How many?</label><input id="pt-count" type="number" min={1} value={count} onChange={(e) => setCount(Number(e.target.value))} /></div>
         </div>
         <div><label htmlFor="pt-label">What are you counting?</label><input id="pt-label" type="text" value={label} onChange={(e) => setLabel(e.target.value)} /></div>

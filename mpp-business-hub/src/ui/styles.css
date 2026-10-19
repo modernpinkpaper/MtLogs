@@ -445,3 +445,16 @@ details > summary { cursor: pointer; }
 /* v1.7 investigation priorities and sources */
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3, 12px); }
 @media (max-width: 760px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* v1.8: employee step page hierarchy and reordering */
+.steprow { display: flex; align-items: stretch; gap: 4px; }
+.steprow .step { flex: 1; min-width: 0; }
+.steprow[draggable=true] { cursor: grab; }
+.reorder { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; color: var(--muted); }
+.reorder .handle { font-size: .9rem; line-height: 1; }
+.reorder .mini { min-height: 20px; padding: 0 6px; font-size: .75rem; line-height: 1.1; }
+.sect { border-top: 1px solid var(--border); padding-top: .8rem; }
+.sect.minor { opacity: .96; }
+.sect.minor h3 { font-size: .9rem; color: var(--muted); font-weight: 600; }
+.subrow { margin: .3rem 0; padding: .25rem .5rem; border-left: 2px solid var(--border); }
+.subrow .num { font-weight: 700; color: var(--muted); margin-right: 4px; }

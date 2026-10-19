@@ -149,7 +149,7 @@ function CardView({ card, highlight, disabled, select, first }: { card: ReviewCa
       <div className="row between">
         <div style={{ minWidth: 0 }}>
           <div className="row small muted" style={{ gap: '.3rem .75rem' }}>
-            {project && <span><ProjectLabel projectId={project.id} text={project.key} /> · {shortProjectName(project)}{step ? <> · <Link to={`/projects/${project.id}/steps/${step.id}`}>Step {step.sortOrder}</Link></> : null}</span>}
+            {project && <span><ProjectLabel projectId={project.id} text={project.key} /> · {shortProjectName(project)}{step ? <> · <Link to={`/projects/${project.id}/steps/${step.id}`}>Step {hub.stepLabelsFor(uid, step.projectId).get(step.id)}</Link></> : null}</span>}
             <span>{formatDateTime(card.createdAt)}</span>
             {card.provisional && <Chip tone="warn" glyph="…" title="We are still reading today’s activity. This may change.">{WORDS.checkingToday}</Chip>}
             {!isRequest && card.sourceCoverage !== 'FINAL' && <CoverageChip state={card.sourceCoverage} />}
@@ -157,7 +157,7 @@ function CardView({ card, highlight, disabled, select, first }: { card: ReviewCa
             {req?.importance === 'IMPORTANT' && <Chip tone="bad" glyph="!">Important</Chip>}
           </div>
           <h2 id={`t-${card.id}`} style={{ marginTop: 4 }}>
-            {isRequest ? `${hub.userName(req?.requestedByUid ?? null)} asked for an update${step ? ` on Step ${step.sortOrder}: ${step.title}` : project ? ` on ${shortProjectName(project)}` : ''}` : spec ? spec.question : card.title}
+            {isRequest ? `${hub.userName(req?.requestedByUid ?? null)} asked for an update${step ? ` on Step ${hub.stepLabelsFor(uid, step.projectId).get(step.id)}: ${step.title}` : project ? ` on ${shortProjectName(project)}` : ''}` : spec ? spec.question : card.title}
           </h2>
         </div>
         {select && select !== 'blocked' && <label className="row" style={{ fontWeight: 500, margin: 0 }}><input type="checkbox" checked={select.checked} onChange={(e) => select.onChange(e.target.checked)} /> {WORDS.selectItem}</label>}
@@ -219,15 +219,15 @@ function CardView({ card, highlight, disabled, select, first }: { card: ReviewCa
                   <select id={`cp-${card.id}`} value={clsProject} onChange={(e) => { setClsProject(e.target.value); setLinkStep(''); }}>{mine.map((p) => <option key={p.id} value={p.id}>{p.key} — {shortProjectName(p)}</option>)}</select></div>)}
               {cls === 'LINK_EXISTING' && clsProject && (
                 <div><label htmlFor={`ls-${card.id}`}>Step</label>
-                  <select id={`ls-${card.id}`} value={linkStep} onChange={(e) => setLinkStep(e.target.value)}><option value="">Choose a step…</option>{hub.projectSteps(uid, clsProject).map((s) => <option key={s.id} value={s.id}>Step {s.sortOrder}: {s.title.slice(0, 60)}</option>)}</select></div>)}
+                  <select id={`ls-${card.id}`} value={linkStep} onChange={(e) => setLinkStep(e.target.value)}><option value="">Choose a step…</option>{hub.projectSteps(uid, clsProject).map((s) => <option key={s.id} value={s.id}>Step {hub.stepLabelsFor(uid, s.projectId).get(s.id)}: {s.title.slice(0, 60)}</option>)}</select></div>)}
               {cls === 'NEW_STEP' && <div><label htmlFor={`nt2-${card.id}`}>New step name</label><input id={`nt2-${card.id}`} type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} /></div>}
               <div className="row"><button className={first ? 'primary' : ''} disabled={disabled || (cls === 'LINK_EXISTING' && !linkStep) || (cls === 'NEW_STEP' && !newTitle.trim())} onClick={() => submit('CONFIRM', 'Saved')}>Save this</button></div>
-              <details className="soft"><summary>Not a task? Skip it, or say it was not your work</summary>
+              <details className="soft"><summary>Not a task? Dismiss it, or say it was not your work</summary>
                 <div className="stack" style={{ marginTop: 8 }}>
                   <div><label htmlFor={`sk-${card.id}`}>Why? (optional)</label>
                     <input id={`sk-${card.id}`} type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Example: just a quick look, nothing to record" />
                     <p className="small muted">Skipped items are not added to any list. Dalia can still see that it was skipped.</p></div>
-                  <div className="row"><button disabled={disabled} onClick={() => submit('DISMISS', 'Skipped. It was not logged.')}>Skip it (do not log)</button><button disabled={disabled} onClick={() => submit('NOT_MY_WORK', 'Saved')}>{WORDS.notMyWork}</button></div>
+                  <div className="row"><button disabled={disabled} onClick={() => submit('DISMISS', 'Dismissed. The activity is still kept in the log.')}>Dismiss (the activity is still kept)</button><button disabled={disabled} onClick={() => submit('NOT_MY_WORK', 'Saved')}>{WORDS.notMyWork}</button></div>
                 </div></details>
               <div><button className="quiet" disabled={disabled} onClick={() => submit('DEFER', 'Saved for your next paid shift')}>Answer later</button></div>
             </div>
@@ -249,7 +249,7 @@ function CardView({ card, highlight, disabled, select, first }: { card: ReviewCa
                   {corr === 'WRONG_STEP' && (
                     <div className="stack">
                       <div><label htmlFor={`cp2-${card.id}`}>Which project?</label><select id={`cp2-${card.id}`} value={clsProject} onChange={(e) => { setClsProject(e.target.value); setLinkStep(''); }}>{mine.map((p) => <option key={p.id} value={p.id}>{p.key} — {shortProjectName(p)}</option>)}</select></div>
-                      <div><label htmlFor={`ls2-${card.id}`}>Which step?</label><select id={`ls2-${card.id}`} value={linkStep} onChange={(e) => setLinkStep(e.target.value)}><option value="">Choose a step…</option>{hub.projectSteps(uid, clsProject).map((s) => <option key={s.id} value={s.id}>Step {s.sortOrder}: {s.title.slice(0, 60)}</option>)}</select></div>
+                      <div><label htmlFor={`ls2-${card.id}`}>Which step?</label><select id={`ls2-${card.id}`} value={linkStep} onChange={(e) => setLinkStep(e.target.value)}><option value="">Choose a step…</option>{hub.projectSteps(uid, clsProject).map((s) => <option key={s.id} value={s.id}>Step {hub.stepLabelsFor(uid, s.projectId).get(s.id)}: {s.title.slice(0, 60)}</option>)}</select></div>
                     </div>
                   )}
                   <div className="choice" onClick={() => setCorr('WRONG_PERSON')}><input type="radio" id={`c2-${card.id}`} name={`corr-${card.id}`} checked={corr === 'WRONG_PERSON'} onChange={() => setCorr('WRONG_PERSON')} /><label htmlFor={`c2-${card.id}`}>Someone else was using this computer</label></div>

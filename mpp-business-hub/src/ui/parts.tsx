@@ -28,7 +28,7 @@ export function JournalList({ events, showProject, grouped }: { events: (Project
             <div className="small" style={{ color: 'var(--text-2)' }}>{e.summary}</div>
             <div className="row small muted" style={{ gap: '.2rem .75rem', marginTop: 2 }}><span>{formatDateTime(e.occurredAt)}</span>
               {showProject && <span><Link to={`/projects/${e.projectId}`}>{e.projectKey}</Link><ProjectInfo projectId={e.projectId} label={e.projectKey} /></span>}
-              {step && <Link to={`/projects/${e.projectId}/steps/${step.id}`}>Step {step.sortOrder}</Link>}
+              {step && <Link to={`/projects/${e.projectId}/steps/${step.id}`}>Step {hub.stepLabelsFor(uid, step.projectId).get(step.id)}</Link>}
               <VerifyBadge state={e.verificationState} />
               {e.confidenceBand !== 'N_A' && <Chip tone="gray">confidence {e.confidenceBand.toLowerCase()}</Chip>}
               <span>{plainActor(e.actorLabel)}</span>{e.sourceRefs.length ? <button className="link" onClick={() => setRaw(e.id)}>Show proof ({e.sourceRefs.length})</button> : null}</div>

@@ -152,7 +152,7 @@ export function outcomeEffect(kind: ReviewKindId, outcome: ReviewOutcome, step: 
 }
 
 /** Plain sentence: why the AI thought this belonged to this step. Never claims more than a guess. */
-export function matchReason(f: Finding, step: Step | null): string | null {
+export function matchReason(f: Finding, step: Step | null, label?: string): string | null {
   if (!step || f.findingType === 'AI_UNMATCHED_WORK') return null;
   const bits: string[] = [];
   for (const h of step.evidenceHints) {
@@ -162,6 +162,6 @@ export function matchReason(f: Finding, step: Step | null): string | null {
     else if (h.startsWith('submission:')) bits.push('an Amazon upload number');
   }
   const uniq = [...new Set(bits)];
-  if (!uniq.length) return `We matched this to Step ${step.sortOrder} because the activity looked related to it. This is a guess.`;
-  return `We matched this to Step ${step.sortOrder} because the activity shows ${uniq.join(' and ')}. This step lists those as signs of the work. It is a guess, and we can only see the computer, not the person.`;
+  if (!uniq.length) return `We matched this to Step ${label ?? step.sortOrder} because the activity looked related to it. This is a guess.`;
+  return `We matched this to Step ${label ?? step.sortOrder} because the activity shows ${uniq.join(' and ')}. This step lists those as signs of the work. It is a guess, and we can only see the computer, not the person.`;
 }

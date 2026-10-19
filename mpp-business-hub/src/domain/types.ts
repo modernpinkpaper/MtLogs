@@ -101,6 +101,8 @@ export interface Project {
   pause: ProjectPauseState | null;
   pilot: PilotCheckpoint | null;
   managerUids: string[]; // delegated people allowed to pause/resume
+  /** v1.8: when the AI last read each person’s computer activity for this project (checked by that person). */
+  aiCheckedAt?: Record<string, string>;
   pinned: boolean;
   canceledAt: string | null;
   origin: 'MANUAL' | 'AI_RECOMMENDATION';
@@ -224,6 +226,11 @@ export interface Resource {
   installPath?: string | null;
   sourceLinked?: boolean; // scripts: is source/manifest linked?
   checklistSummary?: { total: number; yes: number; fix: number; blank: number; sourceNote: string } | null;
+  /** v1.8: files made or linked from a step. The name is built from these parts, so it follows renames and reordering. */
+  nameParts?: { projectId: string; stepId: string; n: number; person: string; suffix?: string } | null;
+  createdInApp?: boolean;
+  /** How a sheet made in the app was started, so a copy can be made later. */
+  startedFrom?: { mode: 'BLANK' | 'SKU' | 'COPY'; families: string[]; columns: string[]; copiedFromResourceId?: string } | null;
   notes?: string;
 }
 

@@ -6,6 +6,7 @@ import { JournalList, ResourceCard, StepResourceRow } from '../parts';
 import { JournalFilters } from './Journal';
 import { RequestUpdateDialog, SendUpdateDialog } from '../dialogs';
 import { ProjectInfo } from '../projectRef';
+import { AddStepsDialog, EditableText, LinkFileDialog, NewFileDialog } from '../stepTools';
 import { ChangeScheduleDialog, PauseBanner, PauseDialog, PilotPanel, PilotSetupDialog, ResumeDialog, SuggestDialog } from '../pauseUi';
 import { deadlineInfo, nextStep, notReadyReason, pauseLine, progressCounts, projectWorkStatus } from '../../domain/projectStatus';
 import { formatDate, formatDateTime } from '../../domain/time';
@@ -31,6 +32,10 @@ export function ProjectDetail() {
     return <div className="card bad" role="alert"><h1>Permission denied</h1><p>You cannot open this page.</p><Link to="/projects">Back to projects</Link></div>;
   }
   const steps = hub.projectSteps(uid, projectId);
+  const labels = hub.stepLabelsFor(uid, projectId);
+  const [checking, setChecking] = useState(false);
+  const [checkNote, setCheckNote] = useState('');
+  const checked = hub.activityCheckedAt(uid, projectId);
   const status = projectWorkStatus(project, steps);
   const paused = status === 'PAUSED';
   const pr = progressCounts(steps);
@@ -52,7 +57,7 @@ export function ProjectDetail() {
 
   return (
     <div className="stack">
-      <nav className="small muted" aria-label="Breadcrumb"><Link to="/projects">Projects</Link> › <Link to={`/projects/${projectId}`}>{project.key}</Link>{stepId && selected ? <> › Step {selected.sortOrder}</> : null}</nav>
+      <nav className="small muted" aria-label="Breadcrumb"><Link to="/projects">Projects</Link> › <Link to={`/projects/${projectId}`}>{project.key}</Link>{stepId && selected ? <> › Step {labels.get(selected.id)}</> : null}</nav>
 
       <header className="card stack">
         <div className="row between" style={{ alignItems: 'flex-start' }}>
@@ -64,7 +69,7 @@ export function ProjectDetail() {
               {project.visibility === 'OWNER_PRIVATE' && <Chip tone="violet" glyph="🔒">Only Dalia</Chip>}
               {project.pinned && <Chip tone="gray" glyph="📌">Pinned</Chip>}
             </div>
-            <h1 style={{ margin: '.2rem 0 0', fontSize: '1.5rem' }}>{project.title}</h1>
+            <h1 style={{ margin: '.2rem 0 0', fontSize: '1.5rem' }}><EditableText value={project.title} canEdit={canWork && !project.closedAt} label="project name" onSave={async (v) => { try { hub.renameProject(uid, project.id, v); return true; } catch (e) { alert((e as Error).message); return false; } }} /></h1>
             <p className="muted proj-obj" style={{ margin: '.35rem 0 0', maxWidth: '64ch' }}>{project.description ?? project.objective}</p>
           </div>
           <div className="row">
@@ -96,10 +101,15 @@ export function ProjectDetail() {
           <span>{pr.label}</span>
           <button className="link" onClick={() => setShowDetails(!showDetails)}>{showDetails ? 'Hide details' : 'Show details'}</button>
         </div>
+        {canWork && !owner && project.visibility !== 'OWNER_PRIVATE' && (
+          <div className="row small" style={{ gap: '.5rem 1rem' }} aria-label="AI activity check">
+            <span>{checked.at ? <>AI last checked your activity: <strong>{formatDateTime(checked.at)}</strong></> : <>AI has not checked your activity here yet.</>}</span>
+            <button disabled={checking} onClick={async () => { setChecking(true); try { const r = await hub.checkMyActivity(uid, project.id); setCheckNote(r.note); } catch (e) { setCheckNote((e as Error).message); } finally { setChecking(false); } }}>{checking ? 'Checking…' : 'Check my activity now'}</button>
+            {checkNote && <span className="muted" role="status">{checkNote}</span>}
+          </div>
+        )}
         {showDetails && (
           <dl className="kv">
-            <dt>Who can see it</dt><dd>{project.visibility === 'OWNER_PRIVATE' ? 'Only Dalia' : project.visibility === 'TEAM_SHARED' ? 'The whole team' : 'The people on it'}{project.sharedWithUids.length ? ` (read only: ${project.sharedWithUids.map((m) => hub.userName(m)).join(', ')})` : ''}</dd>
-            <dt>How we count progress</dt><dd>Only steps confirmed done. Computer activity never counts as progress by itself.</dd>
             <dt>Last check in the source system</dt><dd>{project.lastVerifiedAt ? formatDateTime(project.lastVerifiedAt) : 'Nothing checked in the source system yet'}</dd>
             <dt>What is in the way</dt><dd>{blockers.length ? blockers.map((b) => `${b.title}: ${b.blockerReason}`).join('; ') : project.currentRisk ?? 'Nothing so far'}</dd>
             {project.employeeBrief && <><dt>Brief</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{project.employeeBrief}</dd></>}
@@ -116,11 +126,11 @@ export function ProjectDetail() {
         <>
           {(blockers.length > 0 || myReq.length > 0 || ownerOpenReq.length > 0 || (next && selected && next.id !== selected.id)) && (
             <div className="stack">
-              {next && selected && next.id !== selected.id && <div className="notice"><span><strong>Next step is Step {next.sortOrder}:</strong> {next.title}</span><button className="primary" onClick={() => nav(`/projects/${project.id}/steps/${next.id}`)}>Go to it</button></div>}
-              {blockers.map((b) => <div key={b.id} className="banner warn" role="status">⛔ <strong>In the way:</strong> Step {b.sortOrder} — {b.blockerReason}</div>)}
+              {next && selected && next.id !== selected.id && <div className="notice"><span><strong>Next step is Step {labels.get(next.id)}:</strong> {next.title}</span><button className="primary" onClick={() => nav(`/projects/${project.id}/steps/${next.id}`)}>Go to it</button></div>}
+              {blockers.map((b) => <div key={b.id} className="banner warn" role="status">⛔ <strong>In the way:</strong> Step {labels.get(b.id)} — {b.blockerReason}</div>)}
               {myReq.length > 0 && <div className="notice"><span><strong>Dalia asked for an update.</strong></span><Link to="/review"><button className="primary">Answer now</button></Link></div>}
               {owner && hub.ownerRequests(uid, project.id).filter((r) => r.stage !== 'CLOSED').slice(0, 4).map((r) => (
-                <div key={r.request.id} className="small muted">Your request to {r.recipients.join(', ')}{r.request.stepId ? ` about Step ${hub.getStep(uid, r.request.stepId).sortOrder}` : ''}: <strong>{{ REQUESTED: 'Requested', SEEN: 'Seen, not answered yet', RESPONDED: 'Answered', OVERDUE: 'Overdue', CLOSED: 'Closed' }[r.stage]}</strong>{r.request.dueAt ? ` · due ${formatDate(r.request.dueAt)}` : ''}</div>))}
+                <div key={r.request.id} className="small muted">Your request to {r.recipients.join(', ')}{r.request.stepId ? ` about Step ${labels.get(r.request.stepId) ?? ''}` : ''}: <strong>{{ REQUESTED: 'Requested', SEEN: 'Seen, not answered yet', RESPONDED: 'Answered', OVERDUE: 'Overdue', CLOSED: 'Closed' }[r.stage]}</strong>{r.request.dueAt ? ` · due ${formatDate(r.request.dueAt)}` : ''}</div>))}
             </div>
           )}
 
@@ -128,18 +138,18 @@ export function ProjectDetail() {
             <section className="card plan" aria-labelledby="plan">
               {narrow ? (
                 <details>
-                  <summary id="plan" className="group-title" style={{ margin: 0, cursor: 'pointer' }}>All steps · {pr.label}{selected ? ` · you are on Step ${selected.sortOrder}` : ''}</summary>
-                  <div style={{ marginTop: 10 }}><StepList steps={steps} selectedId={selected?.id} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} />{canWork && owner && <AddStep projectId={project.id} />}</div>
+                  <summary id="plan" className="group-title" style={{ margin: 0, cursor: 'pointer' }}>All steps · {pr.label}{selected ? ` · you are on Step ${labels.get(selected.id)}` : ''}</summary>
+                  <div style={{ marginTop: 10 }}><StepList steps={steps} labels={labels} selectedId={selected?.id} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} canEdit={canWork} />{canWork && <AddSteps projectId={project.id} />}</div>
                 </details>
               ) : (
                 <>
                   <h2 id="plan">Steps <span className="small muted" style={{ fontWeight: 400 }}>· {pr.label}</span></h2>
-                  <StepList steps={steps} selectedId={selected?.id} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} />
-                  {canWork && owner && <AddStep projectId={project.id} />}
+                  <StepList steps={steps} labels={labels} selectedId={selected?.id} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} canEdit={canWork} />
+                  {canWork && <AddSteps projectId={project.id} />}
                 </>
               )}
             </section>
-            {selected && <StepPanel key={selected.id} step={selected} steps={steps} project={project} canWork={canWork} isNext={next?.id === selected.id} paused={paused} onTab={setTab} />}
+            {selected && <StepPanel key={selected.id} step={selected} steps={steps} labels={labels} project={project} canWork={canWork} isNext={next?.id === selected.id} paused={paused} onTab={setTab} />}
           </div>
           <details className="soft">
             <summary>Recent project activity{latestEvent ? <span className="muted small" style={{ fontWeight: 400 }}> · Latest: {latestEvent.title}</span> : null}</summary>
@@ -153,7 +163,7 @@ export function ProjectDetail() {
 
       {tab === 'history' && (
         <div className="stack">
-          <div className="row"><label className="row" style={{ margin: 0, fontWeight: 500 }}>Show history for <select style={{ width: 'auto' }} value={stepId ?? ''} onChange={(e) => nav(e.target.value ? `/projects/${projectId}/steps/${e.target.value}?tab=history` : `/projects/${projectId}?tab=history`)}><option value="">The entire project</option>{steps.map((s) => <option key={s.id} value={s.id}>Step {s.sortOrder}: {s.title.slice(0, 50)}</option>)}</select></label>
+          <div className="row"><label className="row" style={{ margin: 0, fontWeight: 500 }}>Show history for <select style={{ width: 'auto' }} value={stepId ?? ''} onChange={(e) => nav(e.target.value ? `/projects/${projectId}/steps/${e.target.value}?tab=history` : `/projects/${projectId}?tab=history`)}><option value="">The entire project</option>{steps.map((s) => <option key={s.id} value={s.id}>Step {labels.get(s.id)}: {s.title.slice(0, 50)}</option>)}</select></label>
             <span className="small muted">Both views read the same notes. They are never two separate diaries.</span></div>
           <JournalFilters key={stepId ?? 'all'} projectId={projectId} stepId={stepId} grouped />
         </div>
@@ -176,35 +186,49 @@ export function ProjectDetail() {
   );
 }
 
-function StepList({ steps, selectedId, nextId, onPick, project }: { steps: Step[]; selectedId?: string; nextId?: string; onPick: (id: string) => void; project: Project }) {
+function StepList({ steps, labels, selectedId, nextId, onPick, project, canEdit }: { steps: Step[]; labels: Map<string, string>; selectedId?: string; nextId?: string; onPick: (id: string) => void; project: Project; canEdit: boolean }) {
+  const { hub, uid } = useMe();
+  const act = useAct();
+  const [dragId, setDragId] = useState<string | null>(null);
   const kids = (id: string | null) => steps.filter((s) => s.parentStepId === id).sort((a, b) => a.sortOrder - b.sortOrder);
+  const order = (parent: string | null, ids: string[]) => act(() => hub.reorderSteps(uid, project.id, parent, ids), 'New order saved. Numbers and file names follow.');
+  const move = (s: Step, dir: -1 | 1) => {
+    const ids = kids(s.parentStepId).map((x) => x.id); const i = ids.indexOf(s.id); const j = i + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]]; void order(s.parentStepId, ids);
+  };
+  const drop = (target: Step) => {
+    const from = steps.find((x) => x.id === dragId); setDragId(null);
+    if (!from || from.id === target.id || from.parentStepId !== target.parentStepId) return;
+    const ids = kids(from.parentStepId).map((x) => x.id).filter((x) => x !== from.id);
+    ids.splice(ids.indexOf(target.id), 0, from.id); void order(from.parentStepId, ids);
+  };
   const render = (s: Step, depth: number): React.ReactNode => (
     <div key={s.id} className={depth ? 'sub' : ''}>
-      <button className={`step ${selectedId === s.id ? 'sel' : ''}`} onClick={() => onPick(s.id)} aria-current={selectedId === s.id ? 'step' : undefined}>
-        <div className="row"><span className="num">{depth ? '↳' : s.sortOrder}</span><strong style={{ flex: 1, minWidth: 0 }}>{s.title}</strong></div>
-        <div className="row" style={{ marginTop: 2, marginLeft: depth ? 0 : 26 }}>
-          <StepState status={s.status} hold={!!s.onHold} />
-          {nextId === s.id && !project.pause?.isPaused && <span className="tag-next">Next</span>}
-          {s.newActivityAt && s.observedReview === 'PENDING_EMPLOYEE' && !project.pause?.isPaused && <span className="small" style={{ color: 'var(--violet)' }} title="Computer activity was found for this step. A person still needs to confirm it.">✦ activity to check</span>}
-        </div>
-      </button>
+      <div className="steprow" draggable={canEdit} onDragStart={() => setDragId(s.id)} onDragOver={(e) => { if (dragId) e.preventDefault(); }} onDrop={() => drop(s)}>
+        {canEdit && <span className="reorder"><span className="handle" aria-hidden="true" title="Drag to move">⠿</span><button className="mini" aria-label={`Move ${labels.get(s.id)} up`} onClick={() => move(s, -1)}>↑</button><button className="mini" aria-label={`Move ${labels.get(s.id)} down`} onClick={() => move(s, 1)}>↓</button></span>}
+        <button className={`step ${selectedId === s.id ? 'sel' : ''}`} onClick={() => onPick(s.id)} aria-current={selectedId === s.id ? 'step' : undefined}>
+          <div className="row"><span className="num">{labels.get(s.id)}</span><strong style={{ flex: 1, minWidth: 0 }}>{s.title}</strong></div>
+          <div className="row" style={{ marginTop: 2, marginLeft: 30 }}>
+            <StepState status={s.status} hold={!!s.onHold} />
+            {nextId === s.id && !project.pause?.isPaused && <span className="tag-next">Next</span>}
+            {s.newActivityAt && s.observedReview === 'PENDING_EMPLOYEE' && !project.pause?.isPaused && <span className="small" style={{ color: 'var(--violet)' }} title="Computer activity was found for this step. A person still needs to confirm it.">✦ activity to check</span>}
+          </div>
+        </button>
+      </div>
       {kids(s.id).map((k) => render(k, depth + 1))}
     </div>
   );
   return <div className="stack">{kids(null).map((s) => render(s, 0))}</div>;
 }
 
-function AddStep({ projectId }: { projectId: string }) {
-  const { hub, uid } = useMe();
-  const act = useAct();
+function AddSteps({ projectId, parentStepId }: { projectId: string; parentStepId?: string }) {
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  if (!open) return <p><button className="link" onClick={() => setOpen(true)}>Add a step</button></p>;
   return (
-    <form className="row" style={{ marginTop: 8 }} onSubmit={async (e) => { e.preventDefault(); const r = await act(() => hub.addStep(uid, projectId, { title }), 'Step added'); if (r) { setTitle(''); setOpen(false); } }}>
-      <input type="text" aria-label="New step name" placeholder="Name of the new step" value={title} onChange={(e) => setTitle(e.target.value)} style={{ flex: 1 }} />
-      <button className="primary" type="submit" disabled={!title.trim()}>Add step</button><button type="button" onClick={() => setOpen(false)}>Cancel</button>
-    </form>
+    <>
+      <p><button className="link" onClick={() => setOpen(true)}>{parentStepId ? 'Add sub steps' : 'Add steps'}</button></p>
+      {open && <AddStepsDialog projectId={projectId} parentStepId={parentStepId} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 
@@ -212,10 +236,10 @@ const NEXT: Partial<Record<StepStatus, StepStatus[]>> = {
   NOT_STARTED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'], IN_PROGRESS: ['BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'], BLOCKED: ['IN_PROGRESS'], WAITING: ['IN_PROGRESS'],
   REPORTED_COMPLETE: ['VERIFIED_COMPLETE', 'IN_PROGRESS', 'REOPENED'], VERIFIED_COMPLETE: ['REOPENED'], REOPENED: ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE'],
 };
-const ACTION_LABEL: Partial<Record<StepStatus, string>> = { IN_PROGRESS: 'Start / continue', BLOCKED: 'Mark as blocked', WAITING: 'Mark as waiting', REPORTED_COMPLETE: 'I finished this step', NOT_APPLICABLE: 'Not needed', VERIFIED_COMPLETE: 'Mark as checked', REOPENED: 'Reopen' };
+const ACTION_LABEL: Partial<Record<StepStatus, string>> = { IN_PROGRESS: 'Back to in progress', BLOCKED: 'Block this step', WAITING: 'Waiting on something', REPORTED_COMPLETE: 'Completed', NOT_APPLICABLE: 'Not needed', VERIFIED_COMPLETE: 'Mark as checked', REOPENED: 'Reopen' };
 
 /** The employee’s workplace: what to do, substeps, files, latest activity, and one way to report progress. */
-function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, onTab }: { step: Step; steps: Step[]; project: Project; canWork: boolean; isNext?: boolean; paused?: boolean; onTab: (t: Tab) => void }) {
+function StepPanel({ step, steps, labels, project, canWork, isNext, paused: projPaused, onTab }: { step: Step; steps: Step[]; labels: Map<string, string>; project: Project; canWork: boolean; isNext?: boolean; paused?: boolean; onTab: (t: Tab) => void }) {
   const { hub, uid, me } = useMe();
   const act = useAct();
   const [sp] = useSearchParams();
@@ -223,8 +247,8 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(step.instructions);
   const [reason, setReason] = useState('');
-  const [dlg, setDlg] = useState<null | 'help' | 'update' | 'request' | 'verify' | 'sheet' | 'hold'>(null);
-  const [subTitle, setSubTitle] = useState('');
+  const [dlg, setDlg] = useState<null | 'help' | 'update' | 'request' | 'verify' | 'sheet' | 'hold' | 'newSheet' | 'newDoc' | 'link' | 'subs'>(null);
+  const [fileMenu, setFileMenu] = useState(false);
   const responseId = sp.get('response');
   const owner = me.role === 'OWNER';
   const paused = !!project.pause?.isPaused;
@@ -234,28 +258,31 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
   const assigned = step.assignedUids.includes(uid) || owner;
   const why = notReadyReason(step, steps, project);
   const canSignOff = !!step.employeeSignOffAllowed && step.impact === 'ROUTINE';
-  const choices = (NEXT[step.status] ?? []).filter((t) => owner || (assigned && ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'].includes(t)) || (assigned && t === 'VERIFIED_COMPLETE' && canSignOff));
+  const choices = (NEXT[step.status] ?? []).filter((t) => t !== 'REPORTED_COMPLETE' && !(t === 'IN_PROGRESS' && step.status === 'NOT_STARTED')).filter((t) => owner || (assigned && ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'].includes(t)) || (assigned && t === 'VERIFIED_COMPLETE' && canSignOff));
   const move = (to: StepStatus, ownerApproval = false) => act(() => hub.transitionStep(uid, step.id, to, { reason, ownerApproval }), `Saved: ${statusLabel(to)}`);
   const hasCard = hub.outstandingCards(uid).some((c) => c.stepId === step.id && c.cardType !== 'OWNER_REQUEST');
   const ws = hub.projectWorkspace(uid, project.id);
 
   return (
-    <section className="card focal stack" aria-label={`Step ${step.sortOrder} details`}>
+    <section className="card focal stack" aria-label={`Step ${labels.get(step.id)} details`}>
       {responseId && <ResponseDetail responseId={responseId} />}
       <div>
         {isNext && !projPaused && <div className="eyebrow">Next step</div>}
-        <h2 style={{ marginBottom: 4 }}>Step {step.sortOrder}: {step.title}</h2>
+        <h2 style={{ marginBottom: 2 }}>Step {labels.get(step.id)}: <EditableText value={step.title} canEdit={canWork} label="step name" onSave={async (v) => { try { hub.renameStep(uid, step.id, v); return true; } catch (e) { alert((e as Error).message); return false; } }} /></h2>
+        <p className="small muted" style={{ margin: '0 0 4px' }}><EditableText value={step.objective} canEdit={canWork} multiline label="short description" placeholder="Add a short description" onSave={async (v) => { try { hub.setStepDescription(uid, step.id, v); return true; } catch (e) { alert((e as Error).message); return false; } }} /></p>
         <div className="row"><StepState status={step.status} hold={!!step.onHold} />
-          {['REPORTED_COMPLETE', 'VERIFIED_COMPLETE'].includes(step.status) && <SourceChip source={step.verificationSource} />}
+          {step.verificationSource === 'INDEPENDENT' && <SourceChip source={step.verificationSource} />}
           {step.requiresCheck && <Chip tone="warn" glyph="!" title="Dalia chose to check this one herself.">Dalia will check this one</Chip>}
-          {step.dueAt && <span className="small muted">Due {formatDate(step.dueAt)}</span>}</div>
+          {step.dueAt && <span className="small muted">Due {formatDate(step.dueAt)}</span>}
+          {['REPORTED_COMPLETE', 'VERIFIED_COMPLETE'].includes(step.status) && step.lastConfirmedAt && <span className="small">Marked done {formatDateTime(step.lastConfirmedAt)}</span>}</div>
         {(paused || why) && <p className="small" style={{ color: 'var(--warn)', margin: '.4rem 0 0' }}>{paused ? 'This project is paused, so this step is not scheduled right now. Your work is saved.' : `Not ready: ${why}`}</p>}
         {step.status === 'REPORTED_COMPLETE' && (step.requiresCheck || step.impact === 'HIGH') && <p className="smallnote" style={{ margin: '.5rem 0 0' }}>{step.humanReported ? `${hub.userName(step.humanReported.byUid)} reported this done.` : 'Reported done.'} {step.requiresCheck ? 'Dalia chose to check this one, so it is waiting for her.' : 'It counts as done. The result has not been checked in Amazon or any other outside system.'}</p>}
         {step.onHold && <p className="small" style={{ margin: '.3rem 0 0' }}>On hold{step.onHold.reason ? `: ${step.onHold.reason}` : ''}. The rest of the project keeps going.</p>}
       </div>
 
       <div className="row actions">
-        {canWork && !owner && assigned && ['NOT_STARTED', 'IN_PROGRESS', 'REOPENED'].includes(step.status) && <button className="primary" onClick={() => move('REPORTED_COMPLETE')}>I finished this step</button>}
+        {canWork && assigned && step.status === 'NOT_STARTED' && <button className="primary" onClick={() => move('IN_PROGRESS')}>Begin</button>}
+        {canWork && assigned && step.status !== 'CANCELLED' && <button className={step.status === 'NOT_STARTED' ? '' : 'primary'} onClick={() => move('REPORTED_COMPLETE')}>Completed</button>}
         {!owner && canWork && <button onClick={() => setDlg('update')}>Update progress</button>}
         {!owner && canWork && <button onClick={() => setDlg('help')}>Ask for help</button>}
         {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setDlg('request')}>Ask for an update</button>}
@@ -267,38 +294,43 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
           <details><summary>What this means</summary><div>{step.observedNote}</div><div className="muted">The step’s status did not change. Only a person, or a check in the source system, can change it.</div></details>
         </div>
       )}
-      {step.humanReported && <div className="small"><Chip tone="info" glyph="☑">Employee confirmed</Chip> {hub.userName(step.humanReported.byUid)}: {step.humanReported.outcomeText ?? CHOICE_LABEL[step.humanReported.choice]} · {formatDateTime(step.humanReported.at)}{step.humanReported.note ? ` — “${step.humanReported.note}”` : ''}</div>}
+      {step.humanReported && <div className="small muted">{hub.userName(step.humanReported.byUid)}: {step.humanReported.outcomeText ?? CHOICE_LABEL[step.humanReported.choice]} · {formatDateTime(step.humanReported.at)}{step.humanReported.note ? ` — “${step.humanReported.note}”` : ''}</div>}
       {step.blockerReason && <div className="card bad small">{step.status === 'BLOCKED' ? 'Blocked' : 'Waiting'}: {step.blockerReason}</div>}
 
-      <div>
+      <div className="sect">
         <div className="row between"><h3>What to do</h3>{canWork && <button className="link" onClick={() => { setEditing(!editing); setText(step.instructions); }}>{editing ? 'Cancel' : 'Edit'}</button>}</div>
         {editing ? <div className="stack"><textarea aria-label="Instructions" value={text} onChange={(e) => setText(e.target.value)} style={{ minHeight: 140 }} /><div><button className="primary" onClick={async () => { const r = await act(() => hub.updateInstructions(uid, step.id, text), 'Saved'); if (r) setEditing(false); }}>Save</button></div></div>
           : <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{step.instructions || <span className="muted">No instructions yet. Use Edit to add some.</span>}</p>}
         {step.whyForGoal && <p className="small muted" style={{ margin: '.4rem 0 0' }}><strong>Why:</strong> {step.whyForGoal}</p>}
         {(step.objective || step.acceptance) && <p className="small muted" style={{ margin: '.2rem 0 0' }}>{step.acceptance && <><strong>Done when:</strong> {step.acceptance}</>}</p>}
-        {step.dependencyIds.length > 0 && <p className="small muted" style={{ margin: '.2rem 0 0' }}>Comes after: {step.dependencyIds.map((d) => { const s = steps.find((x) => x.id === d); return s ? `Step ${s.sortOrder}` : ''; }).join(', ')}</p>}
+        {step.dependencyIds.length > 0 && <p className="small muted" style={{ margin: '.2rem 0 0' }}>Comes after: {step.dependencyIds.map((d) => { const s = steps.find((x) => x.id === d); return s ? `Step ${labels.get(s.id)}` : ''; }).join(', ')}</p>}
       </div>
 
-      <div>
-        <h3>Checklist</h3>
+      <div className="sect minor">
+        <div className="row between"><h3>Sub steps</h3>{canWork && <button className="link" onClick={() => setDlg('subs')}>Add sub steps</button>}</div>
         {children.length === 0 && step.checklist.length === 0 && <p className="small muted" style={{ margin: 0 }}>None yet.</p>}
         {step.checklist.map((c) => (
           <label key={c.id} style={{ fontWeight: 500, display: 'flex', gap: 8, alignItems: 'flex-start' }}><input type="checkbox" checked={c.done} disabled={!canWork} onChange={() => act(() => hub.toggleChecklist(uid, step.id, c.id))} /> {c.text}</label>))}
         {children.map((c) => (
-          <div key={c.id} className="row between" style={{ margin: '.25rem 0' }}>
-            <span>↳ {c.title} <StepState status={c.status} /></span>
-            {canWork && c.assignedUids.includes(uid) && (c.status === 'NOT_STARTED' || c.status === 'IN_PROGRESS') && <button className="pill-btn" onClick={() => act(() => hub.transitionStep(uid, c.id, c.status === 'NOT_STARTED' ? 'IN_PROGRESS' : 'REPORTED_COMPLETE', {}), c.status === 'NOT_STARTED' ? 'Started' : 'Marked as finished')}>{c.status === 'NOT_STARTED' ? 'Start' : 'I finished this'}</button>}
+          <div key={c.id} className="row between subrow">
+            <span><span className="num">{labels.get(c.id)}</span> <EditableText value={c.title} canEdit={canWork} label={`sub step ${labels.get(c.id)} name`} onSave={async (v) => { try { hub.renameStep(uid, c.id, v); return true; } catch (e) { alert((e as Error).message); return false; } }} /> <StepState status={c.status} /></span>
+            {canWork && c.assignedUids.includes(uid) && <span className="row" style={{ gap: 6 }}>
+              {c.status === 'NOT_STARTED' && <button className="pill-btn" onClick={() => act(() => hub.transitionStep(uid, c.id, 'IN_PROGRESS', {}), 'Started')}>Begin</button>}
+              {c.status !== 'REPORTED_COMPLETE' && c.status !== 'VERIFIED_COMPLETE' && c.status !== 'CANCELLED' && <button className="pill-btn" onClick={() => act(() => hub.transitionStep(uid, c.id, 'REPORTED_COMPLETE', {}), 'Completed')}>Completed</button>}
+            </span>}
           </div>))}
-        {canWork && (
-          <form className="row" style={{ marginTop: 6 }} onSubmit={async (e) => { e.preventDefault(); const r = await act(() => hub.addStep(uid, project.id, { title: subTitle, parentStepId: step.id }), 'Substep added'); if (r) setSubTitle(''); }}>
-            <input type="text" aria-label="New substep" placeholder="Add a substep, like “Test with 5 SKUs”" value={subTitle} onChange={(e) => setSubTitle(e.target.value)} style={{ flex: 1 }} />
-            <button type="submit" disabled={!subTitle.trim()}>Add substep</button>
-          </form>
-        )}
       </div>
 
-      <div>
-        <div className="row between"><h3>Files for this step</h3>{canWork && ws?.state === 'READY' && <button className="link" onClick={() => setDlg('sheet')}>Create a checklist sheet</button>}</div>
+      <div className="sect minor">
+        <div className="row between"><h3>Files for this step</h3>{canWork && (
+          <div className="menu"><button className="quiet" aria-haspopup="menu" aria-expanded={fileMenu} onClick={() => setFileMenu(!fileMenu)}>Add file ▾</button>
+            {fileMenu && <div role="menu" onClick={() => setFileMenu(false)}>
+              <button role="menuitem" onClick={() => setDlg('newSheet')}>New Google Sheet</button>
+              <button role="menuitem" onClick={() => setDlg('newDoc')}>New Google Doc</button>
+              <button role="menuitem" onClick={() => setDlg('link')}>Link a file I already have</button>
+              {ws?.state === 'READY' && <button role="menuitem" onClick={() => setDlg('sheet')}>Create a checklist sheet</button>}
+            </div>}
+          </div>)}</div>
         {resources.length === 0 && <p className="small muted" style={{ margin: 0 }}>No files are linked to this step yet.</p>}
         {(() => {
           // The approved working document and every file the person needs are always shown. Only secondary files fold away.
@@ -332,7 +364,7 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
 
       <div className="stack">
         <details>
-          <summary className="small">More options for this step</summary>
+          <summary className="small">More</summary>
           <div className="stack" style={{ marginTop: 8 }}>
                         {choices.length === 0 ? <span className="muted small">No status changes are available to you right now.</span> : (
               <>
@@ -341,8 +373,10 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
                   {owner && step.status === 'REPORTED_COMPLETE' && step.requiresCheck && !step.verifications.some((v) => v.result === 'CONFIRMED') && <button className="danger" onClick={() => move('VERIFIED_COMPLETE', true)}>Mark it checked myself</button>}</div>
               </>
             )}
+            {canWork && assigned && !owner && <div className="row">
+              {step.onHold ? <button onClick={() => act(() => hub.releaseStep(uid, step.id), 'Step is active again')}>Take this step off pause</button> : <button onClick={() => setDlg('hold')}>Pause this step</button>}</div>}
             {owner && <div className="row">
-              {step.onHold ? <button onClick={() => act(() => hub.releaseStep(uid, step.id), 'Step is active again')}>Take this step off hold</button> : <button onClick={() => setDlg('hold')}>Put this step on hold</button>}
+              {step.onHold ? <button onClick={() => act(() => hub.releaseStep(uid, step.id), 'Step is active again')}>Take this step off pause</button> : <button onClick={() => setDlg('hold')}>Pause this step</button>}
               <button onClick={() => setDlg('verify')}>Add a practice check in the source system</button>
               <button onClick={() => act(() => hub.setStepRequiresCheck(uid, step.id, !step.requiresCheck), step.requiresCheck ? 'You will not be asked to check this one' : 'You will be asked to check this one')}>{step.requiresCheck ? 'Stop asking me to check this one' : 'I want to check this one myself'}</button></div>}
           </div>
@@ -358,7 +392,11 @@ function StepPanel({ step, steps, project, canWork, isNext, paused: projPaused, 
       {dlg === 'help' && <HelpDialog step={step} onClose={() => setDlg(null)} />}
       {dlg === 'verify' && <VerifyDialog step={step} onClose={() => setDlg(null)} />}
       {dlg === 'sheet' && <SheetDialog project={project} step={step} onClose={() => setDlg(null)} />}
-      {dlg === 'hold' && <HoldDialog step={step} onClose={() => setDlg(null)} />}
+      {dlg === 'hold' && <HoldDialog step={step} label={labels.get(step.id) ?? ''} onClose={() => setDlg(null)} />}
+      {dlg === 'newSheet' && <NewFileDialog project={project} step={step} kind="SHEET" onClose={() => setDlg(null)} />}
+      {dlg === 'newDoc' && <NewFileDialog project={project} step={step} kind="DOC" onClose={() => setDlg(null)} />}
+      {dlg === 'link' && <LinkFileDialog step={step} onClose={() => setDlg(null)} />}
+      {dlg === 'subs' && <AddStepsDialog projectId={project.id} parentStepId={step.id} onClose={() => setDlg(null)} />}
     </section>
   );
 }
@@ -412,7 +450,7 @@ function HelpDialog({ step, onClose }: { step: Step; onClose: () => void }) {
   return (
     <Modal title="Ask Dalia for help" onClose={onClose}>
       <div className="stack">
-        <p className="small">Dalia gets a note that you need help with Step {step.sortOrder}. The step status stays the same unless you change it.</p>
+        <p className="small">Dalia gets a note that you need help with this step. The step status stays the same unless you change it.</p>
         <textarea aria-label="What do you need?" value={note} onChange={(e) => setNote(e.target.value)} placeholder="What do you need help with?" />
         <div className="row"><button className="primary" disabled={!note.trim()} onClick={async () => { const r = await act(() => hub.sendProactiveUpdate(uid, { projectId: step.projectId, stepId: step.id, choice: 'BLOCKED', note, needsOwnerHelp: true, idempotencyKey: key.current }), 'Dalia has been notified'); if (r) onClose(); }}>Send to Dalia</button></div>
       </div>
@@ -420,16 +458,16 @@ function HelpDialog({ step, onClose }: { step: Step; onClose: () => void }) {
   );
 }
 
-function HoldDialog({ step, onClose }: { step: Step; onClose: () => void }) {
+function HoldDialog({ step, label, onClose }: { step: Step; label: string; onClose: () => void }) {
   const { hub, uid } = useMe();
   const act = useAct();
   const [why, setWhy] = useState('');
   return (
-    <Modal title={`Put Step ${step.sortOrder} on hold`} onClose={onClose}>
+    <Modal title={`Pause step ${label}`} onClose={onClose}>
       <div className="stack">
         <p className="small muted">Only this step waits. The rest of the project keeps going. The step keeps its status.</p>
         <div><label htmlFor="hd-why">Why? (if you want)</label><input id="hd-why" type="text" value={why} onChange={(e) => setWhy(e.target.value)} /></div>
-        <div className="row"><button className="primary" onClick={async () => { const r = await act(() => hub.holdStep(uid, step.id, why), 'Step is on hold'); if (r) onClose(); }}>Put on hold</button><button onClick={onClose}>Cancel</button></div>
+        <div className="row"><button className="primary" onClick={async () => { const r = await act(() => hub.holdStep(uid, step.id, why), 'Step is paused'); if (r) onClose(); }}>Pause</button><button onClick={onClose}>Cancel</button></div>
       </div>
     </Modal>
   );
@@ -512,12 +550,6 @@ export function AssignDialog({ project, onClose }: { project: Project; onClose: 
   );
 }
 
-const FILE_GROUPS: { title: string; roles: ResourceRole[] }[] = [
-  { title: 'Instructions', roles: ['INSTRUCTIONS'] }, { title: 'Working documents', roles: ['WORKING'] }, { title: 'Checklists', roles: ['CHECKLIST'] },
-  { title: 'Images and input files', roles: ['INPUT', 'SOURCE_IMAGES'] }, { title: 'Scripts and tools', roles: ['AUTOMATION_TOOL'] }, { title: 'Final results', roles: ['OUTPUT', 'APPROVED_FINAL'] },
-  { title: 'Reports', roles: ['VALIDATION'] }, { title: 'Other', roles: ['REFERENCE', 'PRODUCTION_ASSET'] },
-];
-
 function FilesTab({ project, canWork }: { project: Project; canWork: boolean }) {
   const { hub, uid, me } = useMe();
   const act = useAct();
@@ -526,6 +558,15 @@ function FilesTab({ project, canWork }: { project: Project; canWork: boolean }) 
   const [sheet, setSheet] = useState(false);
   const [viewer, setViewer] = useState<string | null>(null);
   const owner = me.role === 'OWNER';
+  const labels = hub.stepLabelsFor(uid, project.id);
+  const steps = hub.projectSteps(uid, project.id);
+  // Files grouped by step, in step order. Files that belong to the whole project come first.
+  const groups = [{ key: 'project', title: 'Whole project', stepId: null as string | null }, ...steps.slice().sort((a, b) => (labels.get(a.id) ?? '').localeCompare(labels.get(b.id) ?? '', undefined, { numeric: true })).map((st) => ({ key: st.id, title: `Step ${labels.get(st.id)} · ${st.title}`, stepId: st.id as string | null }))]
+    .map((g) => {
+      const byRes = new Map<string, typeof all>();
+      all.filter((x) => (x.link.stepId ?? null) === g.stepId).forEach((x) => byRes.set(x.resource.id, [...(byRes.get(x.resource.id) ?? []), x]));
+      return { key: g.key, title: g.title, items: [...byRes.values()] };
+    }).filter((g) => g.items.length);
   return (
     <div className="stack">
       {ws && (
@@ -548,16 +589,10 @@ function FilesTab({ project, canWork }: { project: Project; canWork: boolean }) 
           )}
         </section>
       )}
-      {FILE_GROUPS.map((g) => {
-        const items = all.filter((x) => g.roles.includes(x.link.role));
-        const byRes = new Map<string, typeof items>();
-        items.forEach((x) => byRes.set(x.resource.id, [...(byRes.get(x.resource.id) ?? []), x]));
-        if (!byRes.size) return null;
-        return (
-          <section key={g.title}><h2 className="group-title">{g.title} <span className="count">{byRes.size}</span></h2>
-            <div className="grid cols-2">{[...byRes.values()].map((xs) => <ResourceCard key={xs[0].resource.id} resource={xs[0].resource} links={xs.map((x) => ({ ...x.link, projectKey: project.key, stepTitle: x.stepTitle }))} />)}</div></section>
-        );
-      })}
+      {groups.map((g) => (
+        <section key={g.key}><h2 className="group-title">{g.title} <span className="count">{g.items.length}</span></h2>
+          <div className="grid cols-2">{g.items.map((xs) => <ResourceCard key={xs[0].resource.id} resource={xs[0].resource} links={xs.map((x) => ({ ...x.link, projectKey: project.key, stepTitle: x.stepTitle }))} />)}</div></section>
+      ))}
       {all.length === 0 && !ws && <Empty>No files are linked to this project yet.</Empty>}
       {sheet && <SheetDialog project={project} step={{ id: '', sortOrder: 0 } as Step} onClose={() => setSheet(false)} />}
       {viewer && <Modal title="Project folder" onClose={() => setViewer(null)}><div className="card violet">This is a practice preview. In the real app this opens your Google Drive folder (<code>{viewer}</code>). This copy never talks to Google.</div></Modal>}
@@ -587,7 +622,7 @@ function MoreTab({ project, steps }: { project: Project; steps: Step[] }) {
         <p className="small muted">We check access every time. If you remove someone, they lose access right away, even with an old link.</p></section>
       <section className="card" aria-labelledby="res"><h2 id="res">Results</h2>
         <p>{project.impactPlan ? <>Goal: {project.impactPlan.target}. What we saw: {project.impactPlan.observed ?? <em>Not measured yet</em>}</> : <em>Not measured yet. We do not guess how much time or money was saved.</em>}</p>
-        <h3>Checks in the source system</h3>{verified.length === 0 ? <span className="muted small">None yet.</span> : verified.map(({ s, v }) => <div key={v.id} className="small">Step {s.sortOrder}: {v.entity} — {v.result === 'CONFIRMED' ? 'it matches' : v.result === 'NOT_FOUND' ? 'not found' : 'does not match'} ({v.verifier}, practice) · {formatDateTime(v.at)}</div>)}</section>
+        <h3>Checks in the source system</h3>{verified.length === 0 ? <span className="muted small">None yet.</span> : verified.map(({ s, v }) => <div key={v.id} className="small">Step {hub.stepLabelsFor(uid, project.id).get(s.id)}: {v.entity} — {v.result === 'CONFIRMED' ? 'it matches' : v.result === 'NOT_FOUND' ? 'not found' : 'does not match'} ({v.verifier}, practice) · {formatDateTime(v.at)}</div>)}</section>
       <section className="card"><button className="link" onClick={() => setOpen(!open)}>{open ? 'Hide' : 'Show'} the detailed change log (only you can see this)</button>
         {open && <div className="tablewrap"><table><thead><tr><th>Time</th><th>What</th><th>Who</th><th>Before → After</th><th>Why</th></tr></thead><tbody>
           {rows.map((a) => <tr key={a.id}><td>{formatDateTime(a.recordedAt)}</td><td>{a.entityType} · {a.action.replace(/_/g, ' ').toLowerCase()}</td><td>{a.actorLabel}</td><td className="small"><code>{JSON.stringify(a.before)?.slice(0, 70)}</code> → <code>{JSON.stringify(a.after)?.slice(0, 70)}</code></td><td>{a.reason}</td></tr>)}</tbody></table></div>}</section>
