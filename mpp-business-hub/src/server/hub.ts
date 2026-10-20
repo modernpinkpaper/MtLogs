@@ -25,6 +25,7 @@ import * as SW from './stepWork';
 import * as OH from './ownerHome';
 import * as EL from './errorLog';
 import * as PRS from './printStats';
+import * as PV from './printVerify';
 import { CHECK_LIBRARY } from '../domain/catalog';
 import { stepLabels } from '../domain/stepLabels';
 import * as DR from './drive';
@@ -1936,9 +1937,21 @@ export class HubServer {
   errorHints(uid: string) { return EL.errorHints(this, uid); }
   dismissErrorHint(uid: string, key: string) { return EL.dismissErrorHint(this, uid, key); }
   printSummary(uid: string, forUid: string = uid, ymd?: string) { return PRS.printSummary(this, uid, forUid, ymd); }
+  canVerifyPrints(uid: string) { return PV.canVerify(this, uid); }
+  lookupOrder(uid: string, orderId: string) { return PV.lookupOrder(this, uid, orderId); }
+  confirmFileForOrder(uid: string, orderId: string, file: string) { return PV.confirmFileForOrder(this, uid, orderId, file); }
+  addCaseNote(uid: string, orderId: string, text: string) { return PV.addCaseNote(this, uid, orderId, text); }
+  printTeam(uid: string, ymd: string) { return PRS.printTeam(this, uid, ymd); }
+  printDays(uid: string, forUid: string, endYmd: string, n = 10) { return PRS.printDays(this, uid, forUid, endYmd, n); }
+  printOrders(uid: string, forUid: string, ymd: string) { PRS.printDay(this, uid, forUid, ymd); return PRS.ordersOn(this, forUid, ymd); }
   addDayNote(uid: string, ymd: string, text: string) { return PRS.addDayNote(this, uid, ymd, text); }
   setProjectNote(uid: string, projectId: string, text: string) { return MG.setProjectNote(this, uid, projectId, text); }
   shareFindingWithTeam(uid: string, id: string, toUids: string[], note: string) { return MG.shareFindingWithTeam(this, uid, id, toUids, note); }
+  addStepNote(uid: string, stepId: string, text: string) { return SW.addStepNote(this, uid, stepId, text); }
+  stepNotes(uid: string, stepId: string) { return SW.stepNotes(this, uid, stepId); }
+  needsStepAssignment(uid: string, projectId: string) { return SW.needsStepAssignment(this, uid, projectId); }
+  assignLinkToStep(uid: string, linkId: string, stepId: string) { return SW.assignLinkToStep(this, uid, linkId, stepId); }
+  setMyPhoto(uid: string, dataUrl: string | null) { return SW.setMyPhoto(this, uid, dataUrl); }
   reassignProject(uid: string, projectId: string, fromUid: string | null, toUids: string[]) { return SW.reassignProject(this, uid, projectId, fromUid, toUids); }
   reassignStep(uid: string, stepId: string, toUids: string[]) { return SW.reassignStep(this, uid, stepId, toUids); }
   removeFile(uid: string, linkId: string) { return SW.removeFile(this, uid, linkId); }

@@ -1,6 +1,7 @@
 import { useMe } from './hubContext';
 import { OwnerOnly } from './guard';
 import { Errors } from './pages/Errors';
+import { PrintVerification } from './pages/PrintVerification';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useSession } from './hubContext';
 import { Layout } from './Layout';
@@ -43,6 +44,7 @@ export function App() {
             <Route path="/journal" element={<Journal />} />
             <Route path="/resources" element={<Resources />} />
             <Route path="/errors" element={<ErrorsRoute />} />
+            <Route path="/print-verification" element={<PrintVerificationRoute />} />
             <Route path="/print/my-stats" element={<PrintMyStats />} />
             {/* Owner screens. Old addresses still work and send you to the new place. */}
             <Route path="/owner/overview" element={<Navigate to="/home" replace />} />
@@ -73,4 +75,10 @@ export function App() {
 function ErrorsRoute() {
   const { me } = useMe();
   return me.role === 'OWNER' ? <Navigate to="/owner/team?tab=errors" replace /> : <Errors />;
+}
+
+/** Customer service people use /print-verification. Dalia sees it as a tab in Team & Print. */
+function PrintVerificationRoute() {
+  const { me } = useMe();
+  return me.role === 'OWNER' ? <Navigate to="/owner/team?tab=verify" replace /> : <PrintVerification />;
 }

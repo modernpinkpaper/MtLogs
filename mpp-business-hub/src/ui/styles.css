@@ -500,3 +500,37 @@ details > summary { cursor: pointer; }
 .crumbs li[aria-current=page] { color: var(--text); font-weight: 600; }
 .crumbs .crumb-back { border: 1px solid var(--border); border-radius: 99px; padding: .3rem .8rem; text-decoration: none; min-height: 36px; display: inline-flex; align-items: center; background: var(--surface, #fff); }
 .crumbs .sep { padding: 0 .3rem; }
+
+/* v1.11: avatars and people */
+.avatar { display: inline-flex; align-items: center; justify-content: center; background: var(--pink-soft, #fbeaf0); color: var(--pink-strong, #a3174d); font-weight: 700; letter-spacing: .02em; border: 1px solid #efc3d3; line-height: 1; text-transform: uppercase; }
+.person { display: inline-flex; align-items: center; gap: .5rem; min-width: 0; }
+
+/* v1.11: Print Team and My Print Stats */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.daynav { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.daynav .daylabel { min-width: 10.5rem; text-align: center; }
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3, 12px); }
+.kpi { border-radius: 14px; padding: 1rem 1.2rem; border: 1px solid var(--border); background: #fff; min-width: 0; }
+.kpi.pink { background: #fdf2f6; } .kpi.blue { background: #f1f6fd; } .kpi.green { background: #f1faf4; }
+.kpi .kl { font-size: .92rem; color: var(--text-2, #5a4a52); font-weight: 600; }
+.kpi .kv { font-size: 2rem; font-weight: 700; margin: .15rem 0; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.kpi .kh { font-size: .82rem; color: var(--muted); }
+.ptable { width: 100%; border-collapse: collapse; }
+.ptable th { text-align: right; font-size: .82rem; color: var(--muted); font-weight: 600; padding: .6rem .8rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.ptable th:first-child, .ptable td:first-child { text-align: left; }
+.ptable td { padding: .7rem .8rem; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
+.ptable tbody tr.row-link { cursor: pointer; } .ptable tbody tr.row-link:hover { background: var(--surface-2, #faf7f8); }
+.ptable tbody tr.sel { background: #fdf2f6; }
+.ptable tfoot td { font-weight: 700; background: #fdf2f6; border-bottom: none; }
+.ptable button.cell { border: none; background: none; padding: 0 .2rem; min-height: 0; color: var(--pink-strong, #a3174d); text-decoration: underline; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ordtable { width: 100%; border-collapse: collapse; font-size: .9rem; } .ordtable th, .ordtable td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--border); } .ordtable .num { text-align: right; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); background: #fff; border-left: 1px solid var(--border); box-shadow: -8px 0 24px rgba(40,20,30,.08); z-index: 40; overflow-y: auto; padding: 1.1rem 1.2rem; }
+.drawer .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.drawer .kpi .kv { font-size: 1.5rem; }
+@media (max-width: 800px) { .kpis { grid-template-columns: 1fr; } .kpi { display: grid; grid-template-columns: 1fr auto; align-items: center; } .kpi .kh { grid-column: 1 / -1; } .kpi .kv { font-size: 1.5rem; margin: 0; } .ptable th:nth-child(4), .ptable td:nth-child(4) { display: none; } }
+.selcard { border-color: var(--pink); box-shadow: 0 0 0 2px var(--pink-soft); }
+
+/* Project pages: overview lists steps only; a step page shows a compact list beside one workspace */
+.plan-wide { max-width: 860px; }
+.steptop { padding: .6rem .9rem; }
+.split .plan .step { padding: .35rem .5rem; }

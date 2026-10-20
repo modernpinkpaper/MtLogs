@@ -24,7 +24,8 @@ await p.getByRole('button', { name: /Add file/ }).click(); await p.getByRole('me
 await p.getByRole('button', { name: 'Make it' }).click(); await p.waitForSelector('text=File made');
 ok(await p.locator('text=/P-070 - .* - 2 Build Amazon listing automation - .* - File 1/').count() > 0, 'file got the standard name');
 await p.getByRole('button', { name: 'Done', exact: true }).click();
-// reorder
+// reorder (on the project overview, where the steps list is)
+await p.goto(U + '/projects/prj-070'); await p.waitForSelector('text=Steps');
 await p.getByRole('button', { name: 'Move 2 up' }).click(); await p.waitForTimeout(400);
 ok(await p.locator('.step:has-text("Build Amazon listing automation") .num').first().innerText() === '1', 'moving a step up renumbers it');
 // Update status on a blank step

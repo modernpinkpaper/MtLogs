@@ -1,5 +1,5 @@
 import type {
-  AiFeedback, PrintClaim, DayNote, ErrorLog, ErrorHintDismissal,
+  AiFeedback, PrintClaim, PrintLogRow, OrderFileLink, CsCaseNote, CsSearch, StepNote, DayNote, ErrorLog, ErrorHintDismissal,
   ActivityBin, AiRun, AuditEvent, Finding, IntakeRun, MtLogEvent, NormalizedEvent, Notification, Opportunity, PrintJob,
   PrinterProblemEvent, PrintStation, Project, ProjectEvent, Resource, ResourceLink, ReviewCard, ReviewDecision, Settings,
   Shift, SourceArchive, BusinessGoal, IntelligenceSource, OpportunityModel, OutcomeMeasurement, OwnerFinding, ProjectWorkspace, DriveSim, Step, UpdateRequest, UpdateResponse, User, WorkAssignment, WorkEpisode, WorkLogEntry,
@@ -59,6 +59,11 @@ export interface HubState {
   /** v1.9. Optional so older saved states keep loading. */
   aiFeedback?: AiFeedback[];
   claims?: PrintClaim[];
+  printLogs?: PrintLogRow[];
+  orderFileLinks?: OrderFileLink[];
+  csCaseNotes?: CsCaseNote[];
+  csSearches?: CsSearch[];
+  stepNotes?: StepNote[];
   dayNotes?: DayNote[];
   errorLogs?: ErrorLog[];
   errorHintDismissals?: ErrorHintDismissal[];

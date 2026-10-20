@@ -411,3 +411,51 @@ export function remindersDue(hub: HubServer, uid: string) {
     return [{ step, project, label: stepLabel(hub.state.steps, step) }];
   });
 }
+
+
+// ------------------------------------------------------------------ notes that belong to one step
+export function addStepNote(hub: HubServer, uid: string, stepId: string, text: string) {
+  const { step, project } = hub.workStepFor(uid, stepId);
+  const t = text.trim();
+  if (!t) throw new HubError('VALIDATION', 'Write the note first.');
+  if (t.length > 2000) throw new HubError('VALIDATION', 'Please keep the note under 2000 letters.');
+  return hub.commit(() => {
+    const n = { id: hub.nid('sn'), stepId: step.id, projectId: project.id, byUid: uid, at: hub.state.now, text: t };
+    (hub.state.stepNotes ??= []).push(n);
+    hub.addJournal({ projectId: project.id, stepIds: [step.id], type: 'NOTE', actorUid: uid, title: `${hub.userName(uid)} added a note`, summary: t.slice(0, 200), verificationState: 'EMPLOYEE_CONFIRMED' });
+    hub.audit({ entityType: 'stepNote', entityId: n.id, action: 'ADD_NOTE', before: null, after: { stepId: step.id }, actorUid: uid, actorLabel: hub.userName(uid), reason: 'Step note', evidenceRefs: [], projectId: project.id });
+    return n;
+  });
+}
+/** Notes on one step. Anyone who can read the project can read them. */
+export function stepNotes(hub: HubServer, uid: string, stepId: string) {
+  hub.stepFor(uid, stepId);
+  return (hub.state.stepNotes ?? []).filter((n) => n.stepId === stepId).sort((a, b) => b.at.localeCompare(a.at));
+}
+
+// ------------------------------------------------------------------ files that are on the project but not on a step yet
+/** Owner only. Nothing is lost: each one stays until it is put on a step. */
+export function needsStepAssignment(hub: HubServer, uid: string, projectId: string) {
+  hub.requireOwner(uid); hub.projectFor(uid, projectId);
+  const ws = hub.state.workspaces[projectId];
+  return hub.state.resourceLinks.filter((l) => l.projectId === projectId && !l.stepId && l.associationState !== 'REJECTED' && !l.id.endsWith('-folder') && l.resourceId !== ws?.folderId)
+    .map((link) => ({ link, resource: hub.state.resources.find((r) => r.id === link.resourceId)! })).filter((x) => !!x.resource);
+}
+export function assignLinkToStep(hub: HubServer, uid: string, linkId: string, stepId: string) {
+  hub.requireOwner(uid);
+  const link = hub.state.resourceLinks.find((l) => l.id === linkId && !l.stepId); const step = hub.state.steps.find((x) => x.id === stepId);
+  if (!link || !step || step.projectId !== link.projectId) throw new HubError('VALIDATION', 'Pick a step in the same project.');
+  return hub.commit(() => {
+    link.stepId = step.id; link.lastReviewedAt = hub.state.now; link.approvedBy = uid;
+    hub.audit({ entityType: 'resourceLink', entityId: link.id, action: 'ASSIGN_TO_STEP', before: { stepId: null }, after: { stepId: step.id }, actorUid: uid, actorLabel: hub.userName(uid), reason: 'Project file put on a step', evidenceRefs: [], projectId: link.projectId });
+    hub.addJournal({ projectId: link.projectId, stepIds: [step.id], type: 'RESOURCE', actorUid: uid, title: 'File put on a step', summary: `A project file was put on step ${stepLabel(hub.state.steps, step)}.`, verificationState: 'OFFICIAL', relatedResourceIds: [link.resourceId] });
+    return link;
+  });
+}
+
+// ------------------------------------------------------------------ a person’s own photo
+export function setMyPhoto(hub: HubServer, uid: string, dataUrl: string | null) {
+  const u = hub.user(uid);
+  if (dataUrl !== null && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(dataUrl) || dataUrl.length > 90_000)) throw new HubError('VALIDATION', 'Please choose a small photo (JPG, PNG or WebP).');
+  return hub.commit(() => { u.photo = dataUrl ?? undefined; hub.audit({ entityType: 'user', entityId: u.id, action: dataUrl ? 'PHOTO_SET' : 'PHOTO_REMOVED', before: null, after: null, actorUid: uid, actorLabel: u.name, reason: 'Own photo', evidenceRefs: [], projectId: null }); return u; });
+}

@@ -30,15 +30,15 @@ await tap(p.getByRole('button', { name: 'Update status' }).first()); await tap(p
 await p.getByLabel('Reason').fill('Waiting for access'); await tap(p.getByRole('button', { name: 'Save', exact: true })); ok(await p.locator('.state:has-text("Blocked")').count() > 0, 'Blocked with a reason works');
 await tap(p.getByRole('button', { name: 'Update status' }).first()); await tap(p.getByRole('button', { name: 'In progress', exact: true }).first()); ok(await p.locator('.state:has-text("In progress")').count() > 0, 'back to In progress');
 // add steps, file menu
-await tap(p.locator('summary:has-text("All steps")'));
 await tap(p.getByText('Add steps').first()); await modalFits('Add steps'); await tap(p.getByRole('button', { name: 'Cancel' }));
 await tap(p.getByRole('button', { name: /Add file/ })); await tap(p.getByRole('menuitem', { name: 'New Google Sheet' })); await modalFits('New Google Sheet'); await tap(p.getByRole('button', { name: 'Cancel' }));
 await tap(p.getByRole('button', { name: /Add file/ })); await tap(p.getByRole('menuitem', { name: 'Link a file I already have' })); await modalFits('Link a file'); await tap(p.getByRole('button', { name: 'Cancel' }));
-// reorder arrows work by touch
+// reorder arrows work by touch (on the project overview)
+await p.goto(U + '/projects/prj-070'); await p.waitForSelector('text=Steps');
 const first = await p.locator('.steprow .step .num').first().innerText();
 await tap(p.getByRole('button', { name: /Move 2 down/ }).first()); await p.waitForTimeout(300);
 ok((await p.locator('.steprow .step .num').first().innerText()) === first, 'reorder arrows can be tapped');
-await p.goto(U + '/print/my-stats'); await p.waitForSelector('text=Over time'); await noSide('My printing');
+await p.goto(U + '/print/my-stats'); await p.waitForSelector('text=Your recent days'); await noSide('My printing');
 await p.goto(U + '/clock'); await noSide('Clock');
 
 // ---------------- Dalia on a phone

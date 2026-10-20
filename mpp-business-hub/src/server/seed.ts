@@ -16,12 +16,13 @@ const DAYS = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-1
 
 export const USER_IDS = {
   dalia: 'u-dalia', erika: 'u-erika', arantza: 'u-arantza', carolina: 'u-carolina',
-  printA: 'u-print-a', printB: 'u-print-b', printC: 'u-print-c', extra: 'u-extra',
+  moe: 'u-moe', printA: 'u-print-a', printB: 'u-print-b', printC: 'u-print-c', extra: 'u-extra',
 };
 
 function users(): User[] {
   return [
     { id: USER_IDS.dalia, name: 'Dalia', role: 'OWNER', area: 'PROJECT', active: true, capabilities: ['owner', 'project work'], primaryDeviceId: null },
+    { id: USER_IDS.moe, name: 'Moe', role: 'OWNER', area: 'PRINT', active: true, capabilities: ['owner', 'printing'], primaryDeviceId: 'MOEPC', noClock: true, rosterNote: 'Owner. Does not clock in. Practice person.' },
     { id: USER_IDS.erika, name: 'Erika', role: 'EMPLOYEE', area: 'PROJECT', active: true, capabilities: ['listings', 'Amazon/Shopify scripts'], primaryDeviceId: 'ERIKAPC' },
     { id: USER_IDS.arantza, name: 'Arantza', role: 'EMPLOYEE', area: 'PROJECT', active: true, capabilities: ['SOP writing', 'Etsy'], primaryDeviceId: 'PC-04' },
     { id: USER_IDS.carolina, name: 'Carolina', role: 'EMPLOYEE', area: 'MIXED', active: true, capabilities: ['print production', 'project work (some days)'], primaryDeviceId: 'PRINT-4' },
@@ -283,7 +284,7 @@ export function buildSeedState(): HubState {
     lastOwnerLookAt: T('2026-10-15', '17:00'),
     users: users(), assignments: assignments(), projects: projects(), steps: steps(), resources: resources(), resourceLinks: links(),
     projectEvents: journal(), auditEvents: audit, archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [],
-    updateRequests: [], updateResponses: [], notifications: notifications(), shifts: [...baseShifts, ...practice.shifts], claims: practice.claims, intakeRuns: [], aiRuns: [],
+    updateRequests: [], updateResponses: [], notifications: notifications(), shifts: [...baseShifts, ...practice.shifts], claims: practice.claims, printLogs: practice.logs, intakeRuns: [], aiRuns: [],
     printJobs: p.jobs, printerProblems: p.problems, activityBins: p.bins, stations: STATIONS, opportunities: opportunities(),
     settings: settings(), idempotency: {}, counters: {}, printPendingSync: {}, deviceLastSeen: {}, seenInjection: false, workLog: [], workingVersions: [],
     ownerFindings: o.findings, ownerModels: o.models, outcomes: [], goals: o.goals, sources: o.sources, workspaces: {}, drive: { folders: [], shortcuts: [], failAfterOps: null, opCount: 0 },

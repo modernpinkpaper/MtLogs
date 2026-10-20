@@ -28,7 +28,7 @@ function useTrail(): Crumb[] {
   }
   if (path === '/owner/data-intake') return [{ label: 'Settings', to: '/settings' }, { label: 'Computer activity & AI cost' }];
   if (path === '/review') return [{ label: 'Home', to: '/home' }, { label: 'Answer and confirm' }];
-  if (path === '/owner/team' && tab && tab !== 'team') return [{ label: 'Team & Print', to: '/owner/team' }, { label: ({ errors: 'Customer service errors', print: 'Weekly printing', other: 'Work that may not belong to a project', ideas: 'Print ideas' } as Record<string, string>)[tab] ?? tab }];
+  if (path === '/owner/team' && tab && tab !== 'team') return [{ label: 'Team & Print', to: '/owner/team' }, { label: ({ printteam: 'Print team', verify: 'Print verification', errors: 'Customer service errors', print: 'Weekly printing', other: 'Work that may not belong to a project', ideas: 'Print ideas' } as Record<string, string>)[tab] ?? tab }];
   if (path === '/status' || path === '/demo/operations') return [{ label: 'Settings', to: '/settings' }, { label: path === '/status' ? 'What works in this practice copy' : 'Demo controls' }];
   return [];
 }

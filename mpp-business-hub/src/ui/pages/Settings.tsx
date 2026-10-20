@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAct, useMe } from '../hubContext';
 import { GLOSSARY } from '../lang';
+import { PhotoPicker } from '../avatar';
 
 const INTEGRATIONS = [
   ['Your real clock-in app', 'Not connected. We need your OK first.'],
@@ -43,6 +44,7 @@ export function Settings() {
       <section aria-labelledby="mine">
         <h2 id="mine">Things you can change</h2>
         <div className="card list setrows">
+          <PhotoPicker />
           <div className="setrow">
             <div><strong>Urgent email</strong><p className="small muted">In-app notifications are always on. Email would only be for urgent things. Here it is <strong>pretend</strong>. No email is ever sent.</p></div>
             <label className="row" style={{ margin: 0, fontWeight: 500 }}><input type="checkbox" disabled={!owner} checked={s.emailUrgentOptIn} onChange={(e) => act(() => hub.updateSettings(uid, { emailUrgentOptIn: e.target.checked }))} /> Email me{!owner && ' (owner only)'}</label>

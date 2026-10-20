@@ -27,7 +27,7 @@ await shot('v4-projects-paused');
 await as('Erika'); await go('/projects/prj-070'); await p.waitForSelector('text=Paused by Dalia'); await shot('v5-paused-erika');
 await go('/projects'); await p.waitForSelector('text=Paused'); await shot('v6-erika-home');
 await as('Dalia (owner)'); await go('/projects/prj-070'); await p.getByRole('button', { name: 'Resume project' }).first().click(); await p.getByRole('button', { name: 'Resume project' }).last().click();
-await p.waitForTimeout(500); await p.locator('summary:has-text("Recent project activity")').click(); await p.waitForSelector('text=Resumed by Dalia >> visible=true');
+await p.waitForTimeout(500); await go('/projects/prj-070?tab=history'); await p.waitForSelector('text=Resumed by Dalia >> visible=true');
 // AI recommendations
 await go('/owner/ai'); await p.waitForSelector('text=Needs a decision'); await shot('v7-ai-inbox');
 await go('/owner/ai/af-1'); await p.waitForSelector('text=The numbers'); await shot('v8-finding', true);
@@ -76,7 +76,7 @@ ok(await p.locator('.nextstep').count() === 0, 'no duplicate "Next step" card');
 ok(await p.locator('text=Latest in this project').count() === 0, 'no duplicate latest-activity block');
 await p.setViewportSize({ width: 390, height: 820 }); await go('/projects/prj-012'); await p.waitForSelector('text=Next step');
 const sw = await p.evaluate(() => document.documentElement.scrollWidth); ok(sw <= 392, 'project page has no sideways scrolling on a phone (' + sw + ')');
-ok(await p.locator('summary:has-text("All steps")').count() === 1, 'step list folds away on a phone');
+ok(await p.locator('text=What to do').count() === 0 && await p.locator('.step').count() > 0, 'the project overview shows only the steps (no step files, notes or instructions)');
 await shot('v20-mobile-project');
 await p.setViewportSize({ width: 1280, height: 900 });
 await as('Dalia (owner)'); await go('/owner/ai'); await p.waitForSelector('.lrow');
@@ -137,7 +137,7 @@ await p.locator('.frow:has-text("Shopify Lister") button:has-text("View installa
 ok(await p.locator('text=Do not move it').count() > 0, 'installed script shows installation details and is never moved');
 await shot('v22-step-files', true);
 // project info card
-await p.locator('button[aria-label="About P-012"]').first().click();
+await go('/projects/'+ (await p.evaluate(() => location.hash)).split('/')[2]); await p.locator('button[aria-label="About P-012"]').first().click();
 ok(await p.locator('.pinfo-card:has-text("fall and Halloween")').count() > 0, 'the project info card shows the description');
 await p.getByRole('button', { name: 'Edit description' }).click(); await p.fill('.pinfo-card textarea', 'Put the new seasonal products on Shopify.'); await p.getByRole('button', { name: 'Save', exact: true }).last().click(); await p.waitForTimeout(300);
 ok(await p.evaluate(() => window.__hub.state.projects.find((x) => x.id === 'prj-012').description) === 'Put the new seasonal products on Shopify.', 'a person on the project can edit the description');

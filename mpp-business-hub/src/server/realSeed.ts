@@ -61,7 +61,7 @@ export function buildRealState(demo: HubState, t: RealTracker, nowLocal: string,
   }
   return {
     ...demo, now, lastOwnerLookAt: chicagoToUtc('2026-10-16', '17:00'), users, assignments: [], projects, steps, resources: [], resourceLinks: [], projectEvents: journal,
-    auditEvents: [], archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [], updateRequests: [], updateResponses: [], notifications: [], shifts: [], claims: undefined, dayNotes: undefined, errorLogs: undefined, aiFeedback: undefined, errorHintDismissals: undefined,
+    auditEvents: [], archives: [], rawFileText: {}, events: [], episodes: [], findings: [], reviewCards: [], reviewDecisions: [], updateRequests: [], updateResponses: [], notifications: [], shifts: [], claims: undefined, printLogs: undefined, dayNotes: undefined, errorLogs: undefined, aiFeedback: undefined, errorHintDismissals: undefined,
     printJobs: logs?.printJobs.map(j => ({ ...j, uid: t.people.find(p => p.device === j.deviceId)?.id ?? null })) ?? [], printerProblems: logs?.printerProblems ?? [], activityBins: logs?.activityBins ?? [],
     stations: Object.entries(logs?.printers ?? {}).map(([deviceId, printers]): PrintStation => ({ deviceId, printers, defaultUid: t.people.find(p => p.device === deviceId)?.id ?? null })), opportunities: [], settings: settings(), workLog: [], workingVersions: [],
     sources: realSources(now, logs, sales), goals: realGoals(now),

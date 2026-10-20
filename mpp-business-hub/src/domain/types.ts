@@ -16,6 +16,8 @@ export interface User {
   rosterNote?: string;
   /** v1.9: extra permissions Dalia can give. Customer service may log errors for team members. */
   permissions?: 'CUSTOMER_SERVICE'[];
+  /** A small photo the person chose themselves (a tiny data URL). Initials are shown until then. */
+  photo?: string;
   /** An owner who does not clock in (for example Moe). */
   noClock?: boolean;
 }
@@ -834,7 +836,18 @@ export interface PrintClaim {
   id: string; orderId: string; uid: string; claimedAt: string; buyer: string;
   items: { sku: string; quantity: number; subtotal: number; prints: number }[];
   subtotal: number; prints: number;
+  /** Set when the person gave the order back. An unclaimed order counts for nobody. */
+  unclaimedAt?: string;
 }
+/** One row of a PC print log CSV (Date, File Name, Copies, PC, Printer, File Path). Copies are what was SUBMITTED to the printer. */
+export interface PrintLogRow { id: string; at: string; file: string; copies: number; pc: string; printer: string; path: string }
+/** A person at customer service said “this log file is for that order”. Kept with who and when. */
+export interface OrderFileLink { id: string; orderId: string; file: string; byUid: string; at: string }
+export interface CsCaseNote { id: string; orderId: string; byUid: string; at: string; text: string }
+export interface CsSearch { id: string; byUid: string; at: string; orderId: string; found: boolean }
+/** A note on one step. Every note belongs to a step. */
+export interface StepNote { id: string; stepId: string; projectId: string; byUid: string; at: string; text: string }
+
 export interface DayNote { id: string; uid: string; date: string; text: string; at: string }
 
 /** A customer service error entry. The person sees it only after an owner has acknowledged it. */

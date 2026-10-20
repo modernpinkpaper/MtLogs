@@ -65,9 +65,10 @@ await p.getByRole('button', { name: /Acknowledge/ }).click(); await p.waitForTim
 ok(await p.locator('.errcard').count() === 0, 'acknowledged, it is gone from Home');
 
 // ---- printing numbers
-await p.goto(U + '/print/my-stats'); await p.waitForSelector('text=Over time');
+await p.goto(U + '/print/my-stats'); await p.waitForSelector('text=Your recent days');
 ok(await p.locator('text=Revenue per hour').count() > 0 && await p.locator('text=Error rate').count() > 0, 'My printing shows revenue per hour and error rate');
 ok(await p.locator('tr:has-text("30 days")').count() === 1 && await p.locator('tr:has-text("90 days")').count() === 1 && await p.locator('tr:has-text("180 days")').count() === 1, '30, 90 and 180 day rows');
+await p.locator('summary:has-text("Longer view")').click();
 ok(await p.locator('tr:has-text("30 days") td:nth-child(3)').first().innerText() === '1', 'the error shows in the 30 day numbers');
 
 // ---- Dalia sees the answer

@@ -39,7 +39,7 @@ export function Layout() {
         { to: '/projects', label: 'Projects', icon: '▤', match: ['/projects'] },
         { to: '/clock', label: 'Clock', icon: '⏱' },
         { to: '/print/my-stats', label: 'My printing', icon: '🖨' },
-        ...(canLog ? [{ to: '/errors', label: 'Errors', icon: '⚑' }] : []),
+        ...(canLog ? [{ to: '/errors', label: 'Errors', icon: '⚑' }, { to: '/print-verification', label: 'Print verification', icon: '⌕' }] : []),
       ];
   // The menu stays short. AI setup and results live in Settings. Customer service errors live in Team & Print.
   const more: Item[] = [

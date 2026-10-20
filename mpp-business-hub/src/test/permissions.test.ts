@@ -109,7 +109,7 @@ describe('E. permissions and owner privacy', () => {
     expect(() => hub.markRead(U.erika, n.id)).toThrow(PermissionDenied);
     expect(() => hub.acknowledge(U.erika, n.id)).toThrow(PermissionDenied);
     expect(() => hub.myPrintStats(U.printA, U.printB)).toThrow(PermissionDenied);
-    expect(hub.listUsers(U.erika).map((u) => u.name).sort()).toEqual(['Dalia', 'Erika']);
+    expect(hub.listUsers(U.erika).map((u) => u.name).sort()).toEqual(['Dalia', 'Erika', 'Moe']);
     expect(() => hub.findingEvidence(U.arantza, card.findingIds[0])).toThrow(PermissionDenied);
   });
 

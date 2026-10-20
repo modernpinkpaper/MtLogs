@@ -6,6 +6,7 @@ import { JournalList, ResourceCard, StepResourceRow } from '../parts';
 import { JournalFilters } from './Journal';
 import { RequestUpdateDialog, SendUpdateDialog } from '../dialogs';
 import { ProjectInfo } from '../projectRef';
+import { Avatar } from '../avatar';
 import { AddStepsDialog, EditableText, ProjectNoteDialog, ReassignDialog, RemoveFileButton, StatusMenu, LinkFileDialog, NewFileDialog } from '../stepTools';
 import { ChangeScheduleDialog, PauseBanner, PauseDialog, PilotPanel, PilotSetupDialog, ResumeDialog, SuggestDialog } from '../pauseUi';
 import { deadlineInfo, nextStep, notReadyReason, pauseLine, progressCounts, projectWorkStatus } from '../../domain/projectStatus';
@@ -64,12 +65,31 @@ function ProjectDetailInner() {
   const recentEvents = hub.getJournal(uid, { projectId }).slice(0, 3);
   const latestEvent = recentEvents[0];
 
+  // Three levels: project list → project overview (steps only) → one step's workspace.
+  const stepMode = !!stepId && tab === 'overview' && steps.some((s) => s.id === stepId);
+  const activityBar = canWork && !owner && project.visibility !== 'OWNER_PRIVATE' ? (
+    <div className="row small card flat" style={{ gap: '.5rem 1rem' }} aria-label="AI activity check">
+      <span>{checked.at ? <>AI last checked your activity: <strong>{formatDateTime(checked.at)}</strong></> : <>AI has not checked your activity here yet.</>}</span>
+      <button disabled={checking} onClick={async () => { setChecking(true); try { const r = await hub.checkMyActivity(uid, project.id); setCheckNote(r.note); } catch (e) { setCheckNote((e as Error).message); } finally { setChecking(false); } }}>{checking ? 'Checking…' : 'Check my activity now'}</button>
+      {checkNote && <span className="muted" role="status">{checkNote}</span>}
+    </div>
+  ) : null;
+  const notices = (blockers.length > 0 || myReq.length > 0 || ownerOpenReq.length > 0 || next) ? (
+    <div className="stack">
+      {!stepMode && next && <div className="notice"><span><strong>Next step is Step {labels.get(next.id)}:</strong> {next.title}</span><button className="primary" onClick={() => nav(`/projects/${project.id}/steps/${next.id}`)}>Go to it</button></div>}
+      {blockers.map((b) => <div key={b.id} className="banner warn" role="status">⛔ <strong>In the way:</strong> Step {labels.get(b.id)} — {b.blockerReason}</div>)}
+      {myReq.length > 0 && <div className="notice"><span><strong>Dalia asked for an update.</strong></span><Link to="/review"><button className="primary">Answer now</button></Link></div>}
+      {owner && hub.ownerRequests(uid, project.id).filter((r) => r.stage !== 'CLOSED').slice(0, 4).map((r) => (
+        <div key={r.request.id} className="small muted">Your request to {r.recipients.join(', ')}{r.request.stepId ? ` about Step ${labels.get(r.request.stepId) ?? ''}` : ''}: <strong>{{ REQUESTED: 'Requested', SEEN: 'Seen, not answered yet', RESPONDED: 'Answered', OVERDUE: 'Overdue', CLOSED: 'Closed' }[r.stage]}</strong>{r.request.dueAt ? ` · due ${formatDate(r.request.dueAt)}` : ''}</div>))}
+    </div>
+  ) : null;
   const tabs: { id: Tab; label: string }[] = [{ id: 'overview', label: 'Overview' }, { id: 'history', label: 'History' }, { id: 'files', label: 'All files' }, ...(owner ? [{ id: 'more' as Tab, label: 'More' }] : [])];
 
   return (
     <div className="stack">
 
-      <header className="card stack">
+      {stepMode && selected && <StepTopBar project={project} steps={steps} labels={labels} selected={selected} owner={owner} canWork={canWork} canControl={canControl} paused={paused} onDlg={setDlg} />}
+      {!stepMode && <header className="card stack">
         <div className="row between" style={{ alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0, flex: '1 1 340px' }}>
             <div className="row" style={{ gap: '.4rem' }}>
@@ -108,18 +128,11 @@ function ProjectDetailInner() {
           </div>
         </div>
         <div className="meta row small muted" style={{ gap: '.4rem 1.25rem' }}>
-          <span>{project.memberUids.map((m) => hub.userName(m)).join(', ') || (project.visibility === 'OWNER_PRIVATE' ? 'Only Dalia' : 'Nobody assigned yet')}</span>
+          <span className="row" style={{ gap: '.3rem' }}>{project.memberUids.map((m) => <Avatar key={m} uid={m} size={24} title={hub.userName(m)} />)}{project.memberUids.map((m) => hub.userName(m)).join(', ') || (project.visibility === 'OWNER_PRIVATE' ? 'Only Dalia' : 'Nobody assigned yet')}</span>
           {!paused && di && <span>{di.text}</span>}
           <span>{pr.label}</span>
           <button className="link" onClick={() => setShowDetails(!showDetails)}>{showDetails ? 'Hide details' : 'Show details'}</button>
         </div>
-        {canWork && !owner && project.visibility !== 'OWNER_PRIVATE' && (
-          <div className="row small" style={{ gap: '.5rem 1rem' }} aria-label="AI activity check">
-            <span>{checked.at ? <>AI last checked your activity: <strong>{formatDateTime(checked.at)}</strong></> : <>AI has not checked your activity here yet.</>}</span>
-            <button disabled={checking} onClick={async () => { setChecking(true); try { const r = await hub.checkMyActivity(uid, project.id); setCheckNote(r.note); } catch (e) { setCheckNote((e as Error).message); } finally { setChecking(false); } }}>{checking ? 'Checking…' : 'Check my activity now'}</button>
-            {checkNote && <span className="muted" role="status">{checkNote}</span>}
-          </div>
-        )}
         {showDetails && (
           <dl className="kv">
             <dt>Last check in the source system</dt><dd>{project.lastVerifiedAt ? formatDateTime(project.lastVerifiedAt) : 'Nothing checked in the source system yet'}</dd>
@@ -127,52 +140,38 @@ function ProjectDetailInner() {
             {project.employeeBrief && <><dt>Brief</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{project.employeeBrief}</dd></>}
           </dl>
         )}
-      </header>
+      </header>}
 
-      {project.ownerNote && !owner && <div className="card pink" role="note" aria-label="Note from Dalia"><div className="eyebrow">Note from Dalia</div><p style={{ margin: '.2rem 0 0', whiteSpace: 'pre-wrap' }}>{project.ownerNote.text}</p></div>}
-      {project.ownerNote && owner && <div className="card flat small" role="note"><strong>Your note to the team:</strong> {project.ownerNote.text}</div>}
+      {!stepMode && project.ownerNote && !owner && <div className="card pink" role="note" aria-label="Note from Dalia"><div className="eyebrow">Note from Dalia</div><p style={{ margin: '.2rem 0 0', whiteSpace: 'pre-wrap' }}>{project.ownerNote.text}</p></div>}
+      {!stepMode && project.ownerNote && owner && <div className="card flat small" role="note"><strong>Your note to the team:</strong> {project.ownerNote.text}</div>}
       {paused && <PauseBanner project={project} onResume={() => setDlg('resume')} onChange={() => setDlg('schedule')} onSuggestResume={() => setDlg('suggestResume')} />}
-      {unassigned && <div className="banner warn" role="status"><strong>Approved, but nobody is assigned.</strong> No employee can see this project yet. <button className="primary" onClick={() => setDlg('assign')} style={{ marginLeft: 8 }}>Choose who works on it</button></div>}
-      {project.pilot?.enabled && <PilotPanel project={project} />}
-      <Tabs<Tab> tabs={tabs} value={tab} onChange={setTab} />
+      {!stepMode && unassigned && <div className="banner warn" role="status"><strong>Approved, but nobody is assigned.</strong> No employee can see this project yet. <button className="primary" onClick={() => setDlg('assign')} style={{ marginLeft: 8 }}>Choose who works on it</button></div>}
+      {!stepMode && project.pilot?.enabled && <PilotPanel project={project} />}
+      {!stepMode && <Tabs<Tab> tabs={tabs} value={tab} onChange={setTab} />}
 
-      {tab === 'overview' && (
+      {tab === 'overview' && !stepMode && (
         <>
-          {(blockers.length > 0 || myReq.length > 0 || ownerOpenReq.length > 0 || (next && selected && next.id !== selected.id)) && (
-            <div className="stack">
-              {next && selected && next.id !== selected.id && <div className="notice"><span><strong>Next step is Step {labels.get(next.id)}:</strong> {next.title}</span><button className="primary" onClick={() => nav(`/projects/${project.id}/steps/${next.id}`)}>Go to it</button></div>}
-              {blockers.map((b) => <div key={b.id} className="banner warn" role="status">⛔ <strong>In the way:</strong> Step {labels.get(b.id)} — {b.blockerReason}</div>)}
-              {myReq.length > 0 && <div className="notice"><span><strong>Dalia asked for an update.</strong></span><Link to="/review"><button className="primary">Answer now</button></Link></div>}
-              {owner && hub.ownerRequests(uid, project.id).filter((r) => r.stage !== 'CLOSED').slice(0, 4).map((r) => (
-                <div key={r.request.id} className="small muted">Your request to {r.recipients.join(', ')}{r.request.stepId ? ` about Step ${labels.get(r.request.stepId) ?? ''}` : ''}: <strong>{{ REQUESTED: 'Requested', SEEN: 'Seen, not answered yet', RESPONDED: 'Answered', OVERDUE: 'Overdue', CLOSED: 'Closed' }[r.stage]}</strong>{r.request.dueAt ? ` · due ${formatDate(r.request.dueAt)}` : ''}</div>))}
-            </div>
-          )}
-
-          <div className="split">
-            <section className="card plan" aria-labelledby="plan">
-              {narrow ? (
-                <details>
-                  <summary id="plan" className="group-title" style={{ margin: 0, cursor: 'pointer' }}>All steps · {pr.label}{selected ? ` · you are on Step ${labels.get(selected.id)}` : ''}</summary>
-                  <div style={{ marginTop: 10 }}><StepList steps={steps} labels={labels} selectedId={selected?.id} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} canEdit={canWork} />{canWork && <AddSteps projectId={project.id} />}</div>
-                </details>
-              ) : (
-                <>
-                  <h2 id="plan">Steps <span className="small muted" style={{ fontWeight: 400 }}>· {pr.label}</span></h2>
-                  <StepList steps={steps} labels={labels} selectedId={selected?.id} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} canEdit={canWork} />
-                  {canWork && <AddSteps projectId={project.id} />}
-                </>
-              )}
-            </section>
-            {selected && <StepPanel key={selected.id} step={selected} steps={steps} labels={labels} project={project} canWork={canWork} isNext={next?.id === selected.id} paused={paused} onTab={setTab} />}
-          </div>
-          <details className="soft">
-            <summary>Recent project activity{latestEvent ? <span className="muted small" style={{ fontWeight: 400 }}> · Latest: {latestEvent.title}</span> : null}</summary>
-            <div className="card" style={{ marginTop: 8 }}>
-              <JournalList events={recentEvents} />
-              <button className="link" onClick={() => setTab('history')}>Show the full history</button>
-            </div>
-          </details>
+          {notices}
+          {activityBar}
+          <section className="card plan-wide" aria-labelledby="plan">
+            <h2 id="plan">Steps <span className="small muted" style={{ fontWeight: 400 }}>· {pr.label}</span></h2>
+            <div className="progressbar" role="progressbar" aria-valuenow={pr.done} aria-valuemin={0} aria-valuemax={pr.total} aria-label={pr.label}><span style={{ width: `${pr.total ? Math.round((pr.done / pr.total) * 100) : 0}%`, background: "var(--ok, #2e7d32)" }} /></div>
+            <StepList steps={steps} labels={labels} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} canEdit={canWork} />
+            {canWork && <AddSteps projectId={project.id} />}
+          </section>
         </>
+      )}
+
+      {tab === 'overview' && stepMode && selected && <>{notices}{activityBar}</>}
+      {tab === 'overview' && stepMode && selected && (
+        <div className="split">
+          <nav className="card plan" aria-label="Steps in this project">
+            <h2 id="plan">Steps <span className="small muted" style={{ fontWeight: 400 }}>· {pr.label}</span></h2>
+            <StepList compact steps={steps} labels={labels} selectedId={selected.id} nextId={next?.id} onPick={(id) => nav(`/projects/${project.id}/steps/${id}`)} project={project} canEdit={false} />
+            {canWork && <AddSteps projectId={project.id} />}
+          </nav>
+          <StepPanel key={selected.id} step={selected} steps={steps} labels={labels} project={project} canWork={canWork} isNext={next?.id === selected.id} paused={paused} onTab={setTab} />
+        </div>
       )}
 
       {tab === 'history' && (
@@ -202,7 +201,36 @@ function ProjectDetailInner() {
   );
 }
 
-function StepList({ steps, labels, selectedId, nextId, onPick, project, canEdit }: { steps: Step[]; labels: Map<string, string>; selectedId?: string; nextId?: string; onPick: (id: string) => void; project: Project; canEdit: boolean }) {
+/** Compact bar on a step page: where you are, who it belongs to, and Previous / Next. */
+function StepTopBar({ project, steps, labels, selected, owner, canWork, canControl, paused, onDlg }: { project: Project; steps: Step[]; labels: Map<string, string>; selected: Step; owner: boolean; canWork: boolean; canControl: boolean; paused: boolean; onDlg: (d: 'request' | 'update' | 'pause' | 'resume') => void }) {
+  const nav = useNavigate();
+  const { hub } = useMe();
+  const flat = steps.filter((s) => !s.parentStepId).sort((a, b) => a.sortOrder - b.sortOrder);
+  const top = selected.parentStepId ? flat.find((s) => s.id === selected.parentStepId) ?? selected : selected;
+  const i = flat.findIndex((s) => s.id === top.id);
+  const prev = i > 0 ? flat[i - 1] : undefined; const nextS = i >= 0 && i < flat.length - 1 ? flat[i + 1] : undefined;
+  return (
+    <header className="card stack steptop">
+      <div className="row between" style={{ alignItems: 'center' }}>
+        <div className="row" style={{ gap: '.5rem', minWidth: 0 }}>
+          <Link to={`/projects/${project.id}`}>← {project.title}</Link>
+          <span className="eyebrow">STEP {i + 1} OF {flat.length}</span>
+          {selected.assignedUids.map((a) => <Avatar key={a} uid={a} size={24} title={hub.userName(a)} />)}
+        </div>
+        <div className="row">
+          {owner && project.visibility !== 'OWNER_PRIVATE' && <button onClick={() => onDlg('request')}>Ask for an update</button>}
+          {!owner && canWork && <button onClick={() => onDlg('update')}>Send Dalia an update</button>}
+          {canControl && !paused && <button className="quiet" onClick={() => onDlg('pause')}>Pause project</button>}
+          {canControl && paused && <button className="primary" onClick={() => onDlg('resume')}>Resume project</button>}
+          <button disabled={!prev} onClick={() => prev && nav(`/projects/${project.id}/steps/${prev.id}`)}>← Previous</button>
+          <button disabled={!nextS} onClick={() => nextS && nav(`/projects/${project.id}/steps/${nextS.id}`)}>Next →</button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function StepList({ steps, labels, selectedId, nextId, onPick, project, canEdit, compact }: { compact?: boolean; steps: Step[]; labels: Map<string, string>; selectedId?: string; nextId?: string; onPick: (id: string) => void; project: Project; canEdit: boolean }) {
   const { hub, uid } = useMe();
   const act = useAct();
   const [dragId, setDragId] = useState<string | null>(null);
@@ -226,6 +254,7 @@ function StepList({ steps, labels, selectedId, nextId, onPick, project, canEdit 
         <button className={`step ${selectedId === s.id ? 'sel' : ''}`} onClick={() => onPick(s.id)} aria-current={selectedId === s.id ? 'step' : undefined}>
           <div className="row"><span className="num">{labels.get(s.id)}</span><strong style={{ flex: 1, minWidth: 0 }}>{s.title}</strong></div>
           <div className="row" style={{ marginTop: 2, marginLeft: 30 }}>
+            {!compact && s.assignedUids.map((a) => <Avatar key={a} uid={a} size={20} title={hub.userName(a)} />)}
             <StepState status={s.status} hold={!!s.onHold} />
             {nextId === s.id && !project.pause?.isPaused && <span className="tag-next">Next</span>}
             {s.newActivityAt && s.observedReview === 'PENDING_EMPLOYEE' && !project.pause?.isPaused && <span className="small" style={{ color: 'var(--violet)' }} title="Computer activity was found for this step. A person still needs to confirm it.">✦ activity to check</span>}
@@ -370,6 +399,8 @@ function StepPanel({ step, steps, labels, project, canWork: canWorkProject, isNe
         <button className="link" onClick={() => onTab('files')}>See the full file library</button>
       </div>
 
+      <StepNotes step={step} canWork={canWork} />
+
       <details className="soft">
         <summary>Recent activity on this step{journal.length ? ` (${journal.length})` : ''}</summary>
         <div style={{ marginTop: 8 }}><JournalList events={journal} /><button className="link" onClick={() => nav(`/projects/${project.id}/steps/${step.id}?tab=history`)}>Show the full history for this step</button></div>
@@ -407,6 +438,21 @@ function StepPanel({ step, steps, labels, project, canWork: canWorkProject, isNe
       {dlg === 'link' && <LinkFileDialog step={step} onClose={() => setDlg(null)} />}
       {dlg === 'subs' && <AddStepsDialog projectId={project.id} parentStepId={step.id} onClose={() => setDlg(null)} />}
     </section>
+  );
+}
+
+function StepNotes({ step, canWork }: { step: Step; canWork: boolean }) {
+  const { hub, uid } = useMe();
+  const act = useAct();
+  const [text, setText] = useState('');
+  const notes = hub.stepNotes(uid, step.id);
+  return (
+    <div className="sect minor">
+      <h3>Notes for this step</h3>
+      {notes.length === 0 && <p className="small muted" style={{ margin: 0 }}>No notes yet.</p>}
+      {notes.map((n) => <div key={n.id} className="small" style={{ margin: '.3rem 0' }}><span className="row" style={{ gap: '.3rem' }}><Avatar uid={n.byUid} size={20} /><strong>{hub.userName(n.byUid)}</strong><span className="muted">{formatDateTime(n.at)}</span></span><div style={{ whiteSpace: 'pre-wrap' }}>{n.text}</div></div>)}
+      {canWork && <div className="stack"><textarea aria-label="Add a note to this step" value={text} onChange={(e) => setText(e.target.value)} placeholder="Write a note about this step" style={{ minHeight: 70 }} /><div><button onClick={async () => { const r = await act(() => hub.addStepNote(uid, step.id, text), 'Note saved'); if (r) setText(''); }}>Add note</button></div></div>}
+    </div>
   );
 }
 
