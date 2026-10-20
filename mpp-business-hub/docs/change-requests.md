@@ -20,5 +20,8 @@ Dalia will attach design direction made by ChatGPT. Before changing anything I w
    Open: how often (every 30 minutes or hourly), exact hours, and where it sits.
 3. **Dalia's own projects.** Already built: Projects has All / Mine / By person, plus an "Assigned to" filter. Private projects show only to her. Nothing to add unless she wants a change.
 
+## Received: Print Team and Projects UX spec (Oct 20)
+Saved as `docs/ux-spec-2026-10-20.md` with two concept images. Reviewed against the current build. **No changes made yet.** Questions sent to Dalia (conflicts with her earlier decisions, missing data sources, and design choices). Work starts after she answers.
+
 ## Waiting for more items
 Dalia will add more fixes. They are added here as they come.
