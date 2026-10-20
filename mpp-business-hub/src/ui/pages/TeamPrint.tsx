@@ -5,8 +5,9 @@ import { OwnerPrintWeekly } from './OwnerPrintWeekly';
 import { OwnerOtherWork } from './OwnerOtherWork';
 import { OwnerInsights } from './OwnerInsights';
 import { useMe } from '../hubContext';
+import { Errors } from './Errors';
 
-type Tab = 'team' | 'print' | 'other' | 'ideas';
+type Tab = 'team' | 'errors' | 'print' | 'other' | 'ideas';
 
 /** Team, weekly printing, work that may not belong to a project, and print ideas: one place, four tabs. */
 export function TeamPrint() {
@@ -17,8 +18,9 @@ export function TeamPrint() {
   return (
     <div className="stack">
       <div><h1>Team &amp; Print</h1><p className="muted" style={{ margin: 0 }}>Who does what, how printing went this week, and work that may not belong to a project.</p></div>
-      <Tabs<Tab> tabs={[{ id: 'team', label: 'Team' }, { id: 'print', label: 'Weekly printing' }, { id: 'other', label: `Work that may not belong to a project${waiting ? ` (${waiting})` : ''}` }, { id: 'ideas', label: 'Print ideas' }]} value={tab} onChange={(t) => setSp({ tab: t })} />
+      <Tabs<Tab> tabs={[{ id: 'team', label: 'Team' }, { id: 'errors', label: 'Customer service errors' }, { id: 'print', label: 'Weekly printing' }, { id: 'other', label: `Work that may not belong to a project${waiting ? ` (${waiting})` : ''}` }, { id: 'ideas', label: 'Print ideas' }]} value={tab} onChange={(t) => setSp({ tab: t })} />
       {tab === 'team' && <OwnerTeam embedded />}
+      {tab === 'errors' && <Errors embedded />}
       {tab === 'print' && <OwnerPrintWeekly embedded />}
       {tab === 'other' && <OwnerOtherWork embedded />}
       {tab === 'ideas' && <OwnerInsights embedded />}

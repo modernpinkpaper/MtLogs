@@ -45,7 +45,7 @@ await p.goto(U + '/clock'); await noSide('Clock');
 await as('Dalia'); await p.waitForSelector('h1:has-text("Home")'); await noSide('Dalia Home');
 ok(await p.locator('nav.bottomnav .lb').count() === 4, 'bottom bar: Home, Projects, Team & Print, More');
 await tap(p.locator('nav.bottomnav button:has-text("More")'));
-const ds = await p.locator('.sheet').innerText(); ok(/AI recommendations/.test(ds) && /Priorities and sources/.test(ds) && /Customer service errors/.test(ds) && /My printing/.test(ds) && /History/.test(ds), 'owner More sheet has AI recs, Priorities, errors, My printing, History');
+const ds = await p.locator('.sheet').innerText(); ok(/My printing/.test(ds) && /History/.test(ds) && /Files/.test(ds) && /Settings/.test(ds) && !/AI recommendations|Priorities and sources|Customer service errors|Computer activity/.test(ds), 'owner More sheet is short: My printing, History, Files, Settings');
 await tap(p.locator('nav.bottomnav button:has-text("More")'));
 await tap(p.locator('summary:has-text("AI project recommendations")')); await tap(p.locator('details.hgroup.sub > summary').first());
 await tap(p.getByRole('button', { name: 'Dismiss…' }).first()); await modalFits('Dismiss'); ok(await p.getByRole('button', { name: 'Dismiss', exact: true }).isVisible(), 'Dismiss button reachable'); await tap(p.getByRole('button', { name: 'Cancel' }));

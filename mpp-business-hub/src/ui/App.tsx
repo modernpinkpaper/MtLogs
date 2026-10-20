@@ -1,3 +1,4 @@
+import { useMe } from './hubContext';
 import { OwnerOnly } from './guard';
 import { Errors } from './pages/Errors';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
@@ -41,7 +42,7 @@ export function App() {
             <Route path="/notifications" element={<Navigate to="/home" replace />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/resources" element={<Resources />} />
-            <Route path="/errors" element={<Errors />} />
+            <Route path="/errors" element={<ErrorsRoute />} />
             <Route path="/print/my-stats" element={<PrintMyStats />} />
             {/* Owner screens. Old addresses still work and send you to the new place. */}
             <Route path="/owner/overview" element={<Navigate to="/home" replace />} />
@@ -66,4 +67,10 @@ export function App() {
       </div>
     </HashRouter>
   );
+}
+
+/** Customer service people use /errors. Dalia sees the same screen as a tab inside Team & Print. */
+function ErrorsRoute() {
+  const { me } = useMe();
+  return me.role === 'OWNER' ? <Navigate to="/owner/team?tab=errors" replace /> : <Errors />;
 }

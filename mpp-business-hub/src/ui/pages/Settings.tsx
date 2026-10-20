@@ -29,6 +29,17 @@ export function Settings() {
         <p>Change how the app works for you. What is connected and how data is kept are further down.</p>
       </div>
 
+      {owner && (
+        <section aria-labelledby="ai-set">
+          <h2 id="ai-set">AI</h2>
+          <div className="card list setrows">
+            <div className="setrow"><div><strong>Priorities and sources</strong><p className="small muted">What the AI looks into, and which data it may read. Also what you told it when you dismissed things.</p></div><Link to="/owner/ai?tab=priorities"><button>Open</button></Link></div>
+            <div className="setrow"><div><strong>Computer activity &amp; AI cost</strong><p className="small muted">What computer activity has arrived, and what the AI costs.</p></div><Link to="/owner/data-intake"><button>Open</button></Link></div>
+            <div className="setrow"><div><strong>Results tracker</strong><p className="small muted">Whether approved ideas actually helped.</p></div><Link to="/owner/ai?tab=results"><button>Open</button></Link></div>
+          </div>
+        </section>
+      )}
+
       <section aria-labelledby="mine">
         <h2 id="mine">Things you can change</h2>
         <div className="card list setrows">

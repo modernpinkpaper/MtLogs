@@ -8,7 +8,7 @@ import { chicagoDate } from '../../domain/time';
 const STATE_LABEL = { WAITING_FOR_OWNER: ['Waiting for Dalia', 'warn'], WAITING_FOR_PERSON: ['Waiting for the person', 'info'], SNOOZED: ['Person snoozed it', 'gray'], DONE: ['Acknowledged', 'ok'] } as const;
 
 /** Customer service: log an error for a team member, and look back at what was logged. */
-export function Errors() {
+export function Errors({ embedded }: { embedded?: boolean } = {}) {
   const { hub, uid } = useMe();
   const act = useAct();
   const key = useRef(newKey('err'));
@@ -24,7 +24,7 @@ export function Errors() {
   const ready = !!person && !!date && !!text.trim();
   return (
     <div className="stack">
-      <div><h1>Errors</h1><p className="muted" style={{ margin: 0 }}>Log an error only after we confirmed we made it. Dalia is told right away. The team member sees it after Dalia has read it.</p></div>
+      <div>{embedded ? null : <h1>Errors</h1>}<p className="muted" style={{ margin: 0 }}>Log an error only after we confirmed we made it. Dalia is told right away. The team member sees it after Dalia has read it.</p></div>
 
       {hints.length > 0 && (
         <section className="stack" aria-label="Reminders">

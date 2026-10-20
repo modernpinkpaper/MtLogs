@@ -40,17 +40,15 @@ export function Layout() {
         { to: '/print/my-stats', label: 'My printing', icon: '🖨' },
         ...(canLog ? [{ to: '/errors', label: 'Errors', icon: '⚑' }] : []),
       ];
+  // The menu stays short. AI setup and results live in Settings. Customer service errors live in Team & Print.
   const more: Item[] = [
-    ...(owner ? [{ to: '/owner/ai', label: 'AI recommendations (all)', icon: '✦', badge: urgentAi }, { to: '/owner/ai?tab=priorities', label: 'Priorities and sources', icon: '☰' }] : []),
-    ...(owner ? [{ to: '/errors', label: 'Customer service errors', icon: '⚑' }] : []),
     ...(owner ? [{ to: '/print/my-stats', label: 'My printing', icon: '🖨' }] : []),
     { to: '/journal', label: 'History', icon: '✎' },
     { to: '/resources', label: 'Files', icon: '⧉' },
-    ...(owner ? [{ to: '/owner/data-intake', label: 'Computer activity & AI cost', icon: '⇩' }] : []),
     { to: '/settings', label: 'Settings', icon: '⚙' },
-    { to: '/status', label: 'What works in this practice copy', icon: '☰' },
-    { to: '/demo/operations', label: 'Demo controls', icon: '▶' },
+    ...(REAL_MODE ? [] : [{ to: '/status', label: 'What works in this practice copy', icon: '☰' }, { to: '/demo/operations', label: 'Demo controls', icon: '▶' }]),
   ];
+
   const isActive = (it: Item) => (it.match ? it.match.some((m) => loc.pathname.startsWith(m)) : loc.pathname === it.to);
 
   return (
