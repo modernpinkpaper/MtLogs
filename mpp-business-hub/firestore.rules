@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return signedIn()
+        && request.auth.token.email == 'dalia.abdalla@gmail.com';
+    }
+
+    // Owner-only until employee accounts, roles and approved-device records
+    // are deliberately configured. No browser-only menu rule grants access.
+    match /{document=**} {
+      allow read, write: if isOwner();
+    }
+  }
+}

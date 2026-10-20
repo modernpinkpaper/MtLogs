@@ -6,12 +6,14 @@ import { formatDateTime, formatTime } from '../domain/time';
 import { Chip } from './common';
 import { PageBoundary } from './guard';
 import { Breadcrumbs } from './Breadcrumbs';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 
 interface Item { to: string; label: string; icon: string; badge?: number; match?: string[] }
 
 export function Layout() {
   const { hub, uid, me } = useMe();
-  const { setUid } = useSession();
+  const { authEmail } = useSession();
   const nav = useNavigate();
   const loc = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -95,11 +97,11 @@ export function Layout() {
             🔔{homeCount > 0 && <span className="badge" aria-hidden="true">{homeCount}</span>}
           </button>
           <label className="row" style={{ margin: 0, fontWeight: 500 }}>
-                        <select aria-label="Switch demo user" style={{ width: 'auto' }} value={uid} onChange={(e) => { setUid(e.target.value); nav('/home'); }}>
-              {hub.state.users.filter((u) => u.active).map((u) => <option key={u.id} value={u.id}>{u.name}{u.role === 'OWNER' ? ' (owner)' : ''}</option>)}
+            <select aria-label="Signed-in user" style={{ width: 'auto' }} value={uid} disabled title={authEmail ?? 'Signed in'}>
+              <option value={uid}>{me.name} (owner)</option>
             </select>
           </label>
-          <button className="hide-sm" onClick={() => { setUid(null); nav('/login'); }}>Sign out</button>
+          <button className="hide-sm" onClick={() => { void signOut(auth); nav('/login'); }}>Sign out</button>
         </header>
         <main id="main" className="content" tabIndex={-1}>
           <Breadcrumbs /><PageBoundary><Outlet /></PageBoundary>
@@ -119,7 +121,7 @@ export function Layout() {
         <div className="sheet" role="dialog" aria-label="More">
           {primary.slice(5).map((it) => <Link key={it.to} to={it.to}>{it.icon} {it.label}</Link>)}
           {more.map((it) => <Link key={it.to} to={it.to}>{it.icon} {it.label}</Link>)}
-          <button onClick={() => { setUid(null); nav('/login'); }}>Sign out</button>
+          <button onClick={() => { void signOut(auth); nav('/login'); }}>Sign out</button>
         </div>
       )}
     </div>

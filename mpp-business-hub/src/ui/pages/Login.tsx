@@ -1,38 +1,67 @@
-import { useNavigate } from 'react-router-dom';
-import { useHub, useSession } from '../hubContext';
+import { type FormEvent, useState } from 'react';
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, OWNER_EMAIL } from '../../firebase';
+
+function friendlyAuthError(error: unknown): string {
+  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  if (/invalid-credential|wrong-password|user-not-found/.test(code)) return 'That email and password do not match.';
+  if (code.includes('too-many-requests')) return 'Too many attempts. Please wait and try again.';
+  if (code.includes('unauthorized-domain')) return 'This address is not approved for sign-in yet.';
+  return 'Sign-in did not work. Please try again.';
+}
 
 export function Login() {
-  const hub = useHub();
-  const { setUid } = useSession();
-  const nav = useNavigate();
-  const users = hub.state.users.filter((u) => u.active);
+  const [email, setEmail] = useState(OWNER_EMAIL);
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setMessage('');
+    setBusy(true);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+      setPassword('');
+    } catch (error) {
+      setMessage(friendlyAuthError(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reset = async () => {
+    if (!email.trim()) {
+      setMessage('Enter your email address first.');
+      return;
+    }
+    setMessage('');
+    setBusy(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setMessage('Password-reset instructions were sent if that account exists.');
+    } catch (error) {
+      setMessage(friendlyAuthError(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div style={{ maxWidth: 760, margin: '4vh auto', padding: '0 1rem' }} id="main">
-      <h1 style={{ color: 'var(--pink-strong)' }}>MPP Business Hub</h1>
-      <p className="muted">A practice copy · all data is made up</p>
-      <div className="card violet stack" role="note">
-        <strong>This is a practice picker, not a real sign-in.</strong>
-        <p className="small">In the real app, you would sign in with a safe login. A clock PIN alone should never open private business info. This practice copy cannot reach your real systems. It never talks to Firebase, Google, Amazon, Etsy, Shopify or MT Log.</p>
-      </div>
-      <div className="card pink stack" style={{ marginTop: '1rem' }}>
-        <strong>Not sure where to start? Try this:</strong>
-        <ol className="small" style={{ margin: '0 0 0 1.1rem' }}>
-          <li>Pick <strong>Dalia</strong>. Open “Projects”, then “P-070”. Press “Pause project” and choose a way to resume.</li>
-          <li>Open “AI project recommendations” on Home. Open the first one, look at “The numbers”, then press “Approve as project”.</li>
-          <li>Use the “Demo user” menu to switch to <strong>Erika</strong>. Everything waiting for Erika is on her Home page.</li>
-          <li>As Dalia, open a project step and press “Ask for an update”. Switch to Erika to answer it. Switch back: her answer is on your Home, under “Team members”.</li>
-          <li>Open “More”, then “Demo controls”, to play out a 20-listing test and scheduled resumes.</li>
-        </ol>
-      </div>
-      <h2 style={{ marginTop: '1.2rem' }}>Pick who you want to be</h2>
-      <div className="grid cols-2">
-        {users.map((u) => (
-          <button key={u.id} className="card" style={{ textAlign: 'left' }} onClick={() => { setUid(u.id); nav('/home'); }}>
-            <strong>{u.name}</strong> <span className="muted small">{u.role === 'OWNER' ? 'Owner' : `Employee · ${hub.areaOn(u.id).toLowerCase()}`}</span>
-            <div className="small muted">{u.rosterNote ?? (u.role === 'OWNER' ? 'Sees everything. Asks for updates. Has private projects.' : u.capabilities.join(', ') || 'No jobs set yet')}</div>
-          </button>
-        ))}
-      </div>
-    </div>
+    <main className="mpp-auth-shell" id="main" aria-labelledby="mpp-auth-title">
+      <section className="mpp-auth-card">
+        <div className="mpp-auth-brand"><span>Modern Pink Paper</span><small>Business Hub</small></div>
+        <h1 id="mpp-auth-title">Welcome back</h1>
+        <p className="mpp-auth-subtitle">Sign in to your secure workspace.</p>
+        <form onSubmit={submit}>
+          <label>Email address<input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+          <label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
+          <button className="mpp-auth-primary" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+        </form>
+        <button className="mpp-auth-link" type="button" onClick={reset} disabled={busy}>Forgot your password?</button>
+        {import.meta.env.DEV && <button className="mpp-auth-link dev-preview" type="button" onClick={() => { sessionStorage.setItem('mpp-dev-owner', '1'); location.hash = '/home'; location.reload(); }}>Local visual preview</button>}
+        <p className="mpp-auth-message" role="status" aria-live="polite">{message}</p>
+      </section>
+    </main>
   );
 }

@@ -25,7 +25,8 @@ import { DemoOperations } from './pages/DemoOperations';
 import { StatusPage } from './pages/StatusPage';
 
 export function App() {
-  const { uid, toasts } = useSession();
+  const { uid, authLoading, toasts } = useSession();
+  if (authLoading) return <div className="auth-loading" role="status">Opening your secure workspace…</div>;
   return (
     <HashRouter>
       <a className="skip" href="#main">Skip to content</a>

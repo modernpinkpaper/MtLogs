@@ -4,8 +4,11 @@ import './ui/styles.css';
 import { HubServer } from './server/hub';
 import { HubProvider } from './ui/hubContext';
 import { App } from './ui/App';
+import { installVisualEnhancements } from './ui/visualEnhancements';
 
 // The prototype runs entirely in this browser tab with synthetic data. No network, no Firebase, no API keys.
+installVisualEnhancements();
+
 HubServer.create({ persist: true }).then((hub) => {
   (window as unknown as { __hub: HubServer }).__hub = hub; // handy for demos/debugging in the console
   createRoot(document.getElementById('root')!).render(
