@@ -20,8 +20,17 @@ Dalia will attach design direction made by ChatGPT. Before changing anything I w
    Open: how often (every 30 minutes or hourly), exact hours, and where it sits.
 3. **Dalia's own projects.** Already built: Projects has All / Mine / By person, plus an "Assigned to" filter. Private projects show only to her. Nothing to add unless she wants a change.
 
-## Received: Print Team and Projects UX spec (Oct 20)
-Saved as `docs/ux-spec-2026-10-20.md` with two concept images. Reviewed against the current build. **No changes made yet.** Questions sent to Dalia (conflicts with her earlier decisions, missing data sources, and design choices). Work starts after she answers.
+## Print Team and Projects UX spec (Oct 20): built, Oct 20
+Saved as `docs/ux-spec-2026-10-20.md`. Built and published (private copy v15). Details: `docs/ux-spec-implementation-report.md`.
+- Done: owner Print Team, My Print Stats, Print verification, Projects > Steps > Step details, step notes, avatars (3 letters + own photo), day tabs, icon cards, sortable table, docked person panel, two-column step workspace.
+- Dalia said "everyone listed" on the Print Team table: done.
+- NOT done yet:
+  - The 28 acceptance tests as a numbered Pass/Fail table.
+  - Real order claims and real print logs in the private copy (Dalia will provide them after the layout is approved).
+  - Left menu and top bar like the ChatGPT photos (photo shows My Tasks, Resources, Reports, notification bell; not in the spec).
+  - Related Links, Priority and a progress bar on the project card (in the photo, not in the spec). Ask first.
+  - Print-team tab row is long and cuts off on the right.
+  - Item 2 above (Team right now): still waiting for her answers.
 
 ## Waiting for more items
 Dalia will add more fixes. They are added here as they come.
