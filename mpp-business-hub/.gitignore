@@ -1,0 +1,13 @@
+node_modules
+dist
+.env
+.env.local
+*.log
+e2e/out
+dist-single
+
+# Real business data. Never commit it.
+real-data/
+*.real.json
+*.real.jsonl
+dist-real/
