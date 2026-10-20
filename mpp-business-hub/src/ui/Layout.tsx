@@ -5,6 +5,7 @@ import { useMe, useSession } from './hubContext';
 import { formatDateTime, formatTime } from '../domain/time';
 import { Chip } from './common';
 import { PageBoundary } from './guard';
+import { Breadcrumbs } from './Breadcrumbs';
 
 interface Item { to: string; label: string; icon: string; badge?: number; match?: string[] }
 
@@ -101,7 +102,7 @@ export function Layout() {
           <button className="hide-sm" onClick={() => { setUid(null); nav('/login'); }}>Sign out</button>
         </header>
         <main id="main" className="content" tabIndex={-1}>
-          <PageBoundary><Outlet /></PageBoundary>
+          <Breadcrumbs /><PageBoundary><Outlet /></PageBoundary>
         </main>
       </div>
 

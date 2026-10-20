@@ -434,7 +434,7 @@ details > summary { cursor: pointer; }
 @media (max-width: 700px) { .proj-obj { display: none; } }
 .answerlist .choice { padding: .45rem .8rem; min-height: 40px; margin-bottom: .3rem; }
 .answerlist legend { margin-bottom: .35rem; }
-@media (max-width: 700px) { nav[aria-label=Breadcrumb] { display: none; } .topbar label.row { flex: 1 1 auto; } }
+@media (max-width: 700px) { .topbar label.row { flex: 1 1 auto; } }
 .signals { display: flex; gap: .4rem 1.25rem; flex-wrap: wrap; margin: .45rem 0 .2rem; font-size: var(--fs-small); color: var(--muted); }
 .signals strong { color: var(--text); font-weight: 650; }
 .why { margin: .35rem 0 .5rem; color: var(--text-2); }
@@ -491,3 +491,12 @@ details > summary { cursor: pointer; }
   .steprow { align-items: center; }
   .reorder .handle { display: none; }
 }
+
+/* v1.10: path bar. Visible on a phone too. */
+.crumbs { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: 0 0 var(--sp-3, .75rem); font-size: .9rem; color: var(--muted); }
+.crumbs ol { display: flex; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+.crumbs li { display: inline-flex; }
+.crumbs a { color: var(--pink-strong, #a3174d); }
+.crumbs li[aria-current=page] { color: var(--text); font-weight: 600; }
+.crumbs .crumb-back { border: 1px solid var(--border); border-radius: 99px; padding: .3rem .8rem; text-decoration: none; min-height: 36px; display: inline-flex; align-items: center; background: var(--surface, #fff); }
+.crumbs .sep { padding: 0 .3rem; }

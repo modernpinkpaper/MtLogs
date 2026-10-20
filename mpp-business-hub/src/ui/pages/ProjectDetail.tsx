@@ -68,7 +68,6 @@ function ProjectDetailInner() {
 
   return (
     <div className="stack">
-      <nav className="small muted" aria-label="Breadcrumb"><Link to="/projects">Projects</Link> › <Link to={`/projects/${projectId}`}>{project.key}</Link>{stepId && selected ? <> › Step {labels.get(selected.id)}</> : null}</nav>
 
       <header className="card stack">
         <div className="row between" style={{ alignItems: 'flex-start' }}>

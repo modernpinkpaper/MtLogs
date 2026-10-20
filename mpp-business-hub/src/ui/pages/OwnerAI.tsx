@@ -105,7 +105,6 @@ export function FindingDetail() {
 
   return (
     <div className="stack">
-      <nav className="small muted" aria-label="Breadcrumb"><Link to="/owner/ai">AI Recommendations</Link> › {f.code}</nav>
       <header className="card focal stack">
         <div className="row" style={{ gap: '.4rem' }}>
           <span className="eyebrow">{f.code} · {f.kind} · {f.area}</span>
