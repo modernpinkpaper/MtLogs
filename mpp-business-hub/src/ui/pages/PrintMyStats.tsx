@@ -14,7 +14,7 @@ export function PrintMyStats() {
   const [who, setWho] = useState(uid);
   const s = hub.printSummary(uid, who, date);
   const view = hub.myPrintStats(uid, who, date);
-  const people = hub.listUsers(uid).filter((u) => u.active && (u.role === 'EMPLOYEE' || u.noClock));
+  const people = hub.listUsers(uid).filter((u) => u.active && (u.role === 'EMPLOYEE' || u.noClock || u.id === uid));
   const errors = hub.listErrors(uid).filter((e) => e.uid === who && e.ownerAck).slice(0, 8);
   const pct = (n: number | null) => (n == null ? '—' : `${n.toFixed(2)}%`);
   return (
@@ -22,7 +22,7 @@ export function PrintMyStats() {
       <div><h1>{who === uid ? 'My printing' : `${hub.userName(who)}’s printing`}</h1><p className="muted" style={{ margin: 0 }}>Your day, and how the last 30, 90 and 180 days look. These are numbers. They are not a grade.</p></div>
       <div className="row">
         <label className="row" style={{ margin: 0 }}>Day <select style={{ width: 'auto' }} value={date} onChange={(e) => setDate(e.target.value)}>{days.map((d) => <option key={d}>{d}</option>)}</select></label>
-        {me.role === 'OWNER' && <label className="row" style={{ margin: 0 }}>Person <select style={{ width: 'auto' }} value={who} onChange={(e) => setWho(e.target.value)}>{people.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>}
+        {me.role === 'OWNER' && <label className="row" style={{ margin: 0 }}>Person <select style={{ width: 'auto' }} value={who} onChange={(e) => setWho(e.target.value)}>{people.map((u) => <option key={u.id} value={u.id}>{u.id === uid ? `${u.name} (me)` : u.name}</option>)}</select></label>}
         {!s.hasRecentPrinting && s.hasClaims && <Chip tone="gray">No printing in the last 30 days</Chip>}
       </div>
 

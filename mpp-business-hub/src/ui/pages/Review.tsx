@@ -46,8 +46,8 @@ export function Review() {
   return (
     <div className="stack">
       <div>
-        <h1>Review my work</h1>
-        <p className="muted" style={{ margin: 0 }}>Check what the system noticed, and answer Dalia’s requests. About 1 to 3 minutes. It is paid time. {me.role === 'EMPLOYEE' && <button className="link" onClick={() => setLogging(true)}>Log something I did</button>}</p>
+        <h1>Answer and confirm</h1>
+        <p className="muted" style={{ margin: 0 }}>Check what the system noticed, and answer Dalia’s requests. <Link to="/home">Back to Home</Link>. About 1 to 3 minutes. It is paid time. {me.role === 'EMPLOYEE' && <button className="link" onClick={() => setLogging(true)}>Log something I did</button>}</p>
       </div>
       {offClock && <div className="card warn" role="status">Reviews are paid work, so you answer them while clocked in. <Link to="/clock">Clock in</Link> first. Your items will wait for you.</div>}
       {cards.length === 0 && <Empty>Nothing to review right now. {hub.reviewReadiness(uid).message}</Empty>}

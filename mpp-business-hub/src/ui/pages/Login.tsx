@@ -18,9 +18,9 @@ export function Login() {
         <strong>Not sure where to start? Try this:</strong>
         <ol className="small" style={{ margin: '0 0 0 1.1rem' }}>
           <li>Pick <strong>Dalia</strong>. Open “Projects”, then “P-070”. Press “Pause project” and choose a way to resume.</li>
-          <li>Open “AI Recommendations”. Open the first one, look at “The numbers”, then press “Approve as project”.</li>
-          <li>Use the “Demo user” menu to switch to <strong>Erika</strong>. Open “My Work”, then “Review my work”.</li>
-          <li>As Dalia, open a project step and press “Ask for an update”. Switch to Erika to answer it. Switch back to see the notification.</li>
+          <li>Open “AI project recommendations” on Home. Open the first one, look at “The numbers”, then press “Approve as project”.</li>
+          <li>Use the “Demo user” menu to switch to <strong>Erika</strong>. Everything waiting for Erika is on her Home page.</li>
+          <li>As Dalia, open a project step and press “Ask for an update”. Switch to Erika to answer it. Switch back: her answer is on your Home, under “Team members”.</li>
           <li>Open “More”, then “Demo controls”, to play out a 20-listing test and scheduled resumes.</li>
         </ol>
       </div>

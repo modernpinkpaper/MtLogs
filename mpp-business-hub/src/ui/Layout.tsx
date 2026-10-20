@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useMe, useSession } from './hubContext';
 import { formatDateTime, formatTime } from '../domain/time';
 import { Chip } from './common';
+import { PageBoundary } from './guard';
 
 interface Item { to: string; label: string; icon: string; badge?: number; match?: string[] }
 
@@ -30,7 +31,7 @@ export function Layout() {
     ? [
         { to: '/home', label: 'Home', icon: '⌂', badge: homeCount },
         { to: '/projects', label: 'Projects', icon: '▤', match: ['/projects'] },
-        { to: '/owner/team', label: 'Team & Print', icon: '☺', match: ['/owner/team', '/owner/print-weekly', '/owner/other-work', '/owner/insights', '/print'] },
+        { to: '/owner/team', label: 'Team & Print', icon: '☺', match: ['/owner/team', '/owner/print-weekly', '/owner/other-work', '/owner/insights'] },
       ]
     : [
         { to: '/home', label: 'Home', icon: '⌂', badge: homeCount },
@@ -42,6 +43,7 @@ export function Layout() {
   const more: Item[] = [
     ...(owner ? [{ to: '/owner/ai', label: 'AI recommendations (all)', icon: '✦', badge: urgentAi }, { to: '/owner/ai?tab=priorities', label: 'Priorities and sources', icon: '☰' }] : []),
     ...(owner ? [{ to: '/errors', label: 'Customer service errors', icon: '⚑' }] : []),
+    ...(owner ? [{ to: '/print/my-stats', label: 'My printing', icon: '🖨' }] : []),
     { to: '/journal', label: 'History', icon: '✎' },
     { to: '/resources', label: 'Files', icon: '⧉' },
     ...(owner ? [{ to: '/owner/data-intake', label: 'Computer activity & AI cost', icon: '⇩' }] : []),
@@ -101,7 +103,7 @@ export function Layout() {
           <button className="hide-sm" onClick={() => { setUid(null); nav('/login'); }}>Sign out</button>
         </header>
         <main id="main" className="content" tabIndex={-1}>
-          <Outlet />
+          <PageBoundary><Outlet /></PageBoundary>
         </main>
       </div>
 

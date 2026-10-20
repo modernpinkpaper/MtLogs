@@ -1,3 +1,4 @@
+import { OwnerOnly } from './guard';
 import { Errors } from './pages/Errors';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useSession } from './hubContext';
@@ -44,13 +45,13 @@ export function App() {
             <Route path="/print/my-stats" element={<PrintMyStats />} />
             {/* Owner screens. Old addresses still work and send you to the new place. */}
             <Route path="/owner/overview" element={<Navigate to="/home" replace />} />
-            <Route path="/owner/ai" element={<OwnerAI />} />
-            <Route path="/owner/ai/:id" element={<FindingDetail />} />
-            <Route path="/owner/team" element={<TeamPrint />} />
+            <Route path="/owner/ai" element={<OwnerOnly><OwnerAI /></OwnerOnly>} />
+            <Route path="/owner/ai/:id" element={<OwnerOnly><FindingDetail /></OwnerOnly>} />
+            <Route path="/owner/team" element={<OwnerOnly><TeamPrint /></OwnerOnly>} />
             <Route path="/owner/print-weekly" element={<Navigate to="/owner/team?tab=print" replace />} />
             <Route path="/owner/other-work" element={<Navigate to="/owner/team?tab=other" replace />} />
             <Route path="/owner/insights" element={<Navigate to="/owner/team?tab=ideas" replace />} />
-            <Route path="/owner/data-intake" element={<OwnerDataIntake />} />
+            <Route path="/owner/data-intake" element={<OwnerOnly><OwnerDataIntake /></OwnerOnly>} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/status" element={<StatusPage />} />
             <Route path="/demo/operations" element={<DemoOperations />} />

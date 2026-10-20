@@ -47,7 +47,7 @@ export interface QueueItem {
   /** A quick action she can take right on Home. Always asks her to confirm first. */
   action?: { type: 'APPROVE_VERSION'; resourceId: string; version: string; label: string; confirm: string } | { type: 'MARK_SEEN'; notificationId: string; label: string };
 }
-export const STORAGE_KEY = REAL_MODE ? 'mpp-hub-real-state-v1' : 'mpp-hub-demo-state-v3';
+export const STORAGE_KEY = REAL_MODE ? 'mpp-hub-real-state-v2' : 'mpp-hub-demo-state-v3';
 const freshState = () => (REAL_MODE ? buildRealState(buildSeedState(), REAL_TRACKER as RealTracker, '2026-10-18 11:00', REAL_LOGS as RealLogs | null, REAL_FINDINGS as RealFinding[] | null, REAL_SALES as HubState['salesDaily'] | null) : buildSeedState());
 /** Compile-time guard: demo-only operations exist only in this prototype build. */
 export const DEMO_MODE = true as const;
@@ -57,18 +57,20 @@ export const CHOICE_LABEL: Record<ResponseChoice, string> = {
   BLOCKED: 'Blocked — I need help', WAITING: 'Waiting for someone or something', NOT_APPLICABLE: 'No longer needed', NEED_CLARIFICATION: 'I need clarification',
 };
 
+// Any visible status can move to any other, so a person can always undo a click. Only Dalia (or a real check) makes a step VERIFIED.
+const FREE: StepStatus[] = ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'];
 const TRANSITIONS: Record<StepStatus, StepStatus[]> = {
-  NOT_STARTED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'BLOCKED', 'NOT_APPLICABLE', 'CANCELLED'],
-  IN_PROGRESS: ['BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'],
-  BLOCKED: ['IN_PROGRESS', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'],
-  WAITING: ['IN_PROGRESS', 'BLOCKED', 'REPORTED_COMPLETE', 'NOT_APPLICABLE', 'CANCELLED'],
-  REPORTED_COMPLETE: ['VERIFIED_COMPLETE', 'REOPENED', 'IN_PROGRESS', 'BLOCKED', 'NOT_APPLICABLE', 'REPORTED_COMPLETE'],
-  VERIFIED_COMPLETE: ['REOPENED', 'REPORTED_COMPLETE'],
+  NOT_STARTED: FREE.filter((x) => x !== 'NOT_STARTED'),
+  IN_PROGRESS: [...FREE.filter((x) => x !== 'IN_PROGRESS'), 'WAITING'],
+  BLOCKED: FREE.filter((x) => x !== 'BLOCKED'),
+  WAITING: FREE,
+  REPORTED_COMPLETE: [...FREE, 'VERIFIED_COMPLETE', 'REOPENED'],
+  VERIFIED_COMPLETE: [...FREE.filter((x) => x !== 'CANCELLED'), 'REOPENED'],
   CANCELLED: ['REOPENED'],
-  NOT_APPLICABLE: ['REOPENED', 'IN_PROGRESS', 'REPORTED_COMPLETE'],
-  REOPENED: ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE'],
+  NOT_APPLICABLE: [...FREE.filter((x) => x !== 'NOT_APPLICABLE'), 'REOPENED'],
+  REOPENED: [...FREE, 'WAITING'],
 };
-const EMPLOYEE_TARGETS: StepStatus[] = ['IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'];
+const EMPLOYEE_TARGETS: StepStatus[] = ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'WAITING', 'REPORTED_COMPLETE', 'NOT_APPLICABLE'];
 export const TERMINAL: StepStatus[] = ['VERIFIED_COMPLETE', 'CANCELLED', 'NOT_APPLICABLE'];
 
 export type Listener = () => void;
@@ -414,7 +416,8 @@ export class HubServer {
   applyTransition(step: Step, project: Project, to: StepStatus, actorUid: string | null, reason: string, verificationSource?: Step['verificationSource'], evidence: string[] = []): Step {
     const before = { status: step.status, verificationSource: step.verificationSource, blockerReason: step.blockerReason };
     step.status = to;
-    step.blockerReason = to === 'BLOCKED' || to === 'WAITING' ? reason || step.blockerReason : to === 'IN_PROGRESS' ? null : step.blockerReason;
+    step.blockerReason = to === 'BLOCKED' || to === 'WAITING' ? reason || step.blockerReason : to === 'IN_PROGRESS' || to === 'NOT_STARTED' ? null : step.blockerReason;
+    if (['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'NOT_APPLICABLE'].includes(to) && ['REPORTED_COMPLETE', 'VERIFIED_COMPLETE'].includes(before.status)) step.verificationSource = 'NONE';
     if (to === 'REPORTED_COMPLETE') { step.verificationSource = 'NONE'; step.lastConfirmedAt = this.state.now; }
     if (to === 'VERIFIED_COMPLETE') { step.verificationSource = verificationSource ?? 'EMPLOYEE_CONFIRMED'; step.lastConfirmedAt = this.state.now; if (step.verificationSource === 'INDEPENDENT') step.lastVerifiedAt = this.state.now; }
     if (to === 'REOPENED') step.verificationSource = 'NONE';

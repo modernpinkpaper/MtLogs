@@ -15,7 +15,18 @@ import type { Project, ResourceRole, Step, StepStatus } from '../../domain/types
 
 type Tab = 'overview' | 'history' | 'files' | 'more';
 
+/** Checks access first, then shows the page. The page is keyed by project so its state never carries over from another project. */
 export function ProjectDetail() {
+  const { projectId = '' } = useParams();
+  const { hub, uid } = useMe();
+  let allowed = true;
+  try { hub.getProject(uid, projectId); } catch { allowed = false; }
+  // The same page for “not found” and “not allowed”: nothing about the item is revealed.
+  if (!allowed) return <div className="card bad" role="alert"><h1>Permission denied</h1><p>You cannot open this page.</p><Link to="/projects">Back to projects</Link></div>;
+  return <ProjectDetailInner key={projectId} />;
+}
+
+function ProjectDetailInner() {
   const { projectId = '', stepId } = useParams();
   const [sp, setSp] = useSearchParams();
   const { hub, uid, me } = useMe();

@@ -82,7 +82,7 @@ button.ghost { border-color: transparent; background: transparent; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 button.link { border: none; background: none; padding: 0; min-height: 0; color: var(--pink-strong); text-decoration: underline; }
 label { display: block; font-weight: 600; font-size: .88rem; margin-bottom: .2rem; }
-input[type=text], input[type=search], input[type=date], input[type=number], select, textarea {
+input[type=text], input[type=search], input[type=date], input[type=number], input[type=url], select, textarea {
   font: inherit; width: 100%; padding: .5rem .65rem; border-radius: 10px; border: 1px solid #cfc3bf; background: #fff; min-height: 40px; color: var(--text);
 }
 textarea { min-height: 84px; resize: vertical; }
@@ -481,3 +481,13 @@ details > summary { cursor: pointer; }
 .errcard .equote { margin: 0; padding: .5rem .8rem; border-left: 3px solid var(--pink, #c0245c); background: var(--pink-soft, #fbeaf0); border-radius: 0 8px 8px 0; font-size: .92rem; }
 .errcard .ef { display: flex; gap: .6rem; flex-wrap: wrap; padding: .8rem 1.1rem 1rem; border-top: 1px solid var(--border); background: var(--surface-2, #faf8f9); }
 .pill-link { border: 1px solid var(--border); border-radius: 99px; padding: .1rem .6rem; text-decoration: none; }
+
+/* v1.10: small round buttons keep their look but get a full-size tap area on a phone. */
+@media (max-width: 700px) {
+  .pinfo-btn { position: relative; }
+  .pinfo-btn::after { content: ''; position: absolute; inset: -12px; }
+  .reorder .mini { min-height: 36px; min-width: 40px; font-size: .95rem; }
+  .reorder { flex-direction: row; }
+  .steprow { align-items: center; }
+  .reorder .handle { display: none; }
+}

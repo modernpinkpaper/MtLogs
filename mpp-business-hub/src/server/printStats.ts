@@ -48,7 +48,8 @@ export function printDay(hub: HubServer, uid: string, forUid: string, ymd: strin
   return {
     date: ymd, orders: mine.length, revenue: Math.round(revenue * 100) / 100, prints: mine.reduce((t, c) => t + c.prints, 0), workedMin, projectMin, basisMin,
     revenuePerHour: basisMin > 0 ? Math.round((revenue / (basisMin / 60)) * 100) / 100 : null,
-    basisNote: workedMin === 0 ? 'No clock in was found for this day, so revenue per hour cannot be worked out.'
+    basisNote: hub.user(forUid).role === 'OWNER' || hub.user(forUid).noClock ? 'Owners do not clock in, so there are no hours and no revenue per hour. Orders and revenue still count.'
+      : workedMin === 0 ? 'No clock in was found for this day, so revenue per hour cannot be worked out.'
       : projectMin > 0 ? `Clocked ${fmt(workedMin)}, minus ${fmt(projectMin)} of project work you confirmed, leaves ${fmt(basisMin)}.` : `Clocked ${fmt(workedMin)}. No project work was confirmed, so all of it counts.`,
   };
 }

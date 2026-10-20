@@ -139,3 +139,27 @@ describe('v1.10 AI ideas', () => {
     expect(() => hub.shareFindingWithTeam(U.dalia, f.id, [], '')).toThrow();
   });
 });
+
+describe('v1.10 status can always be undone', () => {
+  it('any visible status can move to any other, including back to Not started', async () => {
+    const hub = await newHub();
+    const order = ['IN_PROGRESS', 'REPORTED_COMPLETE', 'NOT_STARTED', 'BLOCKED', 'IN_PROGRESS', 'REPORTED_COMPLETE', 'IN_PROGRESS', 'NOT_APPLICABLE', 'NOT_STARTED', 'REPORTED_COMPLETE', 'BLOCKED'] as const;
+    for (const to of order) {
+      hub.transitionStep(U.erika, 's-070-3', to, to === 'BLOCKED' ? { reason: 'waiting' } : {});
+      expect(hub.getStep(U.erika, 's-070-3').status).toBe(to);
+    }
+  });
+  it('going back from Completed clears the done mark; going back to Not started clears the blocker', async () => {
+    const hub = await newHub();
+    hub.transitionStep(U.erika, 's-070-3', 'BLOCKED', { reason: 'x' });
+    hub.transitionStep(U.erika, 's-070-3', 'NOT_STARTED');
+    expect(hub.getStep(U.erika, 's-070-3').blockerReason).toBeNull();
+    hub.transitionStep(U.erika, 's-070-3', 'REPORTED_COMPLETE');
+    hub.transitionStep(U.erika, 's-070-3', 'NOT_STARTED');
+    expect(hub.getStep(U.erika, 's-070-3').verificationSource).toBe('NONE');
+  });
+  it('an employee still cannot mark a step checked', async () => {
+    const hub = await newHub();
+    expect(() => hub.transitionStep(U.erika, 's-070-3', 'VERIFIED_COMPLETE')).toThrow();
+  });
+});

@@ -112,8 +112,8 @@ export function LinkFileDialog({ step, onClose }: { step: Step; onClose: () => v
 }
 
 /**
- * The one status button. It opens four choices:
- * In progress (to start, or to restart), Completed (once started), Archive (not needed any more, still shown in the list),
+
+ * The one status button. It opens every choice, so a click can always be undone: Not started, In progress (to start or restart), Completed, Archive (not needed any more, still shown in the list),
  * and Blocked (needs a reason, and can have a day to look at it again). The choice that matches today is greyed out.
  */
 export function StatusMenu({ step, compact }: { step: Step; compact?: boolean }) {
@@ -125,8 +125,7 @@ export function StatusMenu({ step, compact }: { step: Step; compact?: boolean })
   const [remind, setRemind] = useState('');
   const done = step.status === 'REPORTED_COMPLETE' || step.status === 'VERIFIED_COMPLETE';
   const archived = step.status === 'NOT_APPLICABLE';
-  const started = step.status !== 'NOT_STARTED';
-  const go = async (to: 'IN_PROGRESS' | 'REPORTED_COMPLETE' | 'NOT_APPLICABLE' | 'BLOCKED', msg: string, extra: { reason?: string; remindOn?: string | null } = {}) => {
+  const go = async (to: 'NOT_STARTED' | 'IN_PROGRESS' | 'REPORTED_COMPLETE' | 'NOT_APPLICABLE' | 'BLOCKED', msg: string, extra: { reason?: string; remindOn?: string | null } = {}) => {
     const r = await act(() => hub.transitionStep(uid, step.id, to, extra), msg);
     if (r) { setOpen(false); setAsking(false); setReason(''); setRemind(''); }
   };
@@ -137,8 +136,9 @@ export function StatusMenu({ step, compact }: { step: Step; compact?: boolean })
       {open && (
         <div className="stack" style={{ gap: 6 }} role="group" aria-label="Choose a status">
           <div className="row" style={{ gap: 6 }}>
+            <button className={btn} disabled={step.status === 'NOT_STARTED'} aria-pressed={step.status === 'NOT_STARTED'} onClick={() => void go('NOT_STARTED', 'Saved: Not started')}>Not started</button>
             <button className={btn} disabled={step.status === 'IN_PROGRESS'} aria-pressed={step.status === 'IN_PROGRESS'} onClick={() => void go('IN_PROGRESS', 'Saved: In progress')}>In progress</button>
-            <button className={btn} disabled={!started || done || archived} aria-pressed={done} title={!started ? 'Start the step first.' : undefined} onClick={() => void go('REPORTED_COMPLETE', 'Saved: Completed')}>Completed</button>
+            <button className={btn} disabled={done} aria-pressed={done} onClick={() => void go('REPORTED_COMPLETE', 'Saved: Completed')}>Completed</button>
             <button className={btn} disabled={archived} aria-pressed={archived} title="Not needed any more. It stays in the list." onClick={() => { if (confirm('Archive this step? It stays in the list, marked as archived.')) void go('NOT_APPLICABLE', 'Archived'); }}>Archive</button>
             <button className={btn} disabled={step.status === 'BLOCKED'} aria-pressed={step.status === 'BLOCKED'} onClick={() => setAsking(true)}>Blocked</button>
           </div>

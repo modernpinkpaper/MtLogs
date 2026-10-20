@@ -46,7 +46,7 @@ ok(!/profit|ROI|margin|OWNER-ONLY/i.test(body), 'no owner-only words on Erika pr
 await p.getByRole('link', { name: /P-095/ }).first().click(); await p.waitForSelector('text=Next step'); await shot('v12-erika-new-project', true);
 await p.getByRole('tab', { name: 'All files' }).click(); await p.waitForSelector('text=Project folder'); await shot('v13-files');
 // Review with select multiple
-await go('/review'); await p.waitForSelector('text=Review my work'); await shot('v14-review', true);
+await go('/review'); await p.waitForSelector('text=Answer and confirm'); await shot('v14-review', true);
 // Demo controls pilot
 await as('Dalia (owner)'); await go('/demo/operations');
 await p.getByRole('button', { name: /1. Set up the 20-listing test/ }).click(); await p.getByRole('button', { name: /2. Show 19 of 20/ }).click();

@@ -15,7 +15,7 @@ A person can change only the steps assigned to them (rename, instructions, files
 - **Give a project to someone else** (More on the project): steps not done move over; done steps stay done and keep who did them; the new person sees them as done; the old person loses access.
 
 ## Status: one button
-Update status → In progress · Completed (once started) · Archive (kept in the list, marked Archived) · Blocked (a reason is needed; an optional day brings it back on Home). The current choice is greyed out. "Update progress" and "Ask for help" are gone from steps.
+Update status → Not started · In progress · Completed · Archive (kept in the list, marked Archived) · Blocked (a reason is needed; an optional day brings it back on Home). The current choice is greyed out, and every other choice works, so any click can be undone (for example Completed back to In progress or Not started). Only Dalia or a real check can mark a step as checked. "Update progress" and "Ask for help" are gone from steps.
 
 ## Files
 - Remove from step: the original file is never deleted. If the step is already done and the person asking is not the one who did it (for example Dalia), the person who did it gets a Yes / Keep it card on Home first.
@@ -28,3 +28,11 @@ Update status → In progress · Completed (once started) · Archive (kept in th
 
 ## Tests
 `src/test/v110.test.ts`, `e2e/v110.mjs`.
+
+## Checks done (v1.10 QA)
+- Every page was opened as Dalia, Erika, Carolina, a print employee and a customer service person, on a computer and on a phone: no errors, no sideways scrolling, no empty pages.
+- Fixed: opening a page you are not allowed to see (for example an employee opening an AI page) used to break the whole app. Now it shows "Permission denied", and any page that breaks shows a way back to Home instead of a white screen.
+- Fixed: going from a project you cannot open to one you can could crash the project page.
+- Phone: tiny buttons (the "i" buttons, the up and down arrows, the link box on the error form) now have full-size tap areas.
+- Owner: "My printing" is under More. Owners do not clock in, so revenue per hour shows as not available; orders and revenue still count.
+- `e2e/phone19.mjs`, `e2e/audit19.mjs`.
