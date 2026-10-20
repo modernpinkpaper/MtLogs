@@ -534,3 +534,35 @@ details > summary { cursor: pointer; }
 .plan-wide { max-width: 860px; }
 .steptop { padding: .6rem .9rem; }
 .split .plan .step { padding: .35rem .5rem; }
+
+/* Print Team: day tabs, icon cards, table + docked person panel */
+.daystrip { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; justify-content: space-between; }
+.dtabs { display: flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
+.dtab { border: 0; border-right: 1px solid var(--border); border-radius: 0; background: #fff; min-height: 46px; padding: .3rem .9rem; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: .85rem; font-weight: 500; color: var(--text-2); }
+.dtab:last-child { border-right: 0; } .dtab strong { font-weight: 600; } .dtab span { font-size: .75rem; opacity: .85; }
+.dtab[aria-pressed=true] { background: var(--pink); color: #fff; }
+.kpi { display: flex; gap: .9rem; align-items: flex-start; }
+.kpi .kbody { min-width: 0; }
+.kicon { flex: none; width: 46px; height: 46px; border-radius: 12px; background: #fff; display: grid; place-items: center; color: var(--pink); box-shadow: 0 1px 2px rgba(40,20,30,.06); }
+.kpi.green .kicon { color: #1f9d55; } .kpi.blue .kicon { color: #2563c9; }
+.sortbtn { border: 0; background: none; padding: 0; min-height: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+.sortbtn span { font-size: .7rem; opacity: .6; }
+.ptlayout { display: block; }
+@media (min-width: 1150px) { .ptlayout.withpanel { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 1rem; align-items: start; } }
+.drawer.docked { position: static; width: auto; box-shadow: none; border: 1px solid var(--border); border-radius: 14px; }
+@media (max-width: 1149px) { .drawer.docked { position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw); border-radius: 0; box-shadow: -8px 0 24px rgba(40,20,30,.12); } }
+.dtabs2 { display: flex; margin-top: 12px; border-bottom: 1px solid var(--border); }
+.dtabs2 button { flex: 1; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: .5rem; font-weight: 600; color: var(--text-2); }
+.dtabs2 button[aria-selected=true] { color: var(--pink); border-bottom-color: var(--pink); }
+@media (max-width: 800px) { .kpi { display: flex; } .kicon { width: 36px; height: 36px; } }
+
+/* Step workspace: instructions, sub steps, files and notes on the left; status, AI and history on the right */
+.stepcols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 1100px) { .stepcols { grid-template-columns: minmax(0, 1fr); } }
+.split:has(> nav.plan) { grid-template-columns: 270px minmax(0, 1fr); }
+@media (max-width: 900px) { .split:has(> nav.plan) { grid-template-columns: minmax(0, 1fr); } }
+.drawer .kpi { flex-direction: column; gap: .4rem; padding: .8rem; }
+.drawer .kicon { width: 34px; height: 34px; }
+.drawer .kpi .kv { font-size: 1.35rem; }
+.ptable td strong { white-space: nowrap; }
+@media (min-width: 1150px) { .ptlayout.withpanel .ptable th:nth-child(4), .ptlayout.withpanel .ptable td:nth-child(4) { display: none; } .ptlayout.withpanel { grid-template-columns: minmax(0, 1fr) 380px; } }

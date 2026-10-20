@@ -254,7 +254,7 @@ function StepList({ steps, labels, selectedId, nextId, onPick, project, canEdit,
         <button className={`step ${selectedId === s.id ? 'sel' : ''}`} onClick={() => onPick(s.id)} aria-current={selectedId === s.id ? 'step' : undefined}>
           <div className="row"><span className="num">{labels.get(s.id)}</span><strong style={{ flex: 1, minWidth: 0 }}>{s.title}</strong></div>
           <div className="row" style={{ marginTop: 2, marginLeft: 30 }}>
-            {!compact && s.assignedUids.map((a) => <Avatar key={a} uid={a} size={20} title={hub.userName(a)} />)}
+            {s.assignedUids.map((a) => <Avatar key={a} uid={a} size={20} title={hub.userName(a)} />)}
             <StepState status={s.status} hold={!!s.onHold} />
             {nextId === s.id && !project.pause?.isPaused && <span className="tag-next">Next</span>}
             {s.newActivityAt && s.observedReview === 'PENDING_EMPLOYEE' && !project.pause?.isPaused && <span className="small" style={{ color: 'var(--violet)' }} title="Computer activity was found for this step. A person still needs to confirm it.">✦ activity to check</span>}
@@ -328,20 +328,8 @@ function StepPanel({ step, steps, labels, project, canWork: canWorkProject, isNe
       </div>
 
       {canWorkProject && !canWork && <div className="card flat small" role="note">This step belongs to {step.assignedUids.map((a) => hub.userName(a)).join(', ') || 'nobody yet'}. You can read it, but only they can change it.</div>}
-      <div className="row actions">
-        {canWork && assigned && step.status !== 'CANCELLED' && <StatusMenu step={step} />}
-        {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setDlg('request')}>Ask for an update</button>}
-      </div>
-
-      {step.observedLevel !== 'NO_EVIDENCE' && (
-        <div className="card violet small">
-          <div className="row between"><span><strong>{paused ? 'Activity found while paused' : 'We saw computer activity here'}</strong> <ObservedChip level={step.observedLevel} review={step.observedReview} /></span>{hasCard && <Link to="/review"><button>Check it</button></Link>}</div>
-          <details><summary>What this means</summary><div>{step.observedNote}</div><div className="muted">The step’s status did not change. Only a person, or a check in the source system, can change it.</div></details>
-        </div>
-      )}
-      {step.humanReported && <div className="small muted">{hub.userName(step.humanReported.byUid)}: {step.humanReported.outcomeText ?? CHOICE_LABEL[step.humanReported.choice]} · {formatDateTime(step.humanReported.at)}{step.humanReported.note ? ` — “${step.humanReported.note}”` : ''}</div>}
-      {step.blockerReason && <div className="card bad small">{step.status === 'BLOCKED' ? 'Blocked' : 'Waiting'}: {step.blockerReason}</div>}
-
+      <div className="stepcols">
+        <div className="stack stepmain">
       <div className="sect">
         <div className="row between"><h3>What to do</h3>{canWork && <button className="link" onClick={() => { setEditing(!editing); setText(step.instructions); }}>{editing ? 'Cancel' : 'Edit'}</button>}</div>
         {editing ? <div className="stack"><textarea aria-label="Instructions" value={text} onChange={(e) => setText(e.target.value)} style={{ minHeight: 140 }} /><div><button className="primary" onClick={async () => { const r = await act(() => hub.updateInstructions(uid, step.id, text), 'Saved'); if (r) setEditing(false); }}>Save</button></div></div>
@@ -401,7 +389,25 @@ function StepPanel({ step, steps, labels, project, canWork: canWorkProject, isNe
 
       <StepNotes step={step} canWork={canWork} />
 
-      <details className="soft">
+        </div>
+        <aside className="stack stepside" aria-label="Status and activity">
+          <div className="card flat stack"><h3 style={{ margin: 0 }}>Status / Actions</h3>
+      <div className="row actions">
+        {canWork && assigned && step.status !== 'CANCELLED' && <StatusMenu step={step} />}
+        {owner && project.visibility !== 'OWNER_PRIVATE' && <button className="primary" onClick={() => setDlg('request')}>Ask for an update</button>}
+      </div>
+
+          </div>
+      {step.observedLevel !== 'NO_EVIDENCE' && (
+        <div className="card violet small"><h3 style={{ margin: "0 0 4px" }}>AI insights for this step</h3>
+          <div className="row between"><span><strong>{paused ? 'Activity found while paused' : 'We saw computer activity here'}</strong> <ObservedChip level={step.observedLevel} review={step.observedReview} /></span>{hasCard && <Link to="/review"><button>Check it</button></Link>}</div>
+          <details><summary>What this means</summary><div>{step.observedNote}</div><div className="muted">The step’s status did not change. Only a person, or a check in the source system, can change it.</div></details>
+        </div>
+      )}
+      {step.humanReported && <div className="small muted">{hub.userName(step.humanReported.byUid)}: {step.humanReported.outcomeText ?? CHOICE_LABEL[step.humanReported.choice]} · {formatDateTime(step.humanReported.at)}{step.humanReported.note ? ` — “${step.humanReported.note}”` : ''}</div>}
+      {step.blockerReason && <div className="card bad small">{step.status === 'BLOCKED' ? 'Blocked' : 'Waiting'}: {step.blockerReason}</div>}
+
+      <details className="soft" open>
         <summary>Recent activity on this step{journal.length ? ` (${journal.length})` : ''}</summary>
         <div style={{ marginTop: 8 }}><JournalList events={journal} /><button className="link" onClick={() => nav(`/projects/${project.id}/steps/${step.id}?tab=history`)}>Show the full history for this step</button></div>
       </details>
@@ -424,6 +430,9 @@ function StepPanel({ step, steps, labels, project, canWork: canWorkProject, isNe
           <div><h3>Checks in the source system</h3>{step.verifications.map((v) => (
             <div key={v.id} className="small"><VerifyBadge state={v.result === 'CONFIRMED' ? 'INDEPENDENTLY_VERIFIED' : 'NEEDS_REVIEW'} /> {v.verifier} (practice) — {v.entity}: <strong>{v.result === 'CONFIRMED' ? 'it matches' : v.result === 'NOT_FOUND' ? 'not found' : 'does not match'}</strong>. {v.detail} · {formatDateTime(v.at)}</div>))}</div>
         )}
+      </div>
+
+        </aside>
       </div>
 
       {dlg === 'update' && <SendUpdateDialog projectId={project.id} stepId={step.id} onClose={() => setDlg(null)} />}
